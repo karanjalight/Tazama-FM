@@ -1,26 +1,235 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Typography */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-heading: var(--font-sans);
+
+  /* ---- Tazama brand palette (utilities: bg-ink, text-brand, bg-live, ...) ---- */
+  --color-ink: #0a0a0a;
+  --color-paper: #ffffff;
+  --color-bg-alt: #fafafa;
+  --color-surface: #141414; /* elevated near-black for dark cards */
+  --color-brand: #e5342e;
+  --color-brand-strong: #c42a25;
+  --color-live: #22c55e;
+
+  /* ---- shadcn semantic tokens -> Tailwind utilities ---- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-section-alt: var(--section-alt);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Apple-style soft, layered shadows (low-alpha, no color) */
+  --shadow-soft: 0 1px 2px rgb(10 10 10 / 0.04), 0 8px 24px rgb(10 10 10 / 0.06);
+  --shadow-lift: 0 2px 6px rgb(10 10 10 / 0.06), 0 18px 40px rgb(10 10 10 / 0.12);
+  --shadow-dark: 0 2px 8px rgb(0 0 0 / 0.4), 0 24px 60px rgb(0 0 0 / 0.55);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* Single, light editorial theme. Dark surfaces are styled explicitly per-section. */
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+
+  /* Neutral primary — the decisive red is a dedicated `brand` button variant, never the default. */
+  --primary: #0a0a0a;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5; /* zinc-100 */
+  --secondary-foreground: #0a0a0a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a; /* zinc-500 */
+  --accent: #f4f4f5;
+  --accent-foreground: #0a0a0a;
+  --destructive: #e5342e; /* aligned to brand red */
+
+  --border: #e4e4e7; /* zinc-200 */
+  --input: #e4e4e7;
+  --ring: #e5342e; /* visible focus = brand red */
+  --section-alt: #fafafa; /* alternating editorial section */
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+
+  /* In dark, the neutral primary inverts to near-white (red stays the `brand` variant). */
+  --primary: #fafafa;
+  --primary-foreground: #0a0a0a;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #e5342e;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #e5342e;
+  --section-alt: #101012;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply font-sans scroll-smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Visible, on-brand keyboard focus for every interactive element (incl. plain links) */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: var(--color-brand);
+    color: #ffffff;
+  }
+  /* Tight, confident display tracking */
+  .text-display {
+    letter-spacing: -0.035em;
+    line-height: 0.95;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ----------------------------- Motion ----------------------------- */
+@keyframes tz-equalize {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes tz-progress-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes tz-float-up {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.8);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-64px) scale(1.15);
+  }
+}
+@keyframes tz-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@layer utilities {
+  .animate-equalize {
+    transform-origin: bottom;
+    animation: tz-equalize 900ms ease-in-out infinite;
+  }
+  .animate-progress-pulse {
+    animation: tz-progress-pulse 2.4s ease-in-out infinite;
+  }
+  .animate-float-up {
+    animation: tz-float-up 2.8s ease-out infinite;
+  }
+  .animate-live-ping {
+    animation: tz-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  /* Honor reduced-motion for every always-on loop */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-equalize,
+    .animate-progress-pulse,
+    .animate-float-up,
+    .animate-live-ping {
+      animation: none !important;
+    }
+  }
+  /* Edge fade for horizontal scroll strips */
+  .mask-fade-x {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 6%,
+      #000 94%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 6%,
+      #000 94%,
+      transparent
+    );
+  }
+  /* Hide scrollbars on the live strip while keeping it keyboard/scroll accessible */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

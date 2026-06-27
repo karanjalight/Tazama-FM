@@ -1,17 +1,8 @@
-import { headers } from "next/headers";
-
 import { getRoomViewer } from "@/lib/rooms/viewer";
 import { getMyRooms, getLivePublicRooms } from "@/lib/rooms/queries";
+import { getOrigin } from "@/lib/origin";
 import { CreateRoomCard } from "@/components/rooms/create-room-card";
 import { RoomSummaryCard } from "@/components/rooms/room-summary-card";
-
-async function resolveOrigin(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
-}
 
 /**
  * The dashboard rooms area, rendered directly under the greeting: a "Your Rooms"
@@ -22,7 +13,7 @@ export async function RoomsSection() {
   if (!viewer) return null;
 
   const [origin, mine, live] = await Promise.all([
-    resolveOrigin(),
+    getOrigin(),
     getMyRooms(viewer.id),
     getLivePublicRooms(viewer.id),
   ]);

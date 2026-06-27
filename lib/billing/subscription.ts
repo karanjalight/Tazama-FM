@@ -43,17 +43,37 @@ export async function upsertSubscription(input: {
   const admin = createAdminClient();
   if (!admin) return false;
 
-  const { error } = await admin.from("subscriptions").upsert(
-    {
-      account_id: input.accountId,
-      plan: input.plan,
-      status: input.status,
-      paystack_customer_code: input.paystackCustomerCode ?? null,
-      paystack_subscription_code: input.paystackSubscriptionCode ?? null,
-      current_period_end: input.currentPeriodEnd ?? null,
+  const row: Record<string, unknown> = {
+    account_id: input.accountId,
+    plan: input.plan,
+    status: input.status,
+    updated_at: new Date().toISOString(),
+  };
+  // Only overwrite Paystack codes when we actually have them (don't null them out).
+  if (input.paystackCustomerCode) row.paystack_customer_code = input.paystackCustomerCode;
+  if (input.paystackSubscriptionCode)
+    row.paystack_subscription_code = input.paystackSubscriptionCode;
+  if (input.currentPeriodEnd) row.current_period_end = input.currentPeriodEnd;
+
+  const { error } = await admin
+    .from("subscriptions")
+    .upsert(row, { onConflict: "account_id" });
+  return !error;
+}
+
+/** Cancel + downgrade the subscription owning a given Paystack customer code. */
+export async function downgradeByCustomerCode(
+  customerCode: string,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  if (!admin) return false;
+  const { error } = await admin
+    .from("subscriptions")
+    .update({
+      plan: "free",
+      status: "cancelled",
       updated_at: new Date().toISOString(),
-    },
-    { onConflict: "account_id" },
-  );
+    })
+    .eq("paystack_customer_code", customerCode);
   return !error;
 }

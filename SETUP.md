@@ -108,6 +108,35 @@ until the keys are present.
 > then under **Credentials → your key → API restrictions** allow "YouTube Data
 > API v3" (or "Don't restrict key"). Wait a minute for it to propagate.
 
+## 6. Rooms (live listening)
+
+Rooms let a host and listeners hear the same track in sync, with a collaborative,
+taste-aware queue. They appear as a strip at the top of the dashboard.
+
+1. **Run the rooms schema.** Paste [`supabase/rooms.sql`](./supabase/rooms.sql)
+   into the SQL Editor and **Run** it (idempotent). This creates `rooms`,
+   `room_members`, `room_playback`, `room_queue`, `room_track_likes` and
+   `subscriptions`, their RLS policies, and adds the live tables to the Realtime
+   publication.
+
+2. **Use a real session.** Rooms persist + sync against Supabase. Realtime
+   presence/broadcast works with the anon key, but creating/persisting a room
+   needs a real signed-in user — set `NEXT_PUBLIC_DEMO_AUTH=false` and sign up
+   with real Supabase auth to try the full flow.
+
+3. **(Optional) Paid plans via Paystack.** Free rooms allow 6 listeners and 2
+   hours of listening. To enable Individual ($4/mo · 100) and Business
+   ($10/mo · 200):
+   - Create two recurring **Plans** in [Paystack](https://dashboard.paystack.com)
+     → **Plans**, and copy their plan codes.
+   - Add to `.env.local`: `PAYSTACK_SECRET_KEY`, `PAYSTACK_PLAN_INDIVIDUAL`,
+     `PAYSTACK_PLAN_BUSINESS`.
+   - Register the webhook `<your-domain>/api/billing/webhook` under Paystack →
+     **Settings → API Keys & Webhooks**.
+
+   Without these, the upgrade step still works — it just drops you into a free
+   preview room.
+
 ## How it fits together
 
 - **`/signup`** — multi-step: account details → (individual: pick an avatar) /
@@ -115,5 +144,12 @@ until the keys are present.
 - **`/login`** — email + password, or Continue with Google.
 - **Google sign-in** → `/auth/callback` → new users finish at **`/onboarding`**,
   returning users go straight to `/dashboard`.
-- **`/dashboard`** — protected; businesses get an extra "Your venue" panel.
-- Route protection lives in `proxy.ts` (Next.js 16's renamed middleware).
+- **`/dashboard`** — protected; businesses get a "Your venue" panel and a
+  **Your Rooms** + **Live now** strip at the top.
+- **Create a room** — the "+ Create" card opens a 4-step wizard (vibe → access →
+  genres → upgrade) and drops you into **`/rooms/<slug>`**.
+- **`/rooms/<slug>`** — the live room: synced YouTube playback (host = source of
+  truth), Realtime presence, a collaborative like-to-upvote queue, taste-aware
+  suggestions from everyone present, and emoji reactions.
+- Route protection lives in `proxy.ts` (Next.js 16's renamed middleware), which
+  now also guards `/rooms`.

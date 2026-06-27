@@ -43,7 +43,7 @@ export function PlanPicker({
               "group relative flex items-start gap-4 rounded-2xl border p-4 text-left transition-all",
               "hover:border-foreground/30",
               selected
-                ? "border-brand bg-brand/[0.04] ring-1 ring-brand"
+                ? "border-brand bg-brand/4 ring-1 ring-brand"
                 : "border-border bg-background",
             )}
           >

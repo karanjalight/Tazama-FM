@@ -46,10 +46,20 @@ export async function searchGenreTracks(
   genreValue: string,
   max: number,
 ): Promise<YouTubeTrack[]> {
+  return searchTracks(getGenre(genreValue)?.query ?? genreValue, max);
+}
+
+/**
+ * Free-text YouTube music search (rooms: host/listener "add a track", and the
+ * taste-aware suggestion engine). **SERVER ONLY**. Same embeddable constraints
+ * as the genre seed so every hit is safe to play in a room.
+ */
+export async function searchTracks(
+  query: string,
+  max: number,
+): Promise<YouTubeTrack[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error("YOUTUBE_API_KEY is not configured.");
-
-  const query = getGenre(genreValue)?.query ?? genreValue;
 
   const params = new URLSearchParams({
     key: apiKey,

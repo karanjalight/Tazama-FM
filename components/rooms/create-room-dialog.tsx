@@ -52,19 +52,6 @@ export function CreateRoomDialog({
 
   const slug = slugify(name) || "your-hangout";
 
-  // Reset to a clean slate whenever the dialog is (re)opened.
-  React.useEffect(() => {
-    if (open) {
-      setStep(1);
-      setName("");
-      setAbout("");
-      setAccess("public");
-      setGenres([]);
-      setPlan(currentPlan);
-      setError("");
-    }
-  }, [open, currentPlan]);
-
   function next() {
     setError("");
     if (step === 1 && name.trim().length < 2) {
@@ -323,7 +310,7 @@ function AccessOption({
       className={cn(
         "flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all hover:border-foreground/30",
         selected
-          ? "border-brand bg-brand/[0.04] ring-1 ring-brand"
+          ? "border-brand bg-brand/4 ring-1 ring-brand"
           : "border-border bg-background",
       )}
     >

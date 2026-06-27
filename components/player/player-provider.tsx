@@ -15,6 +15,7 @@ import {
   YT_STATE,
   type YTPlayer,
 } from "./yt";
+import { PlayerStage } from "./player-stage";
 
 /** The minimal track shape the player needs (a catalog `Track` satisfies it). */
 export interface PlayerTrack {
@@ -47,6 +48,12 @@ export interface PlayerContextValue {
   repeat: Repeat;
   shuffle: boolean;
 
+  // ── fullscreen / video view ──────────────────────────────────────────────
+  /** Whether the fullscreen now-playing view is open. */
+  isExpanded: boolean;
+  /** Within fullscreen: showing the actual YouTube video (vs. album artwork). */
+  videoMode: boolean;
+
   // ── actions ──────────────────────────────────────────────────────────────
   /** Load + play a track. Pass a list to make it the queue (jumps to `track`). */
   play: (track: PlayerTrack, queue?: PlayerTrack[]) => void;
@@ -58,6 +65,10 @@ export interface PlayerContextValue {
   toggleMute: () => void;
   toggleRepeat: () => void;
   toggleShuffle: () => void;
+  /** Open the fullscreen view (optionally jumping straight to video). */
+  expand: (opts?: { video?: boolean }) => void;
+  collapse: () => void;
+  toggleVideo: () => void;
 }
 
 const PlayerContext = React.createContext<PlayerContextValue | null>(null);
@@ -129,7 +140,7 @@ interface Latest {
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
-  const stageRef = React.useRef<HTMLDivElement | null>(null);
+  const stageRootRef = React.useRef<HTMLDivElement | null>(null);
   const playerRef = React.useRef<YTPlayer | null>(null);
   const readyRef = React.useRef(false);
   const pendingRef = React.useRef<string | null>(null);
@@ -158,6 +169,10 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isMuted, setIsMuted] = React.useState(false);
   const [repeat, setRepeat] = React.useState<Repeat>("off");
   const [shuffle, setShuffle] = React.useState(false);
+
+  // fullscreen / video view
+  const [isExpanded, setIsExpanded] = React.useState(false);
+  const [videoMode, setVideoMode] = React.useState(false);
 
   // A single "latest committed state" mirror so the (stable) YT event callbacks
   // never read stale closures. Synced after each commit — events fire async, so
@@ -335,6 +350,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     setOrderPos(nextShuffle ? 0 : currentQi);
   }, []);
 
+  const expand = React.useCallback((opts?: { video?: boolean }) => {
+    setIsExpanded(true);
+    if (opts?.video !== undefined) setVideoMode(opts.video);
+  }, []);
+
+  const collapse = React.useCallback(() => setIsExpanded(false), []);
+
+  const toggleVideo = React.useCallback(() => setVideoMode((v) => !v), []);
+
   // ── create the single, persistent player once the API is available ────────
   React.useEffect(() => {
     let cancelled = false;
@@ -481,6 +505,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       isMuted,
       repeat,
       shuffle,
+      isExpanded,
+      videoMode,
       play,
       togglePlay,
       next,
@@ -490,6 +516,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleMute,
       toggleRepeat,
       toggleShuffle,
+      expand,
+      collapse,
+      toggleVideo,
     }),
     [
       currentTrack,
@@ -504,6 +533,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       isMuted,
       repeat,
       shuffle,
+      isExpanded,
+      videoMode,
       play,
       togglePlay,
       next,
@@ -513,6 +544,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleMute,
       toggleRepeat,
       toggleShuffle,
+      expand,
+      collapse,
+      toggleVideo,
     ],
   );
 
@@ -520,17 +554,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     <PlayerContext.Provider value={value}>
       {children}
       {/*
-        The one and only player. Kept in the DOM for the app's whole lifetime
-        (YouTube ToS + uninterrupted audio across navigation). Visually hidden
-        here; Part 3 resizes THIS element to reveal the video — never a 2nd player.
+        The one and only player. Its host iframe stays in the DOM for the app's
+        whole lifetime (YouTube ToS + uninterrupted audio across navigation). The
+        stage keeps it visually hidden while collapsed and resizes THE SAME iframe
+        to fullscreen for video mode — never a second player.
       */}
-      <div
-        ref={stageRef}
-        aria-hidden
-        className="pointer-events-none fixed bottom-0 left-0 -z-10 h-0 w-0 overflow-hidden opacity-0"
-      >
-        <div ref={hostRef} />
-      </div>
+      <PlayerStage hostRef={hostRef} stageRootRef={stageRootRef} />
     </PlayerContext.Provider>
   );
 }

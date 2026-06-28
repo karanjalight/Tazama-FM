@@ -20,6 +20,7 @@ import { Reveal } from "@/components/motion/reveal";
 import { buttonVariants } from "@/components/ui/button";
 import { businessFeatures } from "@/lib/data";
 import { PLANS } from "@/lib/billing/plans";
+import { getHeaderAuth } from "@/lib/auth/profile";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -57,12 +58,13 @@ const VENUE_STEPS = [
   },
 ];
 
-export default function ForBusinessPage() {
+export default async function ForBusinessPage() {
   const business = PLANS.business;
+  const auth = await getHeaderAuth();
 
   return (
     <>
-      <SiteHeader />
+      <SiteHeader auth={auth} />
       <main id="content" className="flex-1">
         <MarketingHero
           eyebrow="Tazama for Business"

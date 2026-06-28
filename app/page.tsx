@@ -9,15 +9,17 @@ import { SiteFooter } from "@/components/sections/site-footer";
 import { LandingPlayerProvider } from "@/components/landing/landing-player";
 import { getTrendingTracks, getTrendingArtists } from "@/lib/tracks";
 import { getPublicRooms } from "@/lib/rooms/queries";
+import { getHeaderAuth } from "@/lib/auth/profile";
 
 // Reflect the live catalog + rooms on every load.
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [tracks, artists, rooms] = await Promise.all([
+  const [tracks, artists, rooms, auth] = await Promise.all([
     getTrendingTracks(18),
     getTrendingArtists(10),
     getPublicRooms(8),
+    getHeaderAuth(),
   ]);
 
   const top = tracks[0];
@@ -32,7 +34,7 @@ export default async function Home() {
 
   return (
     <LandingPlayerProvider>
-      <SiteHeader />
+      <SiteHeader auth={auth} />
       <main id="content" className="flex-1">
         <Hero featured={featured} />
         <TrendingTracks tracks={tracks} />

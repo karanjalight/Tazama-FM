@@ -15,6 +15,7 @@ import { LandingPlayerProvider } from "@/components/landing/landing-player";
 import { buttonVariants } from "@/components/ui/button";
 import { steps } from "@/lib/data";
 import { getTrendingTracks } from "@/lib/tracks";
+import { getHeaderAuth } from "@/lib/auth/profile";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
@@ -26,10 +27,13 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function HowItWorksPage() {
-  const tracks = await getTrendingTracks(8);
+  const [tracks, auth] = await Promise.all([
+    getTrendingTracks(8),
+    getHeaderAuth(),
+  ]);
   return (
     <LandingPlayerProvider>
-      <SiteHeader />
+      <SiteHeader auth={auth} />
       <main id="content" className="flex-1">
         <MarketingHero
           eyebrow="How it works"

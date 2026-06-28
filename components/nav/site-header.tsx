@@ -5,12 +5,14 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UserBadge } from "@/components/dashboard/user-badge";
 import { navLinks } from "@/lib/data";
+import type { HeaderAuth } from "@/lib/auth/profile";
 import { cn } from "@/lib/utils";
 import { MobileNav } from "./mobile-nav";
 
 /** Sticky header: transparent over the dark hero, frosted/blurred on scroll. */
-export function SiteHeader() {
+export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
 
@@ -66,27 +68,56 @@ export function SiteHeader() {
                 : "text-white/80 hover:bg-white/10 hover:text-white",
             )}
           />
-          <a
-            href="/login"
-            className={cn(
-              "hidden rounded-md px-3 py-2 text-sm font-medium transition-colors md:inline-flex",
-              scrolled
-                ? "text-muted-foreground hover:text-foreground"
-                : "text-white/80 hover:text-white",
-            )}
-          >
-            Log in
-          </a>
-          <a
-            href="/signup"
-            className={cn(
-              buttonVariants({ variant: "brand", size: "pill" }),
-              "hidden md:inline-flex",
-            )}
-          >
-            Create account
-          </a>
-          <MobileNav scrolled={scrolled} />
+          {auth ? (
+            <>
+              <a
+                href="/dashboard"
+                className={cn(
+                  buttonVariants({ variant: "brand", size: "pill" }),
+                  "hidden md:inline-flex",
+                )}
+              >
+                Dashboard
+              </a>
+              <a
+                href="/dashboard"
+                aria-label="Go to your dashboard"
+                className="hidden md:inline-flex"
+              >
+                <UserBadge
+                  accountType={auth.accountType}
+                  avatarKey={auth.avatarKey}
+                  name={auth.name}
+                  size="sm"
+                  className={cn("ring-1", scrolled ? "ring-border" : "ring-white/25")}
+                />
+              </a>
+            </>
+          ) : (
+            <>
+              <a
+                href="/login"
+                className={cn(
+                  "hidden rounded-md px-3 py-2 text-sm font-medium transition-colors md:inline-flex",
+                  scrolled
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "text-white/80 hover:text-white",
+                )}
+              >
+                Log in
+              </a>
+              <a
+                href="/signup"
+                className={cn(
+                  buttonVariants({ variant: "brand", size: "pill" }),
+                  "hidden md:inline-flex",
+                )}
+              >
+                Create account
+              </a>
+            </>
+          )}
+          <MobileNav scrolled={scrolled} auth={auth} />
         </div>
       </div>
     </header>

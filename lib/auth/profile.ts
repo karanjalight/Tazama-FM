@@ -101,3 +101,25 @@ function demoToProfile(d: DemoUser): CurrentProfile {
 export function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || "there";
 }
+
+/** The minimal identity the marketing header needs to render its auth state. */
+export interface HeaderAuth {
+  name: string;
+  avatarKey: string | null;
+  accountType: AccountType | null;
+}
+
+/** Resolve the current user for the marketing nav, or null when signed out. */
+export async function getHeaderAuth(): Promise<HeaderAuth | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+  const name =
+    profile.accountType === "business"
+      ? (profile.business?.businessName ?? profile.fullName)
+      : profile.fullName;
+  return {
+    name: name || "there",
+    avatarKey: profile.avatarKey,
+    accountType: profile.accountType,
+  };
+}

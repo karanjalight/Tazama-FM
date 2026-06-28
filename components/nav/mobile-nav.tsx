@@ -14,10 +14,17 @@ import {
 import { Logo } from "@/components/brand/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { navLinks } from "@/lib/data";
+import type { HeaderAuth } from "@/lib/auth/profile";
 import { cn } from "@/lib/utils";
 
 /** Mobile navigation in a slide-in sheet (Base UI dialog → focus-trapped). */
-export function MobileNav({ scrolled }: { scrolled: boolean }) {
+export function MobileNav({
+  scrolled,
+  auth,
+}: {
+  scrolled: boolean;
+  auth?: HeaderAuth | null;
+}) {
   const pathname = usePathname();
   const onLanding = pathname === "/";
   const hrefFor = (href: string) =>
@@ -60,12 +67,12 @@ export function MobileNav({ scrolled }: { scrolled: boolean }) {
           <SheetClose
             render={
               <a
-                href="/login"
+                href={auth ? "/dashboard" : "/login"}
                 className="rounded-lg px-3 py-3 text-base font-medium text-foreground transition-colors hover:bg-muted"
               />
             }
           >
-            Log in
+            {auth ? "Dashboard" : "Log in"}
           </SheetClose>
         </nav>
 
@@ -73,12 +80,12 @@ export function MobileNav({ scrolled }: { scrolled: boolean }) {
           <SheetClose
             render={
               <a
-                href="/signup"
+                href={auth ? "/dashboard" : "/signup"}
                 className={cn(buttonVariants({ variant: "brand", size: "xl" }), "w-full")}
               />
             }
           >
-            Create a room
+            {auth ? "Go to dashboard" : "Create a room"}
           </SheetClose>
         </SheetFooter>
       </SheetContent>

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Search, Sparkles, Check } from "lucide-react";
+import { Check, Plus, Search, Sparkles } from "lucide-react";
 
 import { Cover } from "@/components/cover";
 import { cn } from "@/lib/utils";
@@ -10,7 +10,7 @@ import type { RoomTrack } from "@/lib/rooms/types";
 /**
  * Add tracks to the room: search YouTube, or pick from taste-aware suggestions
  * (built from everyone's genre preferences). Everybody gets a say — any listener
- * can add to the shared queue.
+ * can add to the shared queue. Tap a row to add it.
  */
 export function AddTrackPanel({
   suggestions,
@@ -66,19 +66,19 @@ export function AddTrackPanel({
   const isSearch = results !== null;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="relative mb-3">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+    <div className="rounded-2xl border border-border bg-card p-3 sm:p-4">
+      <div className="relative">
+        <Search className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Search a song to add"
-          className="h-10 w-full rounded-xl border border-input bg-background pr-3 pl-9 text-sm text-foreground outline-none transition-[box-shadow,border-color] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30"
+          className="h-11 w-full rounded-xl border border-input bg-background pr-3 pl-10 text-sm text-foreground outline-none transition-[box-shadow,border-color] placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/30"
         />
       </div>
 
-      <p className="mb-2 flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+      <p className="mt-3 mb-1.5 flex items-center gap-1.5 px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         {isSearch ? (
           searching ? (
             "Searching…"
@@ -94,51 +94,54 @@ export function AddTrackPanel({
       </p>
 
       {showing.length === 0 ? (
-        <p className="py-2 text-xs text-muted-foreground">
+        <p className="px-1 py-2 text-xs leading-relaxed text-muted-foreground">
           {isSearch
             ? "No matches — try another search."
-            : "Suggestions will appear as people join."}
+            : "Suggestions appear here as people join."}
         </p>
       ) : (
-        <ul className="no-scrollbar max-h-72 space-y-1 overflow-y-auto">
+        <ul className="no-scrollbar max-h-80 space-y-0.5 overflow-y-auto">
           {showing.map((track) => {
             const added = queuedIds.has(track.youtubeId);
             return (
-              <li
-                key={track.youtubeId}
-                className="flex items-center gap-3 rounded-xl p-1.5 transition-colors hover:bg-muted/60"
-              >
-                <Cover
-                  title={track.title}
-                  src={track.thumbnailUrl ?? undefined}
-                  sizes="36px"
-                  className="size-9 shrink-0 rounded-lg"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">
-                    {track.title || "Untitled"}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {track.artist ?? "Unknown"}
-                  </p>
-                </div>
+              <li key={track.youtubeId}>
                 <button
                   type="button"
-                  aria-label={added ? "Added" : "Add to queue"}
                   disabled={added}
                   onClick={() => onAdd(track)}
-                  className={cn(
-                    "grid size-7 shrink-0 place-items-center rounded-full transition",
-                    added
-                      ? "text-brand"
-                      : "text-muted-foreground hover:bg-foreground hover:text-background",
-                  )}
+                  aria-label={
+                    added ? `${track.title} is queued` : `Add ${track.title}`
+                  }
+                  className="flex w-full items-center gap-3 rounded-xl p-1.5 text-left transition-colors hover:bg-muted/50 disabled:cursor-default"
                 >
-                  {added ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <Plus className="size-4" />
-                  )}
+                  <Cover
+                    title={track.title}
+                    src={track.thumbnailUrl ?? undefined}
+                    sizes="40px"
+                    className="size-10 shrink-0 rounded-lg"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {track.title || "Untitled"}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {track.artist ?? "Unknown"}
+                    </span>
+                  </span>
+                  <span
+                    className={cn(
+                      "grid size-7 shrink-0 place-items-center rounded-full transition-colors",
+                      added
+                        ? "bg-brand/10 text-brand"
+                        : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {added ? (
+                      <Check className="size-4" />
+                    ) : (
+                      <Plus className="size-4" />
+                    )}
+                  </span>
                 </button>
               </li>
             );

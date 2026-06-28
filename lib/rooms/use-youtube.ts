@@ -140,7 +140,9 @@ export function useYouTube(opts: {
     if (!isPlaying) return;
     const id = window.setInterval(() => {
       const p = playerRef.current;
-      if (!p) return;
+      if (!p || !readyRef.current || typeof p.getCurrentTime !== "function") {
+        return;
+      }
       setPositionMs(p.getCurrentTime() * 1000);
       const d = p.getDuration();
       if (d > 0) setDurationMs(d * 1000);
@@ -158,20 +160,29 @@ export function useYouTube(opts: {
     else pendingRef.current = youtubeId;
   }, []);
 
-  const play = React.useCallback(() => playerRef.current?.playVideo(), []);
-  const pause = React.useCallback(() => playerRef.current?.pauseVideo(), []);
-  const seek = React.useCallback((ms: number) => {
-    playerRef.current?.seekTo(Math.max(0, ms) / 1000, true);
-    setPositionMs(Math.max(0, ms));
+  // The YT player object only gains its methods after onReady — guard every
+  // call so a pre-ready invocation (e.g. broadcastState) can't throw.
+  const play = React.useCallback(() => {
+    if (readyRef.current) playerRef.current?.playVideo();
   }, []);
-  const getPositionMs = React.useCallback(
-    () => (playerRef.current?.getCurrentTime() ?? 0) * 1000,
-    [],
-  );
-  const getDurationMs = React.useCallback(
-    () => (playerRef.current?.getDuration() ?? 0) * 1000,
-    [],
-  );
+  const pause = React.useCallback(() => {
+    if (readyRef.current) playerRef.current?.pauseVideo();
+  }, []);
+  const seek = React.useCallback((ms: number) => {
+    const clamped = Math.max(0, ms);
+    if (readyRef.current) playerRef.current?.seekTo(clamped / 1000, true);
+    setPositionMs(clamped);
+  }, []);
+  const getPositionMs = React.useCallback(() => {
+    const p = playerRef.current;
+    if (!readyRef.current || typeof p?.getCurrentTime !== "function") return 0;
+    return p.getCurrentTime() * 1000;
+  }, []);
+  const getDurationMs = React.useCallback(() => {
+    const p = playerRef.current;
+    if (!readyRef.current || typeof p?.getDuration !== "function") return 0;
+    return p.getDuration() * 1000;
+  }, []);
 
   const api: YouTubeApi = {
     ready,

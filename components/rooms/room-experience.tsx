@@ -3,7 +3,18 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Globe, Lock, Share2, Radio, Power } from "lucide-react";
+import {
+  ArrowLeft,
+  Globe,
+  Lock,
+  Share2,
+  Radio,
+  Power,
+  ListMusic,
+  Users,
+  Plus,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Logo } from "@/components/brand/logo";
@@ -17,6 +28,7 @@ import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomChannel } from "@/lib/rooms/use-room-channel";
 import { rankGenresByPopularity } from "@/lib/rooms/suggestions";
 import { roomGenreLabel } from "@/lib/room-genres";
+import { cn } from "@/lib/utils";
 import { FREE_MINUTES_CAP, type SubscriptionPlan } from "@/lib/billing/plans";
 import { roomUrl } from "@/lib/rooms/slug";
 import {
@@ -104,6 +116,10 @@ export function RoomExperience({
   const apiRef = React.useRef<ReturnType<typeof useRoomChannel> | null>(null);
   const ytPlayingRef = React.useRef(false);
   const reactionId = React.useRef(0);
+  // youtubeIds played recently — keeps the radio from looping the same songs.
+  const recentIdsRef = React.useRef<Set<string>>(new Set());
+  const refreshSuggestionsRef = React.useRef<(() => void) | null>(null);
+  const autoStartedRef = React.useRef(false);
 
   React.useEffect(() => void (nowPlayingRef.current = nowPlaying), [nowPlaying]);
   React.useEffect(() => void (queueRef.current = queue), [queue]);
@@ -186,6 +202,11 @@ export function RoomExperience({
     (track: RoomTrack) => {
       setNowPlaying(track);
       nowPlayingRef.current = track;
+      // Remember it so the radio doesn't loop the same couple of songs.
+      recentIdsRef.current.add(track.youtubeId);
+      if (recentIdsRef.current.size > 50) {
+        recentIdsRef.current = new Set([...recentIdsRef.current].slice(-30));
+      }
       loadTrack(track.youtubeId);
       // Only the host drives the shared room (broadcast + persist). A solo
       // listener just plays locally.
@@ -224,10 +245,18 @@ export function RoomExperience({
       playQueued(q[0]);
       return;
     }
-    const sug = suggestionsRef.current.find(
-      (s) => s.youtubeId !== appliedIdRef.current,
+    // Out of queued songs → roll the radio. Prefer something not played
+    // recently so it stays varied; fall back to anything but the current one.
+    const pool = suggestionsRef.current;
+    const fresh = pool.filter(
+      (s) =>
+        s.youtubeId !== appliedIdRef.current &&
+        !recentIdsRef.current.has(s.youtubeId),
     );
+    const sug = fresh[0] ?? pool.find((s) => s.youtubeId !== appliedIdRef.current);
     if (sug) playTrack(sug);
+    // Top the well back up when it's running low (or dry).
+    if (fresh.length <= 2) refreshSuggestionsRef.current?.();
   }, [isHost, playQueued, playTrack]);
   // Latest-ref so the player's onEnded (created before `advance`) always calls
   // the current advance without re-creating the player.
@@ -374,6 +403,25 @@ export function RoomExperience({
     const t = setTimeout(() => void refreshSuggestions(), 1500);
     return () => clearTimeout(t);
   }, [joined, rosterSize, refreshSuggestions]);
+
+  // Stable handle so `advance` (created earlier) can top up suggestions.
+  React.useEffect(() => {
+    refreshSuggestionsRef.current = refreshSuggestions;
+  });
+
+  // Host auto-DJ: once joined, if nothing's playing, start the queue (or a
+  // suggestion) so the room is never silent. onEnded keeps it rolling after.
+  React.useEffect(() => {
+    if (!isHost || !joined || autoStartedRef.current) return;
+    if (nowPlayingRef.current) {
+      autoStartedRef.current = true; // already has a track (e.g. a snapshot)
+      return;
+    }
+    if (queueRef.current.length > 0 || suggestionsRef.current.length > 0) {
+      autoStartedRef.current = true;
+      advance();
+    }
+  }, [isHost, joined, queue, suggestions, advance]);
 
   /* ----------------------- host sync loop + play/pause ------------------ */
 
@@ -541,6 +589,26 @@ export function RoomExperience({
 
   const full = !isHost && channel.participants.length >= listenerCap;
 
+  // Mobile uses a segmented control to switch panels; desktop shows all three.
+  const [mobileTab, setMobileTab] = React.useState<"queue" | "add" | "people">(
+    "queue",
+  );
+  const mobileTabs: {
+    id: "queue" | "add" | "people";
+    label: string;
+    icon: LucideIcon;
+    count?: number;
+  }[] = [
+    { id: "queue", label: "Up Next", icon: ListMusic, count: queue.length },
+    { id: "add", label: "Add", icon: Plus },
+    {
+      id: "people",
+      label: "People",
+      icon: Users,
+      count: channel.participants.length,
+    },
+  ];
+
   /* ------------------------------- render ------------------------------- */
 
   return (
@@ -555,10 +623,10 @@ export function RoomExperience({
             <ArrowLeft className="size-5" />
           </Link>
           <div className="min-w-0">
-            <h1 className="flex items-center gap-2 truncate text-base font-semibold text-foreground">
-              {room.name}
+            <h1 className="flex min-w-0 items-center gap-2 text-base font-semibold text-foreground">
+              <span className="truncate">{room.name}</span>
               {room.isLive && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-brand uppercase">
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-brand uppercase">
                   <Radio className="size-3" /> Live
                 </span>
               )}
@@ -607,8 +675,8 @@ export function RoomExperience({
           onJoin={join}
         />
       ) : (
-        <main className="mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px]">
-          <div className="space-y-4">
+        <main className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-w-0 space-y-4">
             <RoomStage
               containerRef={containerRef}
               nowPlaying={nowPlaying}
@@ -627,8 +695,8 @@ export function RoomExperience({
               onToggleSync={toggleSync}
             />
 
-            <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-2.5">
-              <span className="text-xs text-muted-foreground">
+            <div className="flex items-center justify-between gap-2 rounded-2xl border border-border bg-card px-3 py-2 sm:px-4 sm:py-2.5">
+              <span className="hidden text-xs text-muted-foreground sm:block">
                 {isHost
                   ? "You're the host — play anything, anytime"
                   : "Play in sync or go solo — like to upvote, add a track"}
@@ -648,9 +716,65 @@ export function RoomExperience({
                 ))}
               </div>
             )}
+
+            {/* Mobile: segmented panels. Desktop shows all three in the aside. */}
+            <div className="min-w-0 space-y-3 lg:hidden">
+              <div className="grid grid-cols-3 gap-1 rounded-2xl border border-border bg-muted/40 p-1">
+                {mobileTabs.map((t) => {
+                  const Icon = t.icon;
+                  const active = mobileTab === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setMobileTab(t.id)}
+                      aria-pressed={active}
+                      className={cn(
+                        "flex min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 py-2 text-sm font-medium transition-colors",
+                        active
+                          ? "bg-background text-foreground shadow-soft"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      <span className="truncate">{t.label}</span>
+                      {t.count !== undefined && (
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                          {t.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {mobileTab === "queue" && (
+                <QueuePanel
+                  items={queue}
+                  isHost={isHost}
+                  onLike={onLike}
+                  onRemove={onRemove}
+                  onPlayNow={onPlayNow}
+                />
+              )}
+              {mobileTab === "add" && (
+                <AddTrackPanel
+                  suggestions={suggestions}
+                  queuedIds={queuedIds}
+                  onAdd={onAdd}
+                />
+              )}
+              {mobileTab === "people" && (
+                <ParticipantsPanel
+                  participants={channel.participants}
+                  listenerCap={listenerCap}
+                />
+              )}
+            </div>
           </div>
 
-          <aside className="space-y-4">
+          {/* Desktop: persistent side column */}
+          <aside className="hidden space-y-4 lg:block">
             <ParticipantsPanel
               participants={channel.participants}
               listenerCap={listenerCap}

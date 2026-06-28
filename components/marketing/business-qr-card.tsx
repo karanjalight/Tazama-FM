@@ -1,12 +1,17 @@
 import { Logo } from "@/components/brand/logo";
 import { Equalizer } from "@/components/brand/equalizer";
 import { hashString } from "@/lib/cover-seed";
+import { getTrendingTracks } from "@/lib/tracks";
 
 /**
  * The "scan to request a song" card used on the landing's business section and
- * the dedicated /for-business page. Decorative — the QR isn't scannable.
+ * the dedicated /for-business page. The QR is decorative, but the now-playing
+ * line shows a real, current catalog track.
  */
-export function BusinessQRCard() {
+export async function BusinessQRCard() {
+  const [now] = await getTrendingTracks(1);
+  const nowPlaying = now?.title ?? "Tazama radio";
+
   return (
     <div className="w-[280px] -rotate-2 rounded-3xl bg-white p-6 text-ink shadow-dark sm:w-[330px] dark:bg-red-600">
       <div className="flex items-center justify-between">
@@ -28,9 +33,9 @@ export function BusinessQRCard() {
       <div className="mt-5 flex items-center gap-3 rounded-2xl border border-zinc-200 p-3">
         <Equalizer className="h-4 dark:invert" />
         <p className="min-w-0 flex-1 truncate text-sm font-medium dark:text-white">
-          Now playing · Sauti ya Mji
+          <span className="text-zinc-400">Now playing · </span>
+          {nowPlaying}
         </p>
-        <span className="font-mono text-xs text-zinc-400">3:58</span>
       </div>
     </div>
   );

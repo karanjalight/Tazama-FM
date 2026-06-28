@@ -13,6 +13,9 @@ import { getPlanForAccount } from "@/lib/billing/subscription";
 import { listenerCapFor } from "@/lib/billing/plans";
 import { getOrigin } from "@/lib/origin";
 
+// A room is live state — always render fresh, never cache.
+export const dynamic = "force-dynamic";
+
 export async function generateMetadata({
   params,
 }: {

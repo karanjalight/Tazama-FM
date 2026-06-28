@@ -22,13 +22,13 @@ export function ParticipantsPanel({
   listenerCap: number;
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-          <Users className="size-4" />
+    <div className="rounded-2xl border border-border bg-card p-3 sm:p-4">
+      <div className="mb-2.5 flex items-center justify-between px-1">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Users className="size-4 text-brand" />
           In the room
         </h3>
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
           {participants.length}/{listenerCap}
         </span>
       </div>

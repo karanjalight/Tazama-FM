@@ -62,3 +62,80 @@ export async function getCachedTracksByGenre(
   if (error || !data) return [];
   return (data as TrackRow[]).map(rowToTrack);
 }
+
+/**
+ * A varied "trending" mix for the landing page — newest playable tracks,
+ * round-robined across genres so one genre doesn't dominate the row. SERVER ONLY.
+ */
+export async function getTrendingTracks(limit = 18): Promise<Track[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+
+  const { data } = await admin
+    .from("tracks")
+    .select("*")
+    .eq("is_playable", true)
+    .order("created_at", { ascending: false })
+    .limit(150);
+  if (!data) return [];
+
+  const rows = (data as TrackRow[]).map(rowToTrack);
+  const byGenre = new Map<string, Track[]>();
+  for (const t of rows) {
+    const arr = byGenre.get(t.genre) ?? [];
+    arr.push(t);
+    byGenre.set(t.genre, arr);
+  }
+  const buckets = [...byGenre.values()];
+  const out: Track[] = [];
+  const longest = Math.max(0, ...buckets.map((b) => b.length));
+  for (let i = 0; i < longest && out.length < limit; i++) {
+    for (const b of buckets) {
+      if (b[i]) {
+        out.push(b[i]);
+        if (out.length >= limit) break;
+      }
+    }
+  }
+  return out;
+}
+
+/** An artist trending on Tazama: their name, catalog presence, and a track. */
+export interface TrendingArtist {
+  name: string;
+  trackCount: number;
+  /** A representative (newest) track — drives the cover + the play action. */
+  track: Track;
+}
+
+/**
+ * Top artists in the catalog, ranked by how many tracks they have (then newest).
+ * The `artist` field is the source channel/artist on YouTube. SERVER ONLY.
+ */
+export async function getTrendingArtists(limit = 10): Promise<TrendingArtist[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+
+  const { data } = await admin
+    .from("tracks")
+    .select("*")
+    .eq("is_playable", true)
+    .order("created_at", { ascending: false })
+    .limit(400);
+  if (!data) return [];
+
+  const rows = (data as TrackRow[]).map(rowToTrack);
+  const map = new Map<string, { count: number; track: Track }>();
+  for (const t of rows) {
+    const name = (t.artist ?? "").trim();
+    if (!name) continue;
+    const entry = map.get(name);
+    if (entry) entry.count += 1;
+    else map.set(name, { count: 1, track: t }); // first seen = newest (desc order)
+  }
+
+  return [...map.entries()]
+    .map(([name, v]) => ({ name, trackCount: v.count, track: v.track }))
+    .sort((a, b) => b.trackCount - a.trackCount || a.name.localeCompare(b.name))
+    .slice(0, limit);
+}

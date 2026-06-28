@@ -4,14 +4,36 @@ import { useRef } from "react";
 import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { buttonVariants } from "@/components/ui/button";
-import { NowPlayingCard } from "@/components/live/now-playing-card";
+import { NowPlayingCard, type HeroTrack } from "@/components/live/now-playing-card";
 import { HeroCarousel } from "./hero-carousel";
 import { usePrefersReducedMotion } from "@/components/motion/use-prefers-reduced-motion";
+import { useLandingPlayer } from "@/components/landing/landing-player";
 import { heroRoom, heroTrack } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
-export function Hero() {
+export function Hero({ featured }: { featured?: HeroTrack & { youtubeId: string } }) {
   const reduced = usePrefersReducedMotion();
+  const { play, toggle, isPlaying, isBuffering, isCurrent } = useLandingPlayer();
+
+  // Real, playable featured track when the catalog has one; otherwise the
+  // static placeholder (with no play action).
+  const card: HeroTrack = featured ?? {
+    title: heroTrack.title,
+    artist: heroTrack.artist,
+    thumbnailUrl: null,
+  };
+  const cur = featured ? isCurrent(featured.youtubeId) : false;
+  const onToggle = featured
+    ? () =>
+        cur
+          ? toggle()
+          : play({
+              youtubeId: featured.youtubeId,
+              title: featured.title,
+              artist: featured.artist,
+              thumbnailUrl: featured.thumbnailUrl,
+            })
+    : undefined;
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -65,7 +87,13 @@ export function Hero() {
           style={{ y: cardY }}
           className="mx-auto w-full mt-5 max-w-sm lg:mr-2 m lg:ml-auto"
         >
-          <NowPlayingCard track={heroTrack} room={heroRoom} />
+          <NowPlayingCard
+            track={card}
+            room={heroRoom}
+            isPlaying={cur && isPlaying}
+            isBuffering={cur && isBuffering}
+            onToggle={onToggle}
+          />
         </motion.div>
       </div>
     </section>

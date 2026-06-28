@@ -26,15 +26,18 @@ export interface YouTubeApi {
 }
 
 /**
- * One YouTube IFrame player for a room, mounted into `containerRef`. Imperative
- * controls + reactive transport state. The room layers host/listener sync on top
- * of this (see `room-experience.tsx`).
+ * One YouTube IFrame player for a room. The player is created via a **callback
+ * ref** (`containerRef`) so it's built exactly when the host node mounts — the
+ * room shows a Lobby first and only mounts the stage on join, so a mount-time
+ * effect would run before the node exists and never create the player.
  */
 export function useYouTube(opts: {
   onEnded?: () => void;
   onUnplayable?: (youtubeId: string) => void;
-}): { api: YouTubeApi; containerRef: React.RefObject<HTMLDivElement | null> } {
-  const containerRef = React.useRef<HTMLDivElement | null>(null);
+}): {
+  api: YouTubeApi;
+  containerRef: React.RefCallback<HTMLDivElement>;
+} {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const playerRef = React.useRef<YTPlayer | null>(null);
   const readyRef = React.useRef(false);
@@ -54,19 +57,30 @@ export function useYouTube(opts: {
     cbRef.current = opts;
   });
 
-  // Create the player once a host node exists.
-  React.useEffect(() => {
-    let cancelled = false;
-    // The container holds an inner div that YT replaces with its iframe.
-    const inner = document.createElement("div");
-    if (containerRef.current) {
-      containerRef.current.innerHTML = "";
-      containerRef.current.appendChild(inner);
-      hostRef.current = inner;
+  // Build the player the moment the container mounts; tear it down on unmount.
+  const containerRef = React.useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      try {
+        playerRef.current?.destroy();
+      } catch {
+        /* already gone */
+      }
+      playerRef.current = null;
+      hostRef.current = null;
+      readyRef.current = false;
+      setReady(false);
+      return;
     }
+    if (playerRef.current || hostRef.current) return; // already set up
+
+    // YT replaces this inner node with its iframe.
+    const inner = document.createElement("div");
+    node.innerHTML = "";
+    node.appendChild(inner);
+    hostRef.current = inner;
 
     ensureApi(() => {
-      if (cancelled || playerRef.current || !hostRef.current || !window.YT) return;
+      if (playerRef.current || !hostRef.current || !window.YT) return;
       playerRef.current = new window.YT.Player(hostRef.current, {
         width: "100%",
         height: "100%",
@@ -79,9 +93,21 @@ export function useYouTube(opts: {
           iv_load_policy: 3,
         },
         events: {
-          onReady: () => {
+          onReady: (e) => {
             readyRef.current = true;
             setReady(true);
+            // A cross-origin iframe can't autoplay without this — the video
+            // would load/buffer but never start.
+            try {
+              e.target
+                .getIframe()
+                .setAttribute(
+                  "allow",
+                  "autoplay; encrypted-media; picture-in-picture",
+                );
+            } catch {
+              /* getIframe unavailable — non-fatal */
+            }
             const queued = pendingRef.current;
             if (queued) {
               playerRef.current?.loadVideoById(queued);
@@ -90,19 +116,12 @@ export function useYouTube(opts: {
           },
           onStateChange: (e) => {
             const s = e.data;
-            if (s === YT_STATE.PLAYING) {
-              setIsPlaying(true);
-              setIsBuffering(false);
-            } else if (s === YT_STATE.BUFFERING) {
-              setIsBuffering(true);
-            } else if (s === YT_STATE.PAUSED) {
-              setIsPlaying(false);
-              setIsBuffering(false);
-            } else if (s === YT_STATE.ENDED) {
-              setIsPlaying(false);
-              setIsBuffering(false);
-              cbRef.current.onEnded?.();
-            }
+            // Exhaustive mapping so the buffering spinner always settles — even
+            // at CUED/UNSTARTED (e.g. autoplay blocked), where the user can then
+            // press play.
+            setIsPlaying(s === YT_STATE.PLAYING);
+            setIsBuffering(s === YT_STATE.BUFFERING);
+            if (s === YT_STATE.ENDED) cbRef.current.onEnded?.();
             const d = e.target.getDuration();
             if (d > 0) setDurationMs(d * 1000);
           },
@@ -114,17 +133,6 @@ export function useYouTube(opts: {
         },
       });
     });
-
-    return () => {
-      cancelled = true;
-      try {
-        playerRef.current?.destroy();
-      } catch {
-        /* player already gone */
-      }
-      playerRef.current = null;
-      readyRef.current = false;
-    };
   }, []);
 
   // Poll position while playing.

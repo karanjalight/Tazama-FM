@@ -18,6 +18,7 @@ interface RoomRow {
   id: string;
   slug: string;
   host_id: string;
+  host_name: string;
   name: string;
   about: string;
   access: "public" | "private";
@@ -38,6 +39,33 @@ function mapRoom(r: RoomRow): Room {
     isLive: r.is_live,
     createdAt: r.created_at,
   };
+}
+
+type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
+
+/**
+ * Resolve display names for a set of actor ids from `profiles`.
+ *
+ * Host / adder names used to be denormalised onto the room rows, but we read
+ * them live here so the feature works even where those columns were never added
+ * to the database. Demo-only actors (absent from `profiles`) simply fall back to
+ * the caller's default.
+ */
+async function namesByActorId(
+  admin: AdminClient,
+  ids: (string | null)[],
+): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter((id): id is string => !!id))];
+  if (unique.length === 0) return new Map();
+  const { data } = await admin
+    .from("profiles")
+    .select("id, full_name")
+    .in("id", unique);
+  const map = new Map<string, string>();
+  for (const p of (data ?? []) as { id: string; full_name: string | null }[]) {
+    if (p.full_name) map.set(p.id, p.full_name);
+  }
+  return map;
 }
 
 function asTrack(v: unknown): RoomTrack | null {
@@ -80,34 +108,35 @@ export async function isRoomMember(
   return !!data;
 }
 
-/** Decorate bare rooms with host name, member count and now-playing track. */
-async function summarize(rooms: Room[]): Promise<RoomSummary[]> {
+/** Decorate raw room rows with member count and now-playing track. */
+async function summarize(rows: RoomRow[]): Promise<RoomSummary[]> {
+  const decorate = (
+    r: RoomRow,
+    listenerCount: number,
+    nowPlaying: RoomTrack | null,
+    hostName: string,
+  ): RoomSummary => ({
+    ...mapRoom(r),
+    hostName,
+    listenerCount,
+    nowPlaying,
+  });
+
   const admin = createAdminClient();
-  if (!admin || rooms.length === 0) {
-    return rooms.map((r) => ({
-      ...r,
-      hostName: "Host",
-      listenerCount: 0,
-      nowPlaying: null,
-    }));
+  if (!admin || rows.length === 0) {
+    return rows.map((r) => decorate(r, 0, null, r.host_name || "Host"));
   }
 
-  const ids = rooms.map((r) => r.id);
-  const hostIds = [...new Set(rooms.map((r) => r.hostId))];
+  const ids = rows.map((r) => r.id);
+  const [{ data: members }, { data: playback }, hostNames] = await Promise.all([
+    admin.from("room_members").select("room_id").in("room_id", ids),
+    admin.from("room_playback").select("room_id, track").in("room_id", ids),
+    namesByActorId(
+      admin,
+      rows.map((r) => r.host_id),
+    ),
+  ]);
 
-  const [{ data: hosts }, { data: members }, { data: playback }] =
-    await Promise.all([
-      admin.from("profiles").select("id, full_name").in("id", hostIds),
-      admin.from("room_members").select("room_id").in("room_id", ids),
-      admin.from("room_playback").select("room_id, track").in("room_id", ids),
-    ]);
-
-  const hostName = new Map(
-    (hosts ?? []).map((h: { id: string; full_name: string }) => [
-      h.id,
-      h.full_name || "Host",
-    ]),
-  );
   const counts = new Map<string, number>();
   for (const m of (members ?? []) as { room_id: string }[]) {
     counts.set(m.room_id, (counts.get(m.room_id) ?? 0) + 1);
@@ -119,12 +148,14 @@ async function summarize(rooms: Room[]): Promise<RoomSummary[]> {
     ]),
   );
 
-  return rooms.map((r) => ({
-    ...r,
-    hostName: hostName.get(r.hostId) ?? "Host",
-    listenerCount: counts.get(r.id) ?? 0,
-    nowPlaying: nowPlaying.get(r.id) ?? null,
-  }));
+  return rows.map((r) =>
+    decorate(
+      r,
+      counts.get(r.id) ?? 0,
+      nowPlaying.get(r.id) ?? null,
+      hostNames.get(r.host_id) ?? (r.host_name || "Host"),
+    ),
+  );
 }
 
 /** Rooms the viewer hosts, newest first. */
@@ -137,7 +168,7 @@ export async function getMyRooms(viewerId: string): Promise<RoomSummary[]> {
     .eq("host_id", viewerId)
     .order("created_at", { ascending: false })
     .limit(12);
-  return summarize(((data ?? []) as RoomRow[]).map(mapRoom));
+  return summarize((data ?? []) as RoomRow[]);
 }
 
 /** Live, public rooms for the discovery strip (optionally excluding own). */
@@ -155,7 +186,37 @@ export async function getLivePublicRooms(
     .limit(12);
   if (excludeHostId) q = q.neq("host_id", excludeHostId);
   const { data } = await q;
-  return summarize(((data ?? []) as RoomRow[]).map(mapRoom));
+  return summarize((data ?? []) as RoomRow[]);
+}
+
+/**
+ * Rooms matching a name query that the viewer is allowed to see (any public
+ * room, plus their own private ones). Live rooms surface first.
+ */
+export async function searchRooms(
+  query: string,
+  viewerId: string,
+  limit = 12,
+): Promise<RoomSummary[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+
+  const q = query.trim();
+  if (q.length < 2) return [];
+  // Strip PostgREST ilike metacharacters so user input can't alter the filter.
+  const safe = q.replace(/[%,()*]/g, " ").trim();
+  if (!safe) return [];
+
+  const { data } = await admin
+    .from("rooms")
+    .select("*")
+    .or(`access.eq.public,host_id.eq.${viewerId}`)
+    .ilike("name", `%${safe}%`)
+    .order("is_live", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return summarize((data ?? []) as RoomRow[]);
 }
 
 export async function getRoomPlayback(
@@ -184,6 +245,7 @@ interface QueueRow {
   room_id: string;
   track: unknown;
   added_by: string | null;
+  added_by_name: string | null;
   played: boolean;
   created_at: string;
 }
@@ -207,19 +269,11 @@ export async function getRoomQueue(
   if (items.length === 0) return [];
 
   const queueIds = items.map((i) => i.id);
-  const addedByIds = [
-    ...new Set(items.map((i) => i.added_by).filter(Boolean) as string[]),
-  ];
 
-  const [{ data: likes }, { data: people }] = await Promise.all([
-    admin
-      .from("room_track_likes")
-      .select("queue_id, user_id")
-      .in("queue_id", queueIds),
-    addedByIds.length
-      ? admin.from("profiles").select("id, full_name").in("id", addedByIds)
-      : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
-  ]);
+  const { data: likes } = await admin
+    .from("room_track_likes")
+    .select("queue_id, user_id")
+    .in("queue_id", queueIds);
 
   const likeCount = new Map<string, number>();
   const likedByMe = new Set<string>();
@@ -227,11 +281,10 @@ export async function getRoomQueue(
     likeCount.set(l.queue_id, (likeCount.get(l.queue_id) ?? 0) + 1);
     if (viewerId && l.user_id === viewerId) likedByMe.add(l.queue_id);
   }
-  const nameById = new Map(
-    ((people ?? []) as { id: string; full_name: string }[]).map((p) => [
-      p.id,
-      p.full_name,
-    ]),
+
+  const adderNames = await namesByActorId(
+    admin,
+    items.map((i) => i.added_by),
   );
 
   const mapped: QueueItem[] = items.map((i) => {
@@ -246,7 +299,10 @@ export async function getRoomQueue(
       roomId: i.room_id,
       track,
       addedBy: i.added_by,
-      addedByName: i.added_by ? (nameById.get(i.added_by) ?? null) : null,
+      addedByName:
+        (i.added_by ? adderNames.get(i.added_by) : null) ??
+        i.added_by_name ??
+        null,
       likeCount: likeCount.get(i.id) ?? 0,
       likedByMe: likedByMe.has(i.id),
       played: i.played,

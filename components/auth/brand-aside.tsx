@@ -49,8 +49,8 @@ export function BrandAside() {
       <Image
         src="/brand/logo.png"
         alt="Tazama"
-        width={120}
-        height={40}
+        width={1200}
+        height={1200}
         className="h-9 lg:h-40 w-auto object-contain brightness-0 invert"
         priority
       />

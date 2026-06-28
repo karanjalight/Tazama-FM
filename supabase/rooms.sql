@@ -16,10 +16,14 @@ begin
 end $$;
 
 -- 2. rooms -------------------------------------------------------------------
+-- host_id is a plain uuid (the actor's id — a real auth user OR a demo session),
+-- intentionally NOT FK'd to profiles/auth.users so rooms work in demo mode too.
+-- The host's display name is denormalised here.
 create table if not exists public.rooms (
   id          uuid primary key default gen_random_uuid(),
   slug        text not null unique,
-  host_id     uuid not null references public.profiles (id) on delete cascade,
+  host_id     uuid not null,
+  host_name   text not null default '',
   name        text not null,
   about       text not null default '',
   access      public.room_access not null default 'public',
@@ -34,7 +38,7 @@ create index if not exists rooms_live_public_idx
 -- 3. room_members (host + listeners; powers private-room access) -------------
 create table if not exists public.room_members (
   room_id   uuid not null references public.rooms (id) on delete cascade,
-  user_id   uuid not null references public.profiles (id) on delete cascade,
+  user_id   uuid not null,   -- plain actor id (real OR demo), not FK'd
   role      text not null default 'listener',   -- 'host' | 'listener'
   joined_at timestamptz not null default now(),
   primary key (room_id, user_id)
@@ -52,19 +56,20 @@ create table if not exists public.room_playback (
 
 -- 5. room_queue (collaborative up-next) --------------------------------------
 create table if not exists public.room_queue (
-  id         uuid primary key default gen_random_uuid(),
-  room_id    uuid not null references public.rooms (id) on delete cascade,
-  track      jsonb not null,                      -- {youtubeId,title,artist,thumbnailUrl}
-  added_by   uuid references public.profiles (id) on delete set null,
-  played     boolean not null default false,
-  created_at timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  room_id       uuid not null references public.rooms (id) on delete cascade,
+  track         jsonb not null,                   -- {youtubeId,title,artist,thumbnailUrl}
+  added_by      uuid,                             -- plain actor id (real OR demo)
+  added_by_name text,                             -- denormalised adder name
+  played        boolean not null default false,
+  created_at    timestamptz not null default now()
 );
 create index if not exists room_queue_room_idx on public.room_queue (room_id, created_at);
 
 -- 6. room_track_likes (upvotes that reorder the queue + feed suggestions) -----
 create table if not exists public.room_track_likes (
   queue_id   uuid not null references public.room_queue (id) on delete cascade,
-  user_id    uuid not null references public.profiles (id) on delete cascade,
+  user_id    uuid not null,   -- plain actor id (real OR demo), not FK'd
   room_id    uuid not null references public.rooms (id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (queue_id, user_id)
@@ -73,7 +78,7 @@ create index if not exists room_track_likes_room_idx on public.room_track_likes 
 
 -- 7. subscriptions (account-level plan; written by the Paystack webhook) ------
 create table if not exists public.subscriptions (
-  account_id                 uuid primary key references public.profiles (id) on delete cascade,
+  account_id                 uuid primary key,   -- plain actor id (real OR demo)
   plan                       public.subscription_plan not null default 'free',
   status                     text not null default 'active',  -- active|cancelled|past_due
   paystack_customer_code     text,
@@ -81,6 +86,17 @@ create table if not exists public.subscriptions (
   current_period_end         timestamptz,
   updated_at                 timestamptz not null default now()
 );
+
+-- 7b. Migration for databases created before rooms were decoupled from auth ---
+-- Drops the old profiles foreign keys (which blocked demo-session hosts) and
+-- adds the denormalised name columns. Safe + idempotent on fresh installs.
+alter table public.rooms            drop constraint if exists rooms_host_id_fkey;
+alter table public.rooms            add  column     if not exists host_name text not null default '';
+alter table public.room_members     drop constraint if exists room_members_user_id_fkey;
+alter table public.room_queue       drop constraint if exists room_queue_added_by_fkey;
+alter table public.room_queue       add  column     if not exists added_by_name text;
+alter table public.room_track_likes drop constraint if exists room_track_likes_user_id_fkey;
+alter table public.subscriptions    drop constraint if exists subscriptions_account_id_fkey;
 
 -- 8. Security-definer helpers (avoid recursive RLS between rooms/members) -----
 create or replace function public.is_room_host(p_room uuid, p_user uuid)

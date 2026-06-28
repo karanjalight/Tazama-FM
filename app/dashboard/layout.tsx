@@ -6,9 +6,13 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { MobileSidebar } from "@/components/dashboard/mobile-sidebar";
 import { ProfileMenu } from "@/components/dashboard/profile-menu";
 import { NowPlayingBar } from "@/components/dashboard/now-playing-bar";
+import { DashboardMain } from "@/components/dashboard/dashboard-main";
 import { PlayerProvider } from "@/components/player/player-provider";
+import { NowPlayingPanel } from "@/components/player/now-playing-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { getPlanForAccount } from "@/lib/billing/subscription";
+import { getOrigin } from "@/lib/origin";
 
 export default async function DashboardLayout({
   children,
@@ -18,6 +22,12 @@ export default async function DashboardLayout({
   const profile = await getCurrentProfile();
   if (!profile) redirect("/login");
   if (!profile.onboardingComplete) redirect("/onboarding");
+
+  // Needed by the sidebar's "Create a room" wizard (plan gating + share URLs).
+  const [currentPlan, origin] = await Promise.all([
+    getPlanForAccount(profile.id),
+    getOrigin(),
+  ]);
 
   const isBusiness = profile.accountType === "business";
   const displayName = isBusiness
@@ -36,6 +46,8 @@ export default async function DashboardLayout({
           email={profile.email}
           accountType={profile.accountType}
           avatarKey={profile.avatarKey}
+          currentPlan={currentPlan}
+          origin={origin}
         />
 
       <div className="md:pl-64">
@@ -46,6 +58,8 @@ export default async function DashboardLayout({
               secondary={secondary}
               accountType={profile.accountType}
               avatarKey={profile.avatarKey}
+              currentPlan={currentPlan}
+              origin={origin}
             />
             <Link href="/dashboard" aria-label="Tazama, dashboard">
               <Logo />
@@ -64,10 +78,11 @@ export default async function DashboardLayout({
           </div>
         </header>
 
-        <main className="px-4 pt-6 pb-32 sm:px-6 lg:px-8">{children}</main>
+        <DashboardMain>{children}</DashboardMain>
       </div>
 
         <NowPlayingBar />
+        <NowPlayingPanel />
       </div>
     </PlayerProvider>
   );

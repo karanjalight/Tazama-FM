@@ -18,6 +18,8 @@
   --color-brand: #e5342e;
   --color-brand-strong: #c42a25;
   --color-live: #22c55e;
+  --color-play: #1ed760; /* Spotify-style green, reserved for play actions */
+  --color-play-strong: #1db954;
 
   /* ---- shadcn semantic tokens -> Tailwind utilities ---- */
   --color-background: var(--background);

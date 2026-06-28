@@ -12,7 +12,16 @@ import { cn } from "@/lib/utils";
  * Apple-Music-style artwork card. Click plays the track (or toggles if it's
  * current). Pass `queue` (the row it lives in) so next/previous traverse the row.
  */
-export function TrackCard({ track, queue }: { track: Track; queue?: Track[] }) {
+export function TrackCard({
+  track,
+  queue,
+  fill,
+}: {
+  track: Track;
+  queue?: Track[];
+  /** Fill the parent cell (grid layouts) instead of a fixed carousel width. */
+  fill?: boolean;
+}) {
   const { currentTrack, isPlaying, play, togglePlay } = usePlayer();
   const isCurrent = currentTrack?.id === track.id;
   const playingThis = isCurrent && isPlaying;
@@ -27,7 +36,10 @@ export function TrackCard({ track, queue }: { track: Track; queue?: Track[] }) {
       type="button"
       onClick={handleClick}
       aria-label={`${playingThis ? "Pause" : "Play"} ${track.title}`}
-      className="group w-40 shrink-0 text-left sm:w-44 lg:w-48"
+      className={cn(
+        "group text-left",
+        fill ? "w-full" : "w-40 shrink-0 sm:w-44 lg:w-48",
+      )}
     >
       <div className="relative">
         <Cover
@@ -77,9 +89,9 @@ export function TrackCard({ track, queue }: { track: Track; queue?: Track[] }) {
 }
 
 /** Placeholder shown while a genre's tracks are being seeded. */
-export function TrackCardSkeleton() {
+export function TrackCardSkeleton({ fill }: { fill?: boolean }) {
   return (
-    <div className="w-40 shrink-0 sm:w-44 lg:w-48">
+    <div className={cn(fill ? "w-full" : "w-40 shrink-0 sm:w-44 lg:w-48")}>
       <div className="aspect-square animate-pulse rounded-xl bg-muted" />
       <div className="mt-2.5 h-3.5 w-3/4 animate-pulse rounded bg-muted" />
       <div className="mt-1.5 h-3 w-1/2 animate-pulse rounded bg-muted" />

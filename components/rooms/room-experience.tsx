@@ -76,6 +76,14 @@ export function RoomExperience({
     hostPlan === "free" &&
       (initialPlayback?.listeningMsTotal ?? 0) >= CAP_MS,
   );
+  // Listeners follow the host by default ("synced"); they can break off and
+  // drive their own player ("solo"), then re-sync. The host is always the
+  // broadcast source, so this is meaningful only for non-hosts.
+  const [synced, setSynced] = React.useState(true);
+  // What the host is currently broadcasting (shown so a solo listener can rejoin).
+  const [roomTrack, setRoomTrack] = React.useState<RoomTrack | null>(
+    initialPlayback?.track ?? null,
+  );
 
   // Mirrors for use inside stable callbacks / intervals.
   const nowPlayingRef = React.useRef(nowPlaying);
@@ -88,6 +96,8 @@ export function RoomExperience({
   const pendingSeekRef = React.useRef<number | null>(null);
   const pauseAfterLoadRef = React.useRef(false);
   const cappedRef = React.useRef(capped);
+  const syncedRef = React.useRef(true);
+  const lastHostPayloadRef = React.useRef<PlaybackPayload | null>(null);
   const listeningMsRef = React.useRef(initialPlayback?.listeningMsTotal ?? 0);
   const unpersistedMsRef = React.useRef(0);
   const lastPersistRef = React.useRef(0);
@@ -99,15 +109,18 @@ export function RoomExperience({
   React.useEffect(() => void (queueRef.current = queue), [queue]);
   React.useEffect(() => void (suggestionsRef.current = suggestions), [suggestions]);
   React.useEffect(() => void (cappedRef.current = capped), [capped]);
+  React.useEffect(() => void (syncedRef.current = synced), [synced]);
 
   /* ----------------------------- the player ----------------------------- */
 
+  // The host advances the room; a solo (un-synced) listener advances their own
+  // stream. A synced listener waits for the host's next broadcast.
   const handleEnded = React.useCallback(() => {
-    if (isHost) advanceRef.current?.();
+    if (isHost || !syncedRef.current) advanceRef.current?.();
   }, [isHost]);
 
   const handleUnplayable = React.useCallback(() => {
-    if (isHost) {
+    if (isHost || !syncedRef.current) {
       toast.message("That track can't be played here — skipping.");
       advanceRef.current?.();
     }
@@ -174,10 +187,14 @@ export function RoomExperience({
       setNowPlaying(track);
       nowPlayingRef.current = track;
       loadTrack(track.youtubeId);
-      setTimeout(() => broadcastState(), 300);
-      setTimeout(() => persistSnapshot(), 400);
+      // Only the host drives the shared room (broadcast + persist). A solo
+      // listener just plays locally.
+      if (isHost) {
+        setTimeout(() => broadcastState(), 300);
+        setTimeout(() => persistSnapshot(), 400);
+      }
     },
-    [loadTrack, broadcastState, persistSnapshot],
+    [loadTrack, broadcastState, persistSnapshot, isHost],
   );
 
   const refetchQueue = React.useCallback(async () => {
@@ -198,10 +215,12 @@ export function RoomExperience({
     [playTrack, room.id, refetchQueue],
   );
 
-  // Host auto-advance: top of queue (most-liked) → suggestion → idle.
+  // Auto-advance. The host consumes the shared queue (most-liked first) then
+  // falls back to suggestions; a solo listener just rolls through suggestions
+  // (their own endless stream) without touching the shared queue.
   const advance = React.useCallback(() => {
     const q = queueRef.current;
-    if (q.length > 0) {
+    if (isHost && q.length > 0) {
       playQueued(q[0]);
       return;
     }
@@ -209,7 +228,7 @@ export function RoomExperience({
       (s) => s.youtubeId !== appliedIdRef.current,
     );
     if (sug) playTrack(sug);
-  }, [playQueued, playTrack]);
+  }, [isHost, playQueued, playTrack]);
   // Latest-ref so the player's onEnded (created before `advance`) always calls
   // the current advance without re-creating the player.
   const advanceRef = React.useRef<(() => void) | null>(null);
@@ -220,10 +239,9 @@ export function RoomExperience({
 
   /* ----------------------- listener: follow host ----------------------- */
 
-  const handlePlayback = React.useCallback(
+  // Mirror a host snapshot onto this client's player (load / seek / play-pause).
+  const applyHostPayload = React.useCallback(
     (p: PlaybackPayload) => {
-      if (isHost) return; // host owns the truth
-      setCapped(!!p.capped);
       setNowPlaying(p.track);
       nowPlayingRef.current = p.track;
       if (!p.track) {
@@ -242,8 +260,48 @@ export function RoomExperience({
       if (p.isPlaying && !ytPlayingRef.current) ytRef.current.play();
       if (!p.isPlaying && ytPlayingRef.current) ytRef.current.pause();
     },
-    [isHost, loadTrack],
+    [loadTrack],
   );
+
+  const handlePlayback = React.useCallback(
+    (p: PlaybackPayload) => {
+      if (isHost) return; // host owns the truth
+      // Always remember what the room is playing (so a solo listener can rejoin).
+      lastHostPayloadRef.current = p;
+      setRoomTrack(p.track);
+      setCapped(!!p.capped);
+      // Only mirror it while we're following along.
+      if (syncedRef.current) applyHostPayload(p);
+    },
+    [isHost, applyHostPayload],
+  );
+
+  /** Re-follow the host: snap to their latest broadcast (or ask for one). */
+  const syncToRoom = React.useCallback(() => {
+    setSynced(true);
+    syncedRef.current = true;
+    const p = lastHostPayloadRef.current;
+    if (p) applyHostPayload(p);
+    else apiRef.current?.requestSync();
+  }, [applyHostPayload]);
+
+  /** Listener toggle: follow the host, or break off and DJ your own player. */
+  const toggleSync = React.useCallback(() => {
+    if (syncedRef.current) {
+      setSynced(false);
+      syncedRef.current = false;
+    } else {
+      syncToRoom();
+    }
+  }, [syncToRoom]);
+
+  /** A manual control by a synced listener breaks them off into solo mode. */
+  const ensureControl = React.useCallback(() => {
+    if (!isHost && syncedRef.current) {
+      setSynced(false);
+      syncedRef.current = false;
+    }
+  }, [isHost]);
 
   /* ------------------------------ reactions ----------------------------- */
 
@@ -377,23 +435,24 @@ export function RoomExperience({
   /* ---------------------------- host controls --------------------------- */
 
   function togglePlay() {
-    if (!isHost) return;
-    if (capped) {
+    if (isHost && capped) {
       toast.message("Upgrade to keep the music going.");
       return;
     }
+    ensureControl();
     if (yt.isPlaying) yt.pause();
     else yt.play();
   }
 
   function skip() {
-    if (isHost) advance();
+    ensureControl();
+    advance();
   }
 
   function seek(ms: number) {
-    if (!isHost) return;
+    ensureControl();
     yt.seek(ms);
-    setTimeout(() => broadcastState(), 100);
+    if (isHost) setTimeout(() => broadcastState(), 100);
   }
 
   /* --------------------------- queue actions ---------------------------- */
@@ -438,6 +497,17 @@ export function RoomExperience({
     await removeFromQueue(item.id);
     apiRef.current?.sendQueuePing();
     await refetchQueue();
+  }
+
+  // Anyone can play a queued track on their own player. The host's play drives
+  // the room (and consumes the queue); a listener just previews it solo.
+  function onPlayNow(item: QueueItem) {
+    if (isHost) {
+      playQueued(item);
+    } else {
+      ensureControl();
+      playTrack(item.track);
+    }
   }
 
   function sendReaction(emoji: string) {
@@ -537,12 +607,14 @@ export function RoomExperience({
           onJoin={join}
         />
       ) : (
-        <main className="mx-auto grid max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px]">
+        <main className="mx-auto grid max-w-7xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px]">
           <div className="space-y-4">
             <RoomStage
               containerRef={containerRef}
               nowPlaying={nowPlaying}
+              roomTrack={roomTrack}
               isHost={isHost}
+              synced={synced}
               isPlaying={yt.isPlaying}
               isBuffering={yt.isBuffering}
               positionMs={yt.positionMs}
@@ -552,13 +624,14 @@ export function RoomExperience({
               onTogglePlay={togglePlay}
               onSkip={skip}
               onSeek={seek}
+              onToggleSync={toggleSync}
             />
 
             <div className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-2.5">
               <span className="text-xs text-muted-foreground">
                 {isHost
                   ? "You're the host — play anything, anytime"
-                  : "Everyone gets a say — like to upvote, add a track"}
+                  : "Play in sync or go solo — like to upvote, add a track"}
               </span>
               <ReactionBar onSend={sendReaction} />
             </div>
@@ -592,7 +665,7 @@ export function RoomExperience({
               isHost={isHost}
               onLike={onLike}
               onRemove={onRemove}
-              onPlayNow={playQueued}
+              onPlayNow={onPlayNow}
             />
           </aside>
         </main>

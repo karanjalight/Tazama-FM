@@ -8,7 +8,7 @@
 import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getRoomViewer, ensureProfile } from "@/lib/rooms/viewer";
+import { getRoomViewer } from "@/lib/rooms/viewer";
 import { getRoomBySlug, getRoomQueue } from "@/lib/rooms/queries";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
 import { ROOM_GENRES, MAX_ROOM_GENRES } from "@/lib/room-genres";
@@ -73,9 +73,6 @@ export async function createRoom(
     };
   }
 
-  // Backfill a profiles row so the host_id foreign key holds (demo users).
-  await ensureProfile(viewer);
-
   const slug = await uniqueSlug(parsed.data.name);
 
   const { data: room, error } = await admin
@@ -93,6 +90,9 @@ export async function createRoom(
     .single();
 
   if (error || !room) {
+    // Surface the real cause server-side (e.g. schema drift) — the client only
+    // ever sees a friendly message.
+    console.error("[createRoom] insert failed:", error?.message ?? "no row");
     return { ok: false, error: "Could not create the room. Try again." };
   }
 
@@ -143,7 +143,6 @@ export async function joinRoom(roomId: string): Promise<{ ok: boolean }> {
   const viewer = await getRoomViewer();
   const admin = createAdminClient();
   if (!viewer || !admin) return { ok: false };
-  await ensureProfile(viewer);
   const { error } = await admin
     .from("room_members")
     .upsert(
@@ -162,7 +161,6 @@ export async function addToQueue(
   if (!viewer || !admin) return { ok: false };
   const parsed = trackSchema.safeParse(track);
   if (!parsed.success) return { ok: false };
-  await ensureProfile(viewer);
   const { error } = await admin.from("room_queue").insert({
     room_id: roomId,
     track: parsed.data,
@@ -198,7 +196,6 @@ export async function toggleLike(
   const viewer = await getRoomViewer();
   const admin = createAdminClient();
   if (!viewer || !admin) return { ok: false, liked: false };
-  await ensureProfile(viewer);
 
   const { data: existing } = await admin
     .from("room_track_likes")

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { BusinessPanel } from "@/components/dashboard/business-panel";
 import { GenreFeed } from "@/components/dashboard/genre-feed";
+import { ArtistsRow } from "@/components/dashboard/artists-row";
 import { RoomsSection } from "@/components/dashboard/rooms-section";
 import { getCurrentProfile, firstName } from "@/lib/auth/profile";
 import { getCachedTracksByGenre, type Track } from "@/lib/tracks";
@@ -54,7 +55,9 @@ export default async function DashboardPage() {
         </p>
       </header>
 
-      <RoomsSection />
+      {/* <RoomsSection /> */}
+
+      <ArtistsRow />
 
       {isBusiness && profile.business && (
         <BusinessPanel

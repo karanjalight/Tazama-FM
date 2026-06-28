@@ -2,6 +2,7 @@
 
 import {
   ChevronUp,
+  ListMusic,
   MonitorPlay,
   Play,
   Repeat,
@@ -42,13 +43,20 @@ export function NowPlayingBar() {
     toggleRepeat,
     toggleShuffle,
     expand,
+    isQueueOpen,
+    toggleQueue,
   } = usePlayer();
 
   const hasTrack = current !== null;
   const RepeatGlyph = repeat === "one" ? Repeat1 : Repeat;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/85 backdrop-blur-xl md:left-64">
+    <div
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/85 backdrop-blur-xl md:left-64",
+        isQueueOpen && "xl:right-85",
+      )}
+    >
       <div className="flex h-20 items-center gap-3 px-4 sm:gap-4 sm:px-6">
         {/* ── now playing (click to expand to artwork view) ── */}
         <div className="flex min-w-0 items-center gap-3 sm:w-52 lg:w-72">
@@ -181,6 +189,18 @@ export function NowPlayingBar() {
             sliderClassName="w-24"
             className="mr-1"
           />
+          <button
+            type="button"
+            onClick={toggleQueue}
+            aria-label="Toggle Now Playing panel"
+            aria-pressed={isQueueOpen}
+            className={cn(
+              "grid size-9 place-items-center rounded-full transition-colors hover:bg-muted hover:text-foreground",
+              isQueueOpen ? "text-brand" : "text-muted-foreground",
+            )}
+          >
+            <ListMusic className="size-[18px]" />
+          </button>
           <button
             type="button"
             onClick={() => expand({ video: true })}

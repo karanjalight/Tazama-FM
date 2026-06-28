@@ -16,6 +16,7 @@ import {
   type YTPlayer,
 } from "./yt";
 import { PlayerStage } from "./player-stage";
+import { recordRecent } from "./recent";
 
 /** The minimal track shape the player needs (a catalog `Track` satisfies it). */
 export interface PlayerTrack {
@@ -32,6 +33,8 @@ export interface PlayerContextValue {
   queue: PlayerTrack[];
   /** Index of the current track within `queue` (-1 when nothing is loaded). */
   queueIndex: number;
+  /** Upcoming tracks in play order (after the current one), with queue index. */
+  upNext: { track: PlayerTrack; index: number }[];
 
   // ── transport state ──────────────────────────────────────────────────────
   isPlaying: boolean;
@@ -54,6 +57,12 @@ export interface PlayerContextValue {
   /** Within fullscreen: showing the actual YouTube video (vs. album artwork). */
   videoMode: boolean;
 
+  // ── endless radio + side queue panel ─────────────────────────────────────
+  /** When on, the queue auto-tops-up from the viewer's genres (never stops). */
+  autoRadio: boolean;
+  /** Whether the right-hand Now Playing / Up Next panel is open (desktop). */
+  isQueueOpen: boolean;
+
   // ── actions ──────────────────────────────────────────────────────────────
   /** Load + play a track. Pass a list to make it the queue (jumps to `track`). */
   play: (track: PlayerTrack, queue?: PlayerTrack[]) => void;
@@ -65,6 +74,10 @@ export interface PlayerContextValue {
   toggleMute: () => void;
   toggleRepeat: () => void;
   toggleShuffle: () => void;
+  /** Jump to a specific track in the current queue (Up Next list). */
+  playQueueIndex: (queueIndex: number) => void;
+  toggleAutoRadio: () => void;
+  toggleQueue: () => void;
   /** Open the fullscreen view (optionally jumping straight to video). */
   expand: (opts?: { video?: boolean }) => void;
   collapse: () => void;
@@ -88,6 +101,8 @@ interface PlayerPrefs {
   isMuted: boolean;
   repeat: Repeat;
   shuffle: boolean;
+  autoRadio: boolean;
+  isQueueOpen: boolean;
 }
 
 function readPrefs(): Partial<PlayerPrefs> | null {
@@ -174,6 +189,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [videoMode, setVideoMode] = React.useState(false);
 
+  // endless radio + side queue panel
+  const [autoRadio, setAutoRadio] = React.useState(true);
+  const [isQueueOpen, setIsQueueOpen] = React.useState(true);
+  /** Guards against overlapping radio top-up fetches. */
+  const radioFetchingRef = React.useRef(false);
+
   // A single "latest committed state" mirror so the (stable) YT event callbacks
   // never read stale closures. Synced after each commit — events fire async, so
   // one-render lag never applies; `play()` also writes it eagerly below.
@@ -203,6 +224,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   });
 
   const queueIndex = order[orderPos] ?? -1;
+
+  // Upcoming tracks in play order (drives the right-hand "Up Next" panel).
+  const upNext = React.useMemo(() => {
+    const out: { track: PlayerTrack; index: number }[] = [];
+    for (let p = orderPos + 1; p < order.length; p++) {
+      const qi = order[p];
+      const track = queue[qi];
+      if (track) out.push({ track, index: qi });
+    }
+    return out;
+  }, [order, orderPos, queue]);
 
   // ── low-level: hand a videoId to the player (or queue it until ready) ──────
   const commandLoad = React.useCallback((youtubeId: string) => {
@@ -359,6 +391,36 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const toggleVideo = React.useCallback(() => setVideoMode((v) => !v), []);
 
+  const toggleAutoRadio = React.useCallback(() => setAutoRadio((v) => !v), []);
+  const toggleQueue = React.useCallback(() => setIsQueueOpen((v) => !v), []);
+
+  /** Append fresh (de-duped) tracks to the end of the queue + play order. */
+  const appendToQueue = React.useCallback((tracks: PlayerTrack[]) => {
+    const { queue, order } = latest.current;
+    const existing = new Set(queue.map((t) => t.youtubeId));
+    const fresh = tracks.filter(
+      (t) => t.youtubeId && !existing.has(t.youtubeId),
+    );
+    if (fresh.length === 0) return;
+    const nextQueue = [...queue, ...fresh];
+    const nextOrder = [...order, ...fresh.map((_, k) => queue.length + k)];
+    setQueue(nextQueue);
+    setOrder(nextOrder);
+    latest.current.queue = nextQueue;
+    latest.current.order = nextOrder;
+  }, []);
+
+  /** Jump straight to a track in the current queue (the Up Next list). */
+  const playQueueIndex = React.useCallback(
+    (qi: number) => {
+      const { queue, order } = latest.current;
+      if (qi < 0 || qi >= queue.length) return;
+      const pos = order.indexOf(qi);
+      if (pos >= 0) playOrderPos(pos);
+    },
+    [playOrderPos],
+  );
+
   // ── create the single, persistent player once the API is available ────────
   React.useEffect(() => {
     let cancelled = false;
@@ -381,6 +443,17 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
           onReady: (e) => {
             readyRef.current = true;
             setIsReady(true);
+            // Make sure the browser lets the (visually hidden) iframe autoplay.
+            try {
+              e.target
+                .getIframe()
+                .setAttribute(
+                  "allow",
+                  "autoplay; encrypted-media; picture-in-picture",
+                );
+            } catch {
+              /* getIframe unavailable — non-fatal */
+            }
             // Apply hydrated audio prefs to the fresh player.
             e.target.setVolume(latest.current.volume);
             if (latest.current.isMuted) e.target.mute();
@@ -457,13 +530,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setRepeat(prefs.repeat);
     }
     if (typeof prefs.shuffle === "boolean") setShuffle(prefs.shuffle);
+    if (typeof prefs.autoRadio === "boolean") setAutoRadio(prefs.autoRadio);
+    if (typeof prefs.isQueueOpen === "boolean") setIsQueueOpen(prefs.isQueueOpen);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   // ── persist prefs whenever they change ────────────────────────────────────
   React.useEffect(() => {
-    writePrefs({ volume, isMuted, repeat, shuffle });
-  }, [volume, isMuted, repeat, shuffle]);
+    writePrefs({ volume, isMuted, repeat, shuffle, autoRadio, isQueueOpen });
+  }, [volume, isMuted, repeat, shuffle, autoRadio, isQueueOpen]);
 
   // ── keep the player's audio in sync with state ────────────────────────────
   React.useEffect(() => {
@@ -477,6 +552,39 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     if (isMuted) p.mute();
     else p.unMute();
   }, [isMuted]);
+
+  // ── record each track to the local "recently played" history ──────────────
+  React.useEffect(() => {
+    if (currentTrack) recordRecent(currentTrack);
+  }, [currentTrack]);
+
+  // ── endless radio: top the queue up before it runs out ────────────────────
+  React.useEffect(() => {
+    if (!autoRadio || !currentTrack) return;
+    // Only fetch when we're within two tracks of the end of the play order.
+    if (orderPos < order.length - 2) return;
+    if (radioFetchingRef.current) return;
+    radioFetchingRef.current = true;
+
+    const exclude = latest.current.queue.map((t) => t.youtubeId);
+    fetch("/api/radio", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exclude }),
+    })
+      .then((res) => res.json())
+      .then((data: { tracks?: PlayerTrack[] }) => {
+        if (Array.isArray(data.tracks) && data.tracks.length) {
+          appendToQueue(data.tracks);
+        }
+      })
+      .catch(() => {
+        /* best-effort — radio just won't extend this time */
+      })
+      .finally(() => {
+        radioFetchingRef.current = false;
+      });
+  }, [autoRadio, currentTrack, orderPos, order.length, appendToQueue]);
 
   // ── poll playback position while playing ──────────────────────────────────
   React.useEffect(() => {
@@ -496,6 +604,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentTrack,
       queue,
       queueIndex,
+      upNext,
       isPlaying,
       isBuffering,
       isReady,
@@ -507,6 +616,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       shuffle,
       isExpanded,
       videoMode,
+      autoRadio,
+      isQueueOpen,
       play,
       togglePlay,
       next,
@@ -516,6 +627,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleMute,
       toggleRepeat,
       toggleShuffle,
+      playQueueIndex,
+      toggleAutoRadio,
+      toggleQueue,
       expand,
       collapse,
       toggleVideo,
@@ -524,6 +638,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       currentTrack,
       queue,
       queueIndex,
+      upNext,
       isPlaying,
       isBuffering,
       isReady,
@@ -535,6 +650,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       shuffle,
       isExpanded,
       videoMode,
+      autoRadio,
+      isQueueOpen,
       play,
       togglePlay,
       next,
@@ -544,6 +661,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       toggleMute,
       toggleRepeat,
       toggleShuffle,
+      playQueueIndex,
+      toggleAutoRadio,
+      toggleQueue,
       expand,
       collapse,
       toggleVideo,

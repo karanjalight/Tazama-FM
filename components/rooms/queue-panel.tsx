@@ -63,16 +63,14 @@ export function QueuePanel({
                 </p>
               </div>
 
-              {isHost && (
-                <button
-                  type="button"
-                  aria-label="Play now"
-                  onClick={() => onPlayNow(item)}
-                  className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition hover:bg-foreground hover:text-background group-hover:opacity-100"
-                >
-                  <Play className="size-3.5 fill-current" />
-                </button>
-              )}
+              <button
+                type="button"
+                aria-label={isHost ? "Play now" : "Play on my player"}
+                onClick={() => onPlayNow(item)}
+                className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground opacity-0 transition hover:bg-foreground hover:text-background group-hover:opacity-100"
+              >
+                <Play className="size-3.5 fill-current" />
+              </button>
 
               <button
                 type="button"

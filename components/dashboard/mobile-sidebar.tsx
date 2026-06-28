@@ -1,6 +1,8 @@
 "use client";
 
-import { LogOut, Menu, Plus } from "lucide-react";
+import * as React from "react";
+import { usePathname } from "next/navigation";
+import { LogOut, Menu } from "lucide-react";
 
 import {
   Sheet,
@@ -12,11 +14,12 @@ import {
 } from "@/components/ui/sheet";
 import { Logo } from "@/components/brand/logo";
 import { UserBadge } from "./user-badge";
-import { dashboardNav } from "./nav-items";
+import { CreateRoomButton } from "./create-room-button";
+import { dashboardNav, isNavActive } from "./nav-items";
 import { useSignOut } from "./use-sign-out";
-import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/components/auth/account-type-toggle";
+import type { SubscriptionPlan } from "@/lib/billing/plans";
 
 /** Slide-in dashboard navigation for small screens (hamburger → left drawer). */
 export function MobileSidebar({
@@ -24,16 +27,22 @@ export function MobileSidebar({
   secondary,
   accountType,
   avatarKey,
+  currentPlan,
+  origin,
 }: {
   name: string;
   secondary: string;
   accountType: AccountType | null;
   avatarKey: string | null;
+  currentPlan: SubscriptionPlan;
+  origin: string;
 }) {
   const { signOut, signingOut } = useSignOut();
+  const pathname = usePathname() ?? "";
+  const [open, setOpen] = React.useState(false);
 
   return (
-    <Sheet>
+    <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
         aria-label="Open menu"
         className="inline-grid size-9 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
@@ -48,42 +57,36 @@ export function MobileSidebar({
         </SheetHeader>
 
         <div className="p-3">
-          <SheetClose
-            render={
-              <a
-                href="#"
-                className={cn(
-                  buttonVariants({ variant: "brand" }),
-                  "h-10 w-full justify-start gap-2 rounded-xl px-3 text-[14px]",
-                )}
-              />
-            }
-          >
-            <Plus className="size-4" />
-            Create a room
-          </SheetClose>
+          {/* Opening the wizard closes the drawer first so the dialog is unobstructed. */}
+          <CreateRoomButton
+            accountType={accountType}
+            currentPlan={currentPlan}
+            origin={origin}
+            onOpen={() => setOpen(false)}
+          />
         </div>
 
         <nav aria-label="Dashboard" className="flex-1 space-y-1 px-3">
           {dashboardNav.map((item) => {
             const Icon = item.icon;
+            const active = isNavActive(item, pathname);
             return (
               <SheetClose
                 key={item.label}
                 render={
                   <a
                     href={item.href}
-                    aria-current={item.active ? "page" : undefined}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
                       "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors",
-                      item.active
+                      active
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                     )}
                   />
                 }
               >
-                <Icon className={cn("size-4.5", item.active && "text-brand")} />
+                <Icon className={cn("size-4.5", active && "text-brand")} />
                 {item.label}
               </SheetClose>
             );

@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import {
   Sheet,
@@ -17,6 +18,11 @@ import { cn } from "@/lib/utils";
 
 /** Mobile navigation in a slide-in sheet (Base UI dialog → focus-trapped). */
 export function MobileNav({ scrolled }: { scrolled: boolean }) {
+  const pathname = usePathname();
+  const onLanding = pathname === "/";
+  const hrefFor = (href: string) =>
+    href.startsWith("#") && !onLanding ? `/${href}` : href;
+
   return (
     <Sheet>
       <SheetTrigger
@@ -43,7 +49,7 @@ export function MobileNav({ scrolled }: { scrolled: boolean }) {
               key={l.href}
               render={
                 <a
-                  href={l.href}
+                  href={hrefFor(l.href)}
                   className="rounded-lg px-3 py-3 text-base font-medium text-foreground transition-colors hover:bg-muted"
                 />
               }

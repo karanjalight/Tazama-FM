@@ -235,8 +235,8 @@ export const businessFeatures: BusinessFeature[] = [
 
 export const navLinks: NavLink[] = [
   { label: "Live rooms", href: "#live" },
-  { label: "How it works", href: "#how" },
-  { label: "For business", href: "#business" },
+  { label: "How it works", href: "/how-it-works" },
+  { label: "For business", href: "/for-business" },
 ];
 
 /* ------------------------------- Footer -------------------------------- */
@@ -245,9 +245,9 @@ export const footerColumns: FooterColumn[] = [
   {
     heading: "Product",
     links: [
-      { label: "Create a room", href: "#" },
-      { label: "Browse rooms", href: "#live" },
-      { label: "For business", href: "#business" },
+      { label: "Create a room", href: "/signup" },
+      { label: "How it works", href: "/how-it-works" },
+      { label: "For business", href: "/for-business" },
       { label: "Pricing", href: "#" },
     ],
   },

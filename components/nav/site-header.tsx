@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -11,6 +12,13 @@ import { MobileNav } from "./mobile-nav";
 /** Sticky header: transparent over the dark hero, frosted/blurred on scroll. */
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
+  const pathname = usePathname();
+
+  // On-page anchors only smooth-scroll on the landing; from any other route
+  // they need to point back to the landing section ("/#live").
+  const onLanding = pathname === "/";
+  const hrefFor = (href: string) =>
+    href.startsWith("#") && !onLanding ? `/${href}` : href;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
@@ -29,7 +37,7 @@ export function SiteHeader() {
       )}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
-        <a href="#top" aria-label="Tazama, home" >
+        <a href={onLanding ? "#top" : "/"} aria-label="Tazama, home">
           <Logo />
         </a>
 
@@ -37,7 +45,7 @@ export function SiteHeader() {
           {navLinks.map((l) => (
             <a
               key={l.href}
-              href={l.href}
+              href={hrefFor(l.href)}
               className={cn(
                 "text-sm font-medium transition-colors",
                 scrolled

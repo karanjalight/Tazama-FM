@@ -6,7 +6,7 @@ import type { Playlist } from "@/lib/artists";
 /** Spotify-style playlist page body: gradient header + playable track list. */
 export function PlaylistView({ playlist }: { playlist: Playlist }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-white">
       <header className="relative -mx-4 -mt-6 px-4 pt-6 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
         <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden">
           {playlist.cover && (

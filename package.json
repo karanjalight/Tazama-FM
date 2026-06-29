@@ -10,6 +10,7 @@
     "seed:tracks": "node --env-file=.env.local scripts/seed-tracks.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.107.0",
     "@base-ui/react": "^1.6.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",

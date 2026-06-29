@@ -200,11 +200,11 @@ export function PlayerVisual({ tracks }: { tracks: Track[] }) {
 
   return (
     <div className="rounded-3xl border border-white/10 bg-surface p-6 text-white shadow-dark sm:p-7">
-      <div className="flex items-center justify-center gap-4">
+      <div className="flex items-center justify-center gap-3 sm:gap-4">
         {a ? (
-          <PlayableCover track={a} className="size-20 rounded-2xl ring-1 ring-white/10" sizes="80px" />
+          <PlayableCover track={a} className="size-16 rounded-2xl ring-1 ring-white/10 sm:size-20" sizes="80px" />
         ) : (
-          <Cover title="Tazama" className="size-20 rounded-2xl ring-1 ring-white/10" />
+          <Cover title="Tazama" className="size-16 rounded-2xl ring-1 ring-white/10 sm:size-20" />
         )}
         <div className="flex flex-col items-center text-white/50">
           <ArrowRight className="size-5" aria-hidden="true" />
@@ -213,9 +213,9 @@ export function PlayerVisual({ tracks }: { tracks: Track[] }) {
           </span>
         </div>
         {b ? (
-          <PlayableCover track={b} className="size-20 rounded-2xl ring-1 ring-white/10" sizes="80px" />
+          <PlayableCover track={b} className="size-16 rounded-2xl ring-1 ring-white/10 sm:size-20" sizes="80px" />
         ) : (
-          <Cover title="Tazama" className="size-20 rounded-2xl ring-1 ring-white/10" />
+          <Cover title="Tazama" className="size-16 rounded-2xl ring-1 ring-white/10 sm:size-20" />
         )}
       </div>
 

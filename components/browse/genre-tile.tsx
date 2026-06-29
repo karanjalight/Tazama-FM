@@ -1,23 +1,31 @@
 import Link from "next/link";
 
 import { Cover } from "@/components/cover";
-import type { Genre } from "@/lib/genres";
 
-/** A browse category tile — generated cover art linking into the genre page. */
-export function GenreTile({ genre }: { genre: Genre }) {
+/** A browse category tile — real cover art when the catalog has it, else generated. */
+export function GenreTile({
+  value,
+  label,
+  cover,
+}: {
+  value: string;
+  label: string;
+  cover?: string | null;
+}) {
   return (
     <Link
-      href={`/dashboard/browse/${genre.value}`}
-      aria-label={`Browse ${genre.label}`}
+      href={`/dashboard/browse/${value}`}
+      aria-label={`Browse ${label}`}
       className="group block"
     >
       <Cover
-        title={genre.label}
+        title={label}
+        src={cover ?? undefined}
         sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 200px"
         className="shadow-soft transition duration-300 group-hover:shadow-lift"
       />
       <p className="mt-2.5 truncate text-sm font-semibold text-foreground transition-colors group-hover:text-brand">
-        {genre.label}
+        {label}
       </p>
     </Link>
   );

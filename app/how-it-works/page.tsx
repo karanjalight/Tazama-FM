@@ -34,7 +34,7 @@ export default async function HowItWorksPage() {
   return (
     <LandingPlayerProvider>
       <SiteHeader auth={auth} />
-      <main id="content" className="flex-1">
+      <main id="content" className="flex-1 overflow-x-clip">
         <MarketingHero
           eyebrow="How it works"
           title={

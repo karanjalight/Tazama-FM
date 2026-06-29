@@ -64,6 +64,23 @@ export async function getCachedTracksByGenre(
 }
 
 /**
+ * Every playable track (newest first), for in-memory grouping by the discovery
+ * feed. One query, then we slice/group/shuffle on the server. SERVER ONLY.
+ */
+export async function getAllPlayableTracks(limit = 500): Promise<Track[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data } = await admin
+    .from("tracks")
+    .select("*")
+    .eq("is_playable", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (!data) return [];
+  return (data as TrackRow[]).map(rowToTrack);
+}
+
+/**
  * A varied "trending" mix for the landing page — newest playable tracks,
  * round-robined across genres so one genre doesn't dominate the row. SERVER ONLY.
  */

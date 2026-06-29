@@ -29,6 +29,21 @@ export const GENRES: Genre[] = [
   { value: "drill", label: "Drill", query: "drill music hits" },
   { value: "benga", label: "Benga", query: "benga music kenya" },
   { value: "rhumba", label: "Rhumba", query: "rhumba congolese hits" },
+  // ── expanded discovery genres ───────────────────────────────────────────
+  { value: "soul", label: "Soul", query: "soul music classics" },
+  { value: "jazz", label: "Jazz", query: "jazz lounge mix" },
+  { value: "lofi", label: "Lo-fi", query: "lofi hip hop beats mix" },
+  { value: "afro-house", label: "Afro House", query: "afro house mix" },
+  { value: "electronic", label: "Electronic", query: "electronic dance mix" },
+  { value: "kizomba", label: "Kizomba", query: "kizomba mix" },
+  { value: "highlife", label: "Highlife", query: "highlife classics ghana" },
+  { value: "soukous", label: "Soukous", query: "soukous lingala hits" },
+  { value: "trap", label: "Trap", query: "trap music mix" },
+  { value: "alte", label: "Alté", query: "alte afrobeats alternative" },
+  { value: "gqom", label: "Gqom", query: "gqom mix south africa" },
+  { value: "kwaito", label: "Kwaito", query: "kwaito classics" },
+  { value: "afro-soul", label: "Afro Soul", query: "afro soul mix" },
+  { value: "lingala", label: "Lingala", query: "lingala gospel hits" },
 ];
 
 const BY_VALUE = new Map(GENRES.map((g) => [g.value, g]));

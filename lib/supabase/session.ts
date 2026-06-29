@@ -17,6 +17,12 @@ const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/rooms"];
  * Called from the root `proxy.ts` (Next.js 16's renamed middleware).
  */
 export async function updateSession(request: NextRequest) {
+  // The kiosk player (`/player/*`) is public and unauthenticated — skip the
+  // Supabase round-trip entirely so a freshly-booted TV box loads it instantly.
+  if (request.nextUrl.pathname.startsWith("/player")) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(

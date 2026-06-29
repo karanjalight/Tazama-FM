@@ -1,13 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { PasswordField } from "./password-field";
 import { SubmitButton } from "./submit-button";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage } from "@/lib/auth/messages";
+import { navigateAfterAuth } from "@/lib/auth/navigate";
 import {
   resetPasswordSchema,
   validate,
@@ -15,7 +15,6 @@ import {
 } from "@/lib/auth/validation";
 
 export function ResetPasswordForm() {
-  const router = useRouter();
   const [password, setPassword] = React.useState("");
   const [confirm, setConfirm] = React.useState("");
   const [errors, setErrors] = React.useState<FieldErrors>({});
@@ -41,8 +40,7 @@ export function ResetPasswordForm() {
     }
 
     toast.success("Password updated — you're signed in.");
-    router.push("/dashboard");
-    router.refresh();
+    navigateAfterAuth("/dashboard");
   }
 
   return (

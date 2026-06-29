@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
 import { HomeStats } from "@/components/dashboard/home-stats";
@@ -16,6 +17,7 @@ import {
 import { getSpotlightArtists } from "@/lib/artists";
 import { getLiveRooms } from "@/lib/rooms/queries";
 import { DEFAULT_GENRES } from "@/lib/genres";
+import type { BusinessInfo } from "@/lib/auth/profile";
 
 export const metadata: Metadata = {
   title: "Dashboard",
@@ -42,6 +44,41 @@ export default async function DashboardPage() {
     ? profile.genrePreferences
     : DEFAULT_GENRES;
 
+  // The greeting paints immediately; the catalog-heavy feed streams in behind a
+  // Suspense boundary so a slow Supabase read never blocks first paint (this is
+  // what made the dashboard look like it "hung" on a low-bandwidth TV box).
+  return (
+    <div className="mx-auto space-y-12">
+      <header>
+        <p className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
+          {timeGreeting()}
+        </p>
+        <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          {greetingName}
+        </h1>
+      </header>
+
+      <Suspense fallback={<DashboardFeedSkeleton />}>
+        <DashboardFeed
+          genres={genres}
+          isBusiness={isBusiness}
+          business={profile.business}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+/** All the catalog-driven sections — fetched + rendered as a streamed unit. */
+async function DashboardFeed({
+  genres,
+  isBusiness,
+  business,
+}: {
+  genres: string[];
+  isBusiness: boolean;
+  business?: BusinessInfo;
+}) {
   // One catalog read feeds both the spotlight and the fresh-tracks grid; live
   // rooms + the per-genre warm reads run alongside it.
   const [pool, liveRooms, genreEntries] = await Promise.all([
@@ -58,20 +95,12 @@ export default async function DashboardPage() {
   const listeners = liveRooms.reduce((n, r) => n + r.listenerCount, 0);
 
   return (
-    <div className="mx-auto space-y-12">
-      <header>
-        <p className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
-          {timeGreeting()}
-        </p>
-        <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-          {greetingName}
-        </h1>
-        <HomeStats
-          roomsLive={liveRooms.length}
-          listeners={listeners}
-          tracks={pool.length}
-        />
-      </header>
+    <div className="space-y-12">
+      <HomeStats
+        roomsLive={liveRooms.length}
+        listeners={listeners}
+        tracks={pool.length}
+      />
 
       {/* 1 — every live room, no create card (that's in the sidebar) */}
       <LiveNowRail
@@ -85,15 +114,46 @@ export default async function DashboardPage() {
       {/* 3 — fresh tracks with "view more" */}
       <FreshTracks initial={fresh} />
 
-      {isBusiness && profile.business && (
+      {isBusiness && business && (
         <BusinessPanel
-          businessName={profile.business.businessName}
-          industry={profile.business.industry}
+          businessName={business.businessName}
+          industry={business.industry}
         />
       )}
 
       {/* 4 — made-for-you + genre rows */}
       <GenreFeed genres={genres} initial={initialGenre} />
+    </div>
+  );
+}
+
+/** Lightweight placeholder shown while the feed streams in. */
+function DashboardFeedSkeleton() {
+  return (
+    <div className="space-y-10" aria-hidden>
+      <div className="h-4 w-72 max-w-full animate-pulse rounded bg-muted" />
+      <div className="space-y-3">
+        <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="aspect-square w-44 shrink-0 animate-pulse rounded-2xl bg-muted"
+            />
+          ))}
+        </div>
+      </div>
+      <div className="space-y-3">
+        <div className="h-5 w-40 animate-pulse rounded bg-muted" />
+        <div className="flex gap-4 overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="aspect-square w-36 shrink-0 animate-pulse rounded-2xl bg-muted"
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

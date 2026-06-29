@@ -1,4 +1,4 @@
-import { getGenre } from "@/lib/genres";
+import { genreQuery } from "@/lib/genres";
 
 /** A raw search hit mapped to the fields we persist. */
 export interface YouTubeTrack {
@@ -46,7 +46,14 @@ export async function searchGenreTracks(
   genreValue: string,
   max: number,
 ): Promise<YouTubeTrack[]> {
-  return searchTracks(getGenre(genreValue)?.query ?? genreValue, max);
+  // Resolve the query for ANY catalog slug (curated, native, or room tag) and
+  // bias toward the genre's most-watched videos ("most featured/viewed" first).
+  return searchTracks(genreQuery(genreValue), max, { order: "viewCount" });
+}
+
+export interface SearchOptions {
+  /** YouTube result ordering. Default "relevance"; "viewCount" for popularity. */
+  order?: "relevance" | "viewCount" | "date";
 }
 
 /**
@@ -57,6 +64,7 @@ export async function searchGenreTracks(
 export async function searchTracks(
   query: string,
   max: number,
+  opts: SearchOptions = {},
 ): Promise<YouTubeTrack[]> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error("YOUTUBE_API_KEY is not configured.");
@@ -66,6 +74,7 @@ export async function searchTracks(
     part: "snippet",
     q: query,
     type: "video",
+    order: opts.order ?? "relevance",
     videoEmbeddable: "true",
     videoSyndicated: "true",
     videoCategoryId: "10", // Music

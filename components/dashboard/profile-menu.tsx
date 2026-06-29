@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Menu } from "@base-ui/react/menu";
 import { ChevronsUpDown, LogOut, Settings, UserRound } from "lucide-react";
 
@@ -90,11 +91,17 @@ export function ProfileMenu({
 
             <Menu.Separator className="my-1.5 h-px bg-border" />
 
-            <Menu.Item className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none select-none data-highlighted:bg-muted">
+            <Menu.Item
+              render={<Link href="/dashboard/settings?tab=profile" />}
+              className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none select-none data-highlighted:bg-muted"
+            >
               <UserRound className="size-4 text-muted-foreground" />
               Profile
             </Menu.Item>
-            <Menu.Item className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none select-none data-highlighted:bg-muted">
+            <Menu.Item
+              render={<Link href="/dashboard/settings" />}
+              className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm outline-none select-none data-highlighted:bg-muted"
+            >
               <Settings className="size-4 text-muted-foreground" />
               Settings
             </Menu.Item>

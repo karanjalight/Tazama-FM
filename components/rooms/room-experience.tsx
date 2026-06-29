@@ -26,7 +26,6 @@ import { ParticipantsPanel } from "@/components/rooms/participants-panel";
 import { ReactionBar, type FloatingItem } from "@/components/rooms/room-reactions";
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomChannel } from "@/lib/rooms/use-room-channel";
-import { rankGenresByPopularity } from "@/lib/rooms/suggestions";
 import { roomGenreLabel } from "@/lib/room-genres";
 import { cn } from "@/lib/utils";
 import { FREE_MINUTES_CAP, type SubscriptionPlan } from "@/lib/billing/plans";
@@ -371,10 +370,12 @@ export function RoomExperience({
   /* --------------------------- suggestions ------------------------------ */
 
   const refreshSuggestions = React.useCallback(async () => {
-    const curated = rankGenresByPopularity([
-      ...participantsRef.current.map((p) => p.genres),
-      viewer.genres,
-    ]);
+    // Flat list WITH repeats — the server weights room genres by how many present
+    // members favour each, and pulls in adjacent tastes proportionally.
+    const participantGenres = [
+      ...participantsRef.current.flatMap((p) => p.genres),
+      ...viewer.genres,
+    ];
     const exclude = [
       nowPlayingRef.current?.youtubeId,
       ...queueRef.current.map((i) => i.track.youtubeId),
@@ -384,8 +385,8 @@ export function RoomExperience({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          curatedGenres: curated,
           roomGenres: room.genres,
+          participantGenres,
           exclude,
         }),
       });

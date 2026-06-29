@@ -5,6 +5,7 @@ import {
   Mic2,
   Radio,
   Search,
+  Settings,
   Sparkles,
   House,
   type LucideIcon,
@@ -28,6 +29,7 @@ export const dashboardNav: NavItem[] = [
   { label: "Live", href: "/dashboard/live", icon: Radio },
   { label: "Library", href: "/dashboard/library", icon: Library },
   { label: "Playlists", href: "/dashboard/playlists", icon: ListMusic },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 /** Whether a nav item should be highlighted for the current pathname. */

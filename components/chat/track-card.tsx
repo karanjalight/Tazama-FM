@@ -77,7 +77,7 @@ export function TrackCard({
         </p>
         <p className="truncate text-xs text-muted-foreground">{track.artist}</p>
         {track.why && (
-          <p className="mt-0.5 truncate text-xs text-muted-foreground/80 italic">
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground/80 italic">
             {track.why}
           </p>
         )}

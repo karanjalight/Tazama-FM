@@ -7,7 +7,7 @@
  * page (rendered dynamically) surfaces something new on every reload.
  */
 import { getAllPlayableTracks, type Track } from "@/lib/tracks";
-import { GENRES } from "@/lib/genres";
+import { GENRES, FEATURED_GENRES } from "@/lib/genres";
 
 export interface DiscoveryArtist {
   name: string;
@@ -129,10 +129,10 @@ const EMPTY: Discovery = {
 export async function getDiscovery(): Promise<Discovery> {
   const all = await getAllPlayableTracks(500);
   if (all.length === 0) {
-    // Catalog not seeded yet — still let users browse the genre grid.
+    // Catalog not seeded yet — show the curated featured grid (not all ~145).
     return {
       ...EMPTY,
-      genres: GENRES.map((g) => ({
+      genres: FEATURED_GENRES.map((g) => ({
         value: g.value,
         label: g.label,
         cover: null,
@@ -154,8 +154,12 @@ export async function getDiscovery(): Promise<Discovery> {
     dedupe(shuffle(gs.flatMap((g) => byGenre.get(g) ?? [])));
 
   // ── genres: real cover where the catalog has tracks; seeded genres lead ──
+  // Every genre with tracks is shown; unseeded genres are limited to the
+  // featured set (+ a few extras) so the grid never becomes a wall of empties.
+  const featuredSet = new Set(FEATURED_GENRES.map((g) => g.value));
   const withTracks: DiscoveryGenre[] = [];
-  const empty: DiscoveryGenre[] = [];
+  const emptyFeatured: DiscoveryGenre[] = [];
+  const emptyRest: DiscoveryGenre[] = [];
   for (const g of GENRES) {
     const bucket = byGenre.get(g.value) ?? [];
     const tile: DiscoveryGenre = {
@@ -164,9 +168,15 @@ export async function getDiscovery(): Promise<Discovery> {
       cover: bucket[0]?.thumbnailUrl ?? null,
       trackCount: bucket.length,
     };
-    (bucket.length ? withTracks : empty).push(tile);
+    if (bucket.length) withTracks.push(tile);
+    else if (featuredSet.has(g.value)) emptyFeatured.push(tile);
+    else emptyRest.push(tile);
   }
-  const genres = [...shuffle(withTracks), ...shuffle(empty)];
+  const genres = [
+    ...shuffle(withTracks),
+    ...shuffle(emptyFeatured),
+    ...shuffle(emptyRest).slice(0, 8),
+  ];
 
   // ── artists: top by catalog presence, then shuffled for variety ──────────
   const artistMap = new Map<string, { count: number; track: Track }>();

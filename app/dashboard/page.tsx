@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { HomeStats } from "@/components/dashboard/home-stats";
+import { LiveNowRail } from "@/components/dashboard/live-now-rail";
+import { ArtistSpotlightReel } from "@/components/dashboard/artist-spotlight";
+import { FreshTracks } from "@/components/dashboard/fresh-tracks";
 import { BusinessPanel } from "@/components/dashboard/business-panel";
 import { GenreFeed } from "@/components/dashboard/genre-feed";
-import { ArtistsRow } from "@/components/dashboard/artists-row";
-import { RoomsSection } from "@/components/dashboard/rooms-section";
 import { getCurrentProfile, firstName } from "@/lib/auth/profile";
-import { getCachedTracksByGenre, type Track } from "@/lib/tracks";
+import {
+  getAllPlayableTracks,
+  getCachedTracksByGenre,
+  type Track,
+} from "@/lib/tracks";
+import { getSpotlightArtists } from "@/lib/artists";
+import { getLiveRooms } from "@/lib/rooms/queries";
 import { DEFAULT_GENRES } from "@/lib/genres";
 
 export const metadata: Metadata = {
@@ -34,15 +42,23 @@ export default async function DashboardPage() {
     ? profile.genrePreferences
     : DEFAULT_GENRES;
 
-  // Warm read straight from the catalog (no YouTube call) so already-cached
-  // genres paint instantly; the client fills any gaps via /api/tracks/seed.
-  const entries = await Promise.all(
-    genres.map(async (g) => [g, await getCachedTracksByGenre(g)] as const),
-  );
-  const initial: Record<string, Track[]> = Object.fromEntries(entries);
+  // One catalog read feeds both the spotlight and the fresh-tracks grid; live
+  // rooms + the per-genre warm reads run alongside it.
+  const [pool, liveRooms, genreEntries] = await Promise.all([
+    getAllPlayableTracks(300),
+    getLiveRooms(24),
+    Promise.all(
+      genres.map(async (g) => [g, await getCachedTracksByGenre(g)] as const),
+    ),
+  ]);
+
+  const spotlight = await getSpotlightArtists(6, 6, pool);
+  const fresh = pool.slice(0, 48);
+  const initialGenre: Record<string, Track[]> = Object.fromEntries(genreEntries);
+  const listeners = liveRooms.reduce((n, r) => n + r.listenerCount, 0);
 
   return (
-    <div className="mx-auto space-y-10">
+    <div className="mx-auto space-y-12">
       <header>
         <p className="font-mono text-xs tracking-wider text-muted-foreground uppercase">
           {timeGreeting()}
@@ -50,14 +66,24 @@ export default async function DashboardPage() {
         <h1 className="mt-1.5 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           {greetingName}
         </h1>
-        <p className="mt-1.5 text-[15px] text-muted-foreground">
-          Here’s what’s playing across Tazama right now.
-        </p>
+        <HomeStats
+          roomsLive={liveRooms.length}
+          listeners={listeners}
+          tracks={pool.length}
+        />
       </header>
 
-      {/* <RoomsSection /> */}
+      {/* 1 — every live room, no create card (that's in the sidebar) */}
+      <LiveNowRail
+        rooms={liveRooms}
+        previewCovers={fresh.slice(0, 5).map((t) => t.thumbnailUrl)}
+      />
 
-      <ArtistsRow />
+      {/* 2 — auto-rotating artist spotlight */}
+      {spotlight.length > 0 && <ArtistSpotlightReel items={spotlight} />}
+
+      {/* 3 — fresh tracks with "view more" */}
+      <FreshTracks initial={fresh} />
 
       {isBusiness && profile.business && (
         <BusinessPanel
@@ -66,7 +92,8 @@ export default async function DashboardPage() {
         />
       )}
 
-      <GenreFeed genres={genres} initial={initial} />
+      {/* 4 — made-for-you + genre rows */}
+      <GenreFeed genres={genres} initial={initialGenre} />
     </div>
   );
 }

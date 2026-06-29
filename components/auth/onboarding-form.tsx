@@ -202,7 +202,7 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
               />
             )}
 
-            <div className="flex gap-3">
+            <div className="grid grid-cols-[auto_1fr] gap-3">
               <Button
                 type="button"
                 variant="outline"

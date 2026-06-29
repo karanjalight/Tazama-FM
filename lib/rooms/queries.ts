@@ -185,6 +185,20 @@ export async function getPublicRooms(limit = 12): Promise<RoomSummary[]> {
   return summarize((data ?? []) as RoomRow[]);
 }
 
+/** ALL live, public rooms for the dashboard "Live now" strip (newest first). */
+export async function getLiveRooms(limit = 24): Promise<RoomSummary[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data } = await admin
+    .from("rooms")
+    .select("*")
+    .eq("access", "public")
+    .eq("is_live", true)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  return summarize((data ?? []) as RoomRow[]);
+}
+
 /** Live, public rooms for the discovery strip (optionally excluding own). */
 export async function getLivePublicRooms(
   excludeHostId?: string,

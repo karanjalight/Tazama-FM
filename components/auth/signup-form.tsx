@@ -312,7 +312,7 @@ export function SignupForm() {
               )}
             </div>
 
-            <div className="flex gap-3">
+            <div className="grid grid-cols-[auto_1fr] gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -352,7 +352,7 @@ export function SignupForm() {
               />
             )}
 
-            <div className="flex gap-3">
+            <div className="grid grid-cols-[auto_1fr] gap-3">
               <Button
                 type="button"
                 variant="outline"
@@ -385,7 +385,7 @@ export function SignupForm() {
               />
             </div>
 
-            <div className="flex gap-3">
+            <div className="grid grid-cols-[auto_1fr] gap-3">
               <Button
                 type="button"
                 variant="outline"

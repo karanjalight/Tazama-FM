@@ -8,6 +8,7 @@ import { rowToTrack, type Track } from "@/lib/tracks";
 import { genreLabel } from "@/lib/genres";
 import { slugify } from "@/lib/rooms/slug";
 import { hashString } from "@/lib/cover-seed";
+import { formatCount } from "@/lib/utils";
 
 export interface Artist {
   slug: string;
@@ -101,11 +102,105 @@ function dedupe(tracks: Track[]): Track[] {
   return out;
 }
 
+/** Fisher–Yates, in place. Math.random is fine here — runs per request. */
+function shuffle<T>(arr: T[]): T[] {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** Honest editorial blurb from what we actually have (genre + presence). */
+function bioFor(a: Artist): string {
+  const g = a.genres[0] ? genreLabel(a.genres[0]) : "the scene";
+  const listeners = formatCount(a.monthlyListeners);
+  const n = `${a.trackCount} ${a.trackCount === 1 ? "track" : "tracks"}`;
+  const templates = [
+    `${a.name} is a defining voice in ${g} — ${listeners} monthly listeners and ${n} in rotation on Tazama. Dive into the essentials.`,
+    `With ${listeners} monthly listeners, ${a.name} is one of ${g}'s biggest draws right now. Here's where to start.`,
+    `${a.name} keeps ${g} moving — ${n} live on Tazama and a sound people can't stop replaying.`,
+    `Straight from the heart of ${g}, ${a.name} pulls ${listeners} monthly listeners. Press play and hear why.`,
+  ];
+  return templates[hashString(a.name) % templates.length];
+}
+
 /* --------------------------------- reads ---------------------------------- */
 
 export async function getArtists(limit = 24): Promise<Artist[]> {
   const artists = aggregate(await allTracks());
   return artists.slice(0, limit);
+}
+
+export interface ArtistSpotlight {
+  artist: Artist;
+  bio: string;
+  /** Up to 6 of the artist's tracks. */
+  tracks: Track[];
+}
+
+export interface ArtistsDiscovery {
+  spotlight: ArtistSpotlight | null;
+  roster: Artist[];
+}
+
+/**
+ * Shuffled feed for the Artists page: one rotating spotlight (drawn from artists
+ * with enough tracks for a real top-tracks list) plus a fresh roster. Re-rolls
+ * on every call, so the page keeps surfacing someone new.
+ */
+export async function getArtistsDiscovery(
+  rosterSize = 36,
+): Promise<ArtistsDiscovery> {
+  const tracks = await allTracks();
+  if (tracks.length === 0) return { spotlight: null, roster: [] };
+
+  const artists = aggregate(tracks);
+  const rich = artists.filter((a) => a.trackCount >= 2 && a.image);
+  const pool = rich.length ? rich : artists.filter((a) => a.image);
+  const pick = shuffle([...pool])[0] ?? artists[0];
+
+  const mine = shuffle(
+    tracks.filter((t) => t.artist && slugify(t.artist) === pick.slug),
+  ).slice(0, 6);
+
+  const spotlight: ArtistSpotlight = {
+    artist: pick,
+    bio: bioFor(pick),
+    tracks: mine,
+  };
+
+  const roster = shuffle(
+    artists.filter((a) => a.slug !== pick.slug && a.image),
+  ).slice(0, rosterSize);
+
+  return { spotlight, roster };
+}
+
+/**
+ * Top artists (by catalog presence) as a set of home-page spotlights, each with
+ * a bio + their own tracks. Accepts an optional pre-fetched track pool so the
+ * dashboard can derive this from the same read it uses for fresh tracks.
+ */
+export async function getSpotlightArtists(
+  count = 5,
+  tracksPer = 6,
+  pool?: Track[],
+): Promise<ArtistSpotlight[]> {
+  const tracks = pool ?? (await allTracks());
+  if (tracks.length === 0) return [];
+
+  const artists = aggregate(tracks)
+    .filter((a) => a.image && a.trackCount >= 1)
+    .slice(0, count);
+
+  return artists.map((artist) => ({
+    artist,
+    bio: bioFor(artist),
+    tracks: tracks
+      .filter((t) => t.artist && slugify(t.artist) === artist.slug)
+      .slice(0, tracksPer),
+  }));
 }
 
 export async function getArtistBySlug(slug: string): Promise<ArtistDetail | null> {

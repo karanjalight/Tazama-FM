@@ -16,11 +16,14 @@ export function TrackCard({
   track,
   queue,
   fill,
+  badge,
 }: {
   track: Track;
   queue?: Track[];
   /** Fill the parent cell (grid layouts) instead of a fixed carousel width. */
   fill?: boolean;
+  /** Optional pill rendered over the top-right of the artwork (e.g. "NEW"). */
+  badge?: React.ReactNode;
 }) {
   const { currentTrack, isPlaying, play, togglePlay } = usePlayer();
   const isCurrent = currentTrack?.id === track.id;
@@ -71,6 +74,9 @@ export function TrackCard({
               barClassName="bg-white"
             />
           </span>
+        )}
+        {badge && !isCurrent && (
+          <span className="absolute top-2 right-2">{badge}</span>
         )}
       </div>
       <p

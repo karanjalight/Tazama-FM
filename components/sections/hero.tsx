@@ -5,6 +5,7 @@ import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { buttonVariants } from "@/components/ui/button";
 import { NowPlayingCard, type HeroTrack } from "@/components/live/now-playing-card";
+import { InstallButton } from "@/components/pwa/install-button";
 import { HeroCarousel } from "./hero-carousel";
 import { usePrefersReducedMotion } from "@/components/motion/use-prefers-reduced-motion";
 import { useLandingPlayer } from "@/components/landing/landing-player";
@@ -80,6 +81,7 @@ export function Hero({ featured }: { featured?: HeroTrack & { youtubeId: string 
             >
               Browse live rooms
             </a>
+            <InstallButton variant="onDark" size="xl" label="Install app" />
           </div>
         </div>
 

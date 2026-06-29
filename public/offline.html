@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" />
+    <title>Offline — Tazama</title>
+    <link rel="icon" href="/icon.svg" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: #0a0a0a;
+        color: #fafafa;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-align: center;
+      }
+      .card { max-width: 22rem; }
+      .mark {
+        width: 72px; height: 72px; margin: 0 auto 24px;
+        display: block; border-radius: 20px;
+      }
+      h1 { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 8px; }
+      p { margin: 0 0 24px; color: #a3a3a3; line-height: 1.55; font-size: 0.95rem; }
+      button {
+        appearance: none; border: 0; cursor: pointer;
+        background: #c42a25; color: #fff;
+        font: inherit; font-weight: 600; font-size: 0.9rem;
+        padding: 12px 24px; border-radius: 999px;
+        transition: background 0.15s ease;
+      }
+      button:hover { background: #a82420; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img class="mark" src="/icons/icon-192.png" alt="Tazama" />
+      <h1>You're offline</h1>
+      <p>Tazama needs a connection to stream and sync rooms. Check your network and try again.</p>
+      <button onclick="location.reload()">Try again</button>
+    </div>
+  </body>
+</html>

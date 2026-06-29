@@ -8,6 +8,7 @@ import { SubscriptionsTab } from "./subscriptions-tab";
 import { SecurityTab } from "./security-tab";
 import { GenresTab } from "./genres-tab";
 import type { SettingsTabId } from "./tabs";
+import { InstallCard } from "@/components/pwa/install-card";
 import { cn } from "@/lib/utils";
 import type { CurrentProfile } from "@/lib/auth/profile";
 import type { SubscriptionPlan } from "@/lib/billing/plans";
@@ -100,7 +101,8 @@ export function SettingsShell({
         </nav>
 
         {/* content */}
-        <div className="min-w-0 max-w-2xl">
+        <div className="min-w-0 max-w-2xl space-y-6">
+          <InstallCard />
           {active === "profile" && <ProfileTab profile={profile} />}
           {active === "subscriptions" && (
             <SubscriptionsTab

@@ -23,6 +23,10 @@ export interface YouTubeApi {
   seek: (ms: number) => void;
   getPositionMs: () => number;
   getDurationMs: () => number;
+  // Local audio controls (used by the kiosk; the room leaves these untouched).
+  setVolume: (volume: number) => void; // 0–100
+  mute: () => void;
+  unMute: () => void;
 }
 
 /**
@@ -183,6 +187,16 @@ export function useYouTube(opts: {
     if (!readyRef.current || typeof p?.getDuration !== "function") return 0;
     return p.getDuration() * 1000;
   }, []);
+  const setVolume = React.useCallback((volume: number) => {
+    const v = Math.min(100, Math.max(0, Math.round(volume)));
+    if (readyRef.current) playerRef.current?.setVolume(v);
+  }, []);
+  const mute = React.useCallback(() => {
+    if (readyRef.current) playerRef.current?.mute();
+  }, []);
+  const unMute = React.useCallback(() => {
+    if (readyRef.current) playerRef.current?.unMute();
+  }, []);
 
   const api: YouTubeApi = {
     ready,
@@ -197,6 +211,9 @@ export function useYouTube(opts: {
     seek,
     getPositionMs,
     getDurationMs,
+    setVolume,
+    mute,
+    unMute,
   };
 
   return { api, containerRef };

@@ -12,10 +12,11 @@ import { getCurrentProfile, firstName } from "@/lib/auth/profile";
 import {
   getAllPlayableTracks,
   getCachedTracksByGenre,
+  countPlayableTracks,
   type Track,
 } from "@/lib/tracks";
 import { getSpotlightArtists } from "@/lib/artists";
-import { getLiveRooms } from "@/lib/rooms/queries";
+import { getLiveRooms, countLiveListeners } from "@/lib/rooms/queries";
 import { DEFAULT_GENRES } from "@/lib/genres";
 import type { BusinessInfo } from "@/lib/auth/profile";
 
@@ -80,26 +81,30 @@ async function DashboardFeed({
   business?: BusinessInfo;
 }) {
   // One catalog read feeds both the spotlight and the fresh-tracks grid; live
-  // rooms + the per-genre warm reads run alongside it.
-  const [pool, liveRooms, genreEntries] = await Promise.all([
-    getAllPlayableTracks(300),
-    getLiveRooms(24),
-    Promise.all(
-      genres.map(async (g) => [g, await getCachedTracksByGenre(g)] as const),
-    ),
-  ]);
+  // rooms + the per-genre warm reads run alongside it. The two headline stats
+  // are counted straight from the DB (exact, uncapped) rather than derived from
+  // the capped feed pool / append-only membership rows.
+  const [pool, liveRooms, genreEntries, trackCount, listeners] =
+    await Promise.all([
+      getAllPlayableTracks(300),
+      getLiveRooms(24),
+      Promise.all(
+        genres.map(async (g) => [g, await getCachedTracksByGenre(g)] as const),
+      ),
+      countPlayableTracks(),
+      countLiveListeners(),
+    ]);
 
   const spotlight = await getSpotlightArtists(6, 6, pool);
   const fresh = pool.slice(0, 48);
   const initialGenre: Record<string, Track[]> = Object.fromEntries(genreEntries);
-  const listeners = liveRooms.reduce((n, r) => n + r.listenerCount, 0);
 
   return (
     <div className="space-y-12">
       <HomeStats
         roomsLive={liveRooms.length}
         listeners={listeners}
-        tracks={pool.length}
+        tracks={trackCount}
       />
 
       {/* 1 — every live room, no create card (that's in the sidebar) */}

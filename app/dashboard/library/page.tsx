@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 import { CreateRoomCard } from "@/components/rooms/create-room-card";
 import { RoomSummaryCard } from "@/components/rooms/room-summary-card";
 import { RecentlyPlayed } from "@/components/library/recently-played";
+import { LikedSongsTile } from "@/components/likes/liked-songs-tile";
 import { getRoomViewer } from "@/lib/rooms/viewer";
+import { getCurrentProfile } from "@/lib/auth/profile";
+import { listLikedIds } from "@/lib/likes/store";
 import { getMyRooms } from "@/lib/rooms/queries";
 import { getOrigin } from "@/lib/origin";
 import { genreLabel, GENRE_VALUES } from "@/lib/genres";
@@ -21,9 +24,11 @@ export default async function LibraryPage() {
   const viewer = await getRoomViewer();
   if (!viewer) redirect("/login");
 
-  const [origin, mine] = await Promise.all([
+  const profile = await getCurrentProfile();
+  const [origin, mine, likedIds] = await Promise.all([
     getOrigin(),
     getMyRooms(viewer.id),
+    profile ? listLikedIds(profile.id) : Promise.resolve<string[]>([]),
   ]);
   const myGenres = viewer.genres.filter((g) => GENRE_VALUES.includes(g));
 
@@ -57,6 +62,18 @@ export default async function LibraryPage() {
             <RoomSummaryCard key={room.id} room={room} />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-3.5">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            Liked Songs
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Everything you’ve hearted, in one place
+          </p>
+        </div>
+        <LikedSongsTile variant="banner" count={likedIds.length} />
       </section>
 
       <RecentlyPlayed />

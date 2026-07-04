@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Cover } from "@/components/cover";
 import { usePlayer } from "@/components/player/player-provider";
+import { LikeButton } from "@/components/likes/like-button";
 import { addToQueue } from "@/app/rooms/actions";
 import { cn } from "@/lib/utils";
 import type { ChatTrack } from "./types";
@@ -82,6 +83,15 @@ export function TrackCard({
           </p>
         )}
       </div>
+      <LikeButton
+        track={{
+          videoId: track.videoId,
+          title: track.title,
+          artist: track.artist,
+          thumbnailUrl: track.thumbnail,
+        }}
+        className="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100"
+      />
       <button
         type="button"
         onClick={handle}

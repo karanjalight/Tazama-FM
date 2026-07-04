@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { Cover } from "@/components/cover";
+import { LikeButton } from "@/components/likes/like-button";
 import { usePrefersReducedMotion } from "@/components/motion/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 
@@ -353,6 +354,18 @@ export function FullscreenPlayer({
               >
                 <RepeatGlyph className="size-5" />
               </IconButton>
+              {currentTrack && (
+                <LikeButton
+                  size="md"
+                  tone="onDark"
+                  track={{
+                    videoId: currentTrack.youtubeId,
+                    title: currentTrack.title,
+                    artist: currentTrack.artist,
+                    thumbnailUrl: currentTrack.thumbnailUrl,
+                  }}
+                />
+              )}
             </div>
 
             <VolumeSlider

@@ -130,6 +130,20 @@ export async function getAllPlayableTracks(limit = 500): Promise<Track[]> {
 }
 
 /**
+ * Exact number of playable tracks in the catalog — the real "tracks in rotation"
+ * figure. Uses a head count so it's not capped by a fetch limit. SERVER ONLY.
+ */
+export async function countPlayableTracks(): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 0;
+  const { count } = await admin
+    .from("tracks")
+    .select("id", { count: "exact", head: true })
+    .eq("is_playable", true);
+  return count ?? 0;
+}
+
+/**
  * A varied "trending" mix for the landing page — newest playable tracks,
  * round-robined across genres so one genre doesn't dominate the row. SERVER ONLY.
  */

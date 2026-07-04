@@ -1,12 +1,12 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut, Menu } from "lucide-react";
 
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -71,24 +71,25 @@ export function MobileSidebar({
             const Icon = item.icon;
             const active = isNavActive(item, pathname);
             return (
-              <SheetClose
+              // Use Next's <Link> for client-side navigation (like the desktop
+              // sidebar) so the persistent player survives page changes. A raw
+              // <a> triggers a full reload, which tears down the PlayerProvider
+              // and stops playback. Closing the drawer is a side effect of the tap.
+              <Link
                 key={item.label}
-                render={
-                  <a
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-                    )}
-                  />
-                }
+                href={item.href}
+                onClick={() => setOpen(false)}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                )}
               >
                 <Icon className={cn("size-4.5", active && "text-brand")} />
                 {item.label}
-              </SheetClose>
+              </Link>
             );
           })}
         </nav>

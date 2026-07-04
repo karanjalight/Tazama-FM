@@ -22,7 +22,7 @@ export interface NavItem {
 /** Shared dashboard nav, used by both the desktop sidebar and the mobile drawer. */
 export const dashboardNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: House, exact: true },
-  { label: "Concierge", href: "/dashboard/chat", icon: Sparkles },
+  { label: "Chat", href: "/dashboard/chat", icon: Sparkles },
   { label: "Search", href: "/dashboard/search", icon: Search },
   { label: "Artists", href: "/dashboard/artists", icon: Mic2 },
   { label: "Browse", href: "/dashboard/browse", icon: Compass },

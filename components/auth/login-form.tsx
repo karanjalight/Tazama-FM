@@ -26,6 +26,10 @@ export function LoginForm() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("error")) {
+      const reason = params.get("reason");
+      // The `reason` (e.g. provider not enabled / redirect not allowlisted) is
+      // logged to help diagnose production OAuth config without leaking it in UI.
+      if (reason) console.warn("[oauth] sign-in failed:", reason);
       toast.error("Google sign-in didn't complete. Please try again.");
       window.history.replaceState(null, "", window.location.pathname);
     }

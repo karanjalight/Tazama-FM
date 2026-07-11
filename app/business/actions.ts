@@ -58,7 +58,6 @@ export async function createBranch(input: {
     .insert({
       slug,
       host_id: viewer.businessId,
-      host_name: viewer.businessName,
       name: parsed.data,
       about: "",
       access: "private",

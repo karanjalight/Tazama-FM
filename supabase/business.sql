@@ -92,22 +92,31 @@ $$;
 alter table public.branches                enable row level security;
 alter table public.business_staff          enable row level security;
 alter table public.business_staff_branches enable row level security;
+alter table public.device_pairings         enable row level security;
 
 drop policy if exists "branches_select" on public.branches;
 create policy "branches_select" on public.branches for select using (
-  public.is_business_staff(business_id, auth.uid())
+  public.is_business_staff(business_id, auth.uid(), id)
 );
 
 drop policy if exists "business_staff_select" on public.business_staff;
 create policy "business_staff_select" on public.business_staff for select using (
-  public.is_business_staff(business_id, auth.uid()) or user_id = auth.uid()
+  public.is_business_staff(business_id, auth.uid())
+  or user_id = auth.uid()
+  or exists (
+    select 1 from public.business_staff caller
+    join public.business_staff_branches sb on sb.staff_id = caller.id
+    where caller.business_id = business_staff.business_id
+      and caller.user_id = auth.uid()
+      and caller.accepted_at is not null
+  )
 );
 
 drop policy if exists "business_staff_branches_select" on public.business_staff_branches;
 create policy "business_staff_branches_select" on public.business_staff_branches for select using (
   exists (
     select 1 from public.business_staff s
-    where s.id = staff_id and public.is_business_staff(s.business_id, auth.uid())
+    where s.id = staff_id and public.is_business_staff(s.business_id, auth.uid(), branch_id)
   )
 );
 

@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import type { LucideIcon } from "lucide-react";
 
 import { usePrefersReducedMotion } from "@/components/motion/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
@@ -27,13 +26,16 @@ function useCountUp(target: number, reduced: boolean): number {
 
 /** A dashboard stat tile: icon, animated tabular number, label — optionally "live". */
 export function StatCard({
-  icon: Icon,
+  icon,
   label,
   value,
   live,
   delayMs = 0,
 }: {
-  icon: LucideIcon;
+  /** A rendered icon element, e.g. `<Building2 className="size-4.5" />` — pass an
+   * already-rendered element (not the component reference) since this crosses
+   * the server/client boundary. */
+  icon: React.ReactNode;
   label: string;
   /** A plain integer animates with a count-up; a string (e.g. "3/5") renders as-is. */
   value: number | string;
@@ -52,7 +54,7 @@ export function StatCard({
     >
       <div className="flex items-center justify-between">
         <span className="grid size-9 place-items-center rounded-xl bg-muted text-foreground">
-          <Icon className="size-4.5" />
+          {icon}
         </span>
         {live && (
           <span className="relative flex size-2">

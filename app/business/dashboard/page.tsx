@@ -34,26 +34,26 @@ export default async function BusinessDashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          icon={Building2}
+          icon={<Building2 className="size-4.5" />}
           label="Branches"
           value={overview.branchCount}
           delayMs={0}
         />
         <StatCard
-          icon={Wifi}
+          icon={<Wifi className="size-4.5" />}
           label="Devices online"
           value={`${overview.onlineCount}/${overview.branchCount}`}
           live={overview.onlineCount > 0}
           delayMs={60}
         />
         <StatCard
-          icon={Users}
+          icon={<Users className="size-4.5" />}
           label="Staff"
           value={overview.staff.length}
           delayMs={120}
         />
         <StatCard
-          icon={Radio}
+          icon={<Radio className="size-4.5" />}
           label="Now playing"
           value={overview.nowPlaying.filter((n) => n.isPlaying).length}
           live={overview.nowPlaying.some((n) => n.isPlaying)}

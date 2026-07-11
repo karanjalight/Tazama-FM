@@ -187,12 +187,13 @@ export async function claimDevice(input: {
   }
 
   const claimedAt = new Date().toISOString();
-  const { error: claimError } = await admin
+  const { data: claimedRows, error: claimError } = await admin
     .from("device_pairings")
     .update({ claimed_branch_id: branch.id, claimed_at: claimedAt })
     .eq("id", pairing.id)
-    .is("claimed_branch_id", null);
-  if (claimError) {
+    .is("claimed_branch_id", null)
+    .select("id");
+  if (claimError || !claimedRows || claimedRows.length === 0) {
     return { ok: false, error: "That code was just claimed by someone else." };
   }
 

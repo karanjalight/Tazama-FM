@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
-import { getBranch } from "@/lib/business/queries";
+import { getBranch, listBranches } from "@/lib/business/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
 import type { ActionResult } from "@/lib/business/types";
+import type { RoomTrack } from "@/lib/rooms/types";
 
 const nameSchema = z.string().trim().min(2).max(60);
 
@@ -204,4 +205,59 @@ export async function claimDevice(input: {
 
   revalidatePath(`/business/branches/${branch.id}`);
   return { ok: true };
+}
+
+const trackSchema = z.object({
+  youtubeId: z.string().min(5),
+  title: z.string(),
+  artist: z.string().nullable(),
+  thumbnailUrl: z.string().nullable(),
+});
+
+export async function playToBranches(input: {
+  branchIds: string[] | "all";
+  track: RoomTrack;
+}): Promise<
+  | { ok: true; results: { branchId: string; ok: boolean }[] }
+  | { ok: false; error: string }
+> {
+  const viewer = await getBusinessViewer();
+  if (!viewer) return { ok: false, error: "Please sign in." };
+  const parsedTrack = trackSchema.safeParse(input.track);
+  if (!parsedTrack.success) {
+    return { ok: false, error: "Invalid track." };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const allBranches = await listBranches(viewer.businessId);
+  const targets =
+    input.branchIds === "all"
+      ? allBranches
+      : allBranches.filter((b) => input.branchIds.includes(b.id));
+
+  const permitted = targets.filter((b) => canActOnBranch(viewer, b.id));
+  if (!permitted.length) {
+    return { ok: false, error: "No branches to play to." };
+  }
+
+  const results = await Promise.all(
+    permitted.map(async (branch) => {
+      const { error } = await admin
+        .from("room_playback")
+        .upsert(
+          {
+            room_id: branch.roomId,
+            track: parsedTrack.data,
+            position_ms: 0,
+            is_playing: true,
+          },
+          { onConflict: "room_id" },
+        );
+      return { branchId: branch.id, ok: !error };
+    }),
+  );
+
+  return { ok: true, results };
 }

@@ -42,7 +42,7 @@ export async function getBusinessViewer(): Promise<BusinessViewer | null> {
   const { data: pendingInvites } = await admin
     .from("business_staff")
     .select("id")
-    .eq("email", profile.email)
+    .eq("email", profile.email.toLowerCase())
     .is("user_id", null);
 
   if (pendingInvites?.length === 1) {
@@ -52,11 +52,12 @@ export async function getBusinessViewer(): Promise<BusinessViewer | null> {
       .eq("id", pendingInvites[0].id);
   }
 
-  const { data: staff } = await admin
+  const { data: staffRows } = await admin
     .from("business_staff")
-    .select("id, business_id, role")
+    .select("id, business_id, role, accepted_at")
     .eq("user_id", profile.id)
-    .maybeSingle();
+    .order("accepted_at", { ascending: false, nullsFirst: false });
+  const staff = staffRows?.[0];
   if (!staff) return null;
 
   const { data: business } = await admin

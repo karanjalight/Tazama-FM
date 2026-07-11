@@ -88,6 +88,18 @@ create or replace function public.is_business_staff(
     );
 $$;
 
+-- 7b. is_staff_of_business() helper (security-definer, avoids recursive RLS) -------
+create or replace function public.is_staff_of_business(p_business uuid, p_user uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (
+    select 1 from public.business_staff s
+    join public.business_staff_branches sb on sb.staff_id = s.id
+    where s.business_id = p_business
+      and s.user_id = p_user
+      and s.accepted_at is not null
+  );
+$$;
+
 -- 8. Row Level Security -------------------------------------------------------------
 alter table public.branches                enable row level security;
 alter table public.business_staff          enable row level security;
@@ -103,13 +115,7 @@ drop policy if exists "business_staff_select" on public.business_staff;
 create policy "business_staff_select" on public.business_staff for select using (
   public.is_business_staff(business_id, auth.uid())
   or user_id = auth.uid()
-  or exists (
-    select 1 from public.business_staff caller
-    join public.business_staff_branches sb on sb.staff_id = caller.id
-    where caller.business_id = business_staff.business_id
-      and caller.user_id = auth.uid()
-      and caller.accepted_at is not null
-  )
+  or public.is_staff_of_business(business_id, auth.uid())
 );
 
 drop policy if exists "business_staff_branches_select" on public.business_staff_branches;

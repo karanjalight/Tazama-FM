@@ -204,6 +204,7 @@ export async function claimDevice(input: {
     .eq("id", branch.id);
 
   revalidatePath(`/business/branches/${branch.id}`);
+  revalidatePath("/business/dashboard");
   return { ok: true };
 }
 
@@ -259,6 +260,7 @@ export async function playToBranches(input: {
     }),
   );
 
+  revalidatePath("/business/dashboard");
   return { ok: true, results };
 }
 
@@ -319,14 +321,18 @@ export async function updateStaffBranches(input: {
     .maybeSingle();
   if (!staff) return { ok: false, error: "Staff member not found." };
 
+  const ownBranches = await listBranches(viewer.businessId);
+  const ownBranchIds = new Set(ownBranches.map((b) => b.id));
+  const branchIds = input.branchIds.filter((id) => ownBranchIds.has(id));
+
   const { data: existingRows } = await admin
     .from("business_staff_branches")
     .select("branch_id")
     .eq("staff_id", input.staffId);
   const existingIds = new Set((existingRows ?? []).map((r) => r.branch_id as string));
-  const nextIds = new Set(input.branchIds);
+  const nextIds = new Set(branchIds);
 
-  const toAdd = input.branchIds.filter((id) => !existingIds.has(id));
+  const toAdd = branchIds.filter((id) => !existingIds.has(id));
   const toRemove = [...existingIds].filter((id) => !nextIds.has(id));
 
   // Insert first: a failure here leaves existing assignments untouched, never

@@ -25,6 +25,7 @@ export interface Room {
   genres: string[];
   isLive: boolean;
   createdAt: string;
+  ownerBusinessId: string | null;
 }
 
 /** A room plus the bits the dashboard cards need (host name + live snapshot). */

@@ -25,6 +25,7 @@ interface RoomRow {
   genres: string[];
   is_live: boolean;
   created_at: string;
+  owner_business_id: string | null;
 }
 
 function mapRoom(r: RoomRow): Room {
@@ -38,6 +39,7 @@ function mapRoom(r: RoomRow): Room {
     genres: r.genres ?? [],
     isLive: r.is_live,
     createdAt: r.created_at,
+    ownerBusinessId: r.owner_business_id,
   };
 }
 

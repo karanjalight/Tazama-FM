@@ -32,7 +32,7 @@ export function KioskRoomPlayer({
   hostName,
   initialPlayback,
 }: {
-  room: { id: string; slug: string; name: string };
+  room: { id: string; slug: string; name: string; isBranch?: boolean };
   hostName: string | null;
   initialPlayback: RoomPlayback | null;
 }) {
@@ -69,6 +69,24 @@ export function KioskRoomPlayer({
     ytRef.current = yt;
     ytPlayingRef.current = yt.isPlaying;
   });
+
+  // Send a heartbeat to the business dashboard if this is a branch kiosk.
+  React.useEffect(() => {
+    if (!room.isBranch) return;
+    const send = () => {
+      fetch("/api/business/devices/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: room.slug }),
+        keepalive: true,
+      }).catch(() => {
+        // Best-effort — a missed heartbeat just means "last seen" ages out.
+      });
+    };
+    send();
+    const id = setInterval(send, 25_000);
+    return () => clearInterval(id);
+  }, [room.isBranch, room.slug]);
 
   const loadTrack = React.useCallback((youtubeId: string) => {
     appliedIdRef.current = youtubeId;

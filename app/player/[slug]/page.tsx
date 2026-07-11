@@ -50,11 +50,16 @@ export default async function PlayerPage({
 
   // A public room slug → mirror the host's live video.
   const room = await getRoomBySlug(slug);
-  if (room && room.access === "public") {
+  if (room && (room.access === "public" || room.ownerBusinessId)) {
     const initialPlayback = await getRoomPlayback(room.id);
     return (
       <KioskRoomPlayer
-        room={{ id: room.id, slug: room.slug, name: room.name }}
+        room={{
+          id: room.id,
+          slug: room.slug,
+          name: room.name,
+          isBranch: !!room.ownerBusinessId,
+        }}
         hostName={null}
         initialPlayback={initialPlayback}
       />

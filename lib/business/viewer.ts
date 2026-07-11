@@ -5,11 +5,19 @@
  * Unlike rooms, the business dashboard requires a real Supabase session (no
  * demo-session support) — this is a paid B2B surface.
  */
+import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BusinessViewer } from "@/lib/business/types";
 
 export async function getBusinessViewer(): Promise<BusinessViewer | null> {
+  // Require a real Supabase session — no demo-session fallback for the business dashboard.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
   const profile = await getCurrentProfile();
   if (!profile) return null;
 
@@ -28,12 +36,21 @@ export async function getBusinessViewer(): Promise<BusinessViewer | null> {
   const admin = createAdminClient();
   if (!admin) return null;
 
-  // Auto-claim a pending invite that matches this account's email.
-  await admin
+  // Auto-claim a pending invite, but only if there is exactly one (ambiguous cases
+  // require manual resolution). Do NOT blind-update by email, as the same email can
+  // have pending invites at multiple businesses simultaneously.
+  const { data: pendingInvites } = await admin
     .from("business_staff")
-    .update({ user_id: profile.id, accepted_at: new Date().toISOString() })
+    .select("id")
     .eq("email", profile.email)
     .is("user_id", null);
+
+  if (pendingInvites?.length === 1) {
+    await admin
+      .from("business_staff")
+      .update({ user_id: profile.id, accepted_at: new Date().toISOString() })
+      .eq("id", pendingInvites[0].id);
+  }
 
   const { data: staff } = await admin
     .from("business_staff")

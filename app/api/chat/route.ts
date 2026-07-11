@@ -184,33 +184,39 @@ export async function POST(request: Request) {
   }
 
   // 3. Resolve or create the thread, and persist the user turn (service role;
-  //    ownership enforced by user_id). Persistence is best-effort.
+  //    ownership enforced by user_id). Persistence is best-effort: a transient
+  //    Supabase error here must not fail the whole turn (see step 4's contract).
   const admin = createAdminClient();
   let threadId = typeof body.threadId === "string" ? body.threadId : null;
   if (admin) {
-    if (threadId) {
-      const { data } = await admin
-        .from("chat_threads")
-        .select("id")
-        .eq("id", threadId)
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!data) threadId = null; // not ours / gone — start fresh
-    }
-    if (!threadId) {
-      const { data } = await admin
-        .from("chat_threads")
-        .insert({ user_id: userId, title: last.content.trim().slice(0, 80) })
-        .select("id")
-        .single();
-      threadId = (data?.id as string | undefined) ?? null;
-    }
-    if (threadId) {
-      await admin.from("chat_messages").insert({
-        thread_id: threadId,
-        role: "user",
-        content: { text: last.content },
-      });
+    try {
+      if (threadId) {
+        const { data } = await admin
+          .from("chat_threads")
+          .select("id")
+          .eq("id", threadId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (!data) threadId = null; // not ours / gone — start fresh
+      }
+      if (!threadId) {
+        const { data } = await admin
+          .from("chat_threads")
+          .insert({ user_id: userId, title: last.content.trim().slice(0, 80) })
+          .select("id")
+          .single();
+        threadId = (data?.id as string | undefined) ?? null;
+      }
+      if (threadId) {
+        await admin.from("chat_messages").insert({
+          thread_id: threadId,
+          role: "user",
+          content: { text: last.content },
+        });
+      }
+    } catch (err) {
+      console.error("chat route: thread persistence failed", err);
+      // Keep going without a thread — the model turn below still works.
     }
   }
 
@@ -317,11 +323,15 @@ export async function POST(request: Request) {
 
   // 5. Persist the assistant turn (best-effort) and return.
   if (admin && threadId) {
-    await admin.from("chat_messages").insert({
-      thread_id: threadId,
-      role: "assistant",
-      content: { text, tracks, playlist: savedPlaylist },
-    });
+    try {
+      await admin.from("chat_messages").insert({
+        thread_id: threadId,
+        role: "assistant",
+        content: { text, tracks, playlist: savedPlaylist },
+      });
+    } catch (err) {
+      console.error("chat route: assistant persistence failed", err);
+    }
   }
 
   return NextResponse.json({

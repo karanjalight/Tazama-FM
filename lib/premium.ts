@@ -76,7 +76,13 @@ export async function activatePremium(
 export async function premiumGuard(): Promise<
   { userId: string } | NextResponse
 > {
-  const profile = await getCurrentProfile();
+  let profile;
+  try {
+    profile = await getCurrentProfile();
+  } catch (err) {
+    console.error("premiumGuard: failed to resolve session", err);
+    return NextResponse.json({ error: "session_unavailable" }, { status: 503 });
+  }
   if (!profile) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }

@@ -102,10 +102,15 @@ export function ChatExperience({
       if (handlePaywall(res)) return; // 402 → upgrade sheet opened
 
       if (!res.ok) {
-        setMessages((m) => [
-          ...m,
-          { role: "assistant", text: "Something went wrong. Mind trying again?" },
-        ]);
+        const errBody = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        console.error("chat request failed", res.status, errBody);
+        const text =
+          res.status === 401
+            ? "Your session expired — refresh the page and try again."
+            : "Something went wrong. Mind trying again?";
+        setMessages((m) => [...m, { role: "assistant", text }]);
         return;
       }
 

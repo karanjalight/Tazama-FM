@@ -146,3 +146,61 @@ export async function archiveBranch(input: {
   revalidatePath("/business/dashboard");
   return { ok: true };
 }
+
+const claimSchema = z.object({
+  branchId: z.string().uuid(),
+  code: z.string().trim().min(4).max(8),
+});
+
+export async function claimDevice(input: {
+  branchId: string;
+  code: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const parsed = claimSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Invalid pairing code." };
+  }
+
+  const branch = await getBranch(viewer.businessId, parsed.data.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const code = parsed.data.code.toUpperCase();
+  const { data: pairing } = await admin
+    .from("device_pairings")
+    .select("id, expires_at, claimed_branch_id")
+    .eq("code", code)
+    .maybeSingle();
+
+  if (
+    !pairing ||
+    pairing.claimed_branch_id ||
+    new Date(pairing.expires_at).getTime() < Date.now()
+  ) {
+    return { ok: false, error: "That code is invalid or has expired." };
+  }
+
+  const claimedAt = new Date().toISOString();
+  const { error: claimError } = await admin
+    .from("device_pairings")
+    .update({ claimed_branch_id: branch.id, claimed_at: claimedAt })
+    .eq("id", pairing.id)
+    .is("claimed_branch_id", null);
+  if (claimError) {
+    return { ok: false, error: "That code was just claimed by someone else." };
+  }
+
+  await admin
+    .from("branches")
+    .update({ device_paired_at: claimedAt, device_last_seen_at: claimedAt })
+    .eq("id", branch.id);
+
+  revalidatePath(`/business/branches/${branch.id}`);
+  return { ok: true };
+}

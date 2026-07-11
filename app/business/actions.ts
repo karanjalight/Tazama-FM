@@ -69,6 +69,7 @@ export async function createBranch(input: {
     .select("id")
     .single();
   if (roomError || !room) {
+    console.error("createBranch: rooms insert failed", roomError);
     return { ok: false, error: "Could not create the branch's room." };
   }
 
@@ -76,6 +77,7 @@ export async function createBranch(input: {
     .from("room_playback")
     .upsert({ room_id: room.id }, { onConflict: "room_id" });
   if (playbackError) {
+    console.error("createBranch: room_playback upsert failed", playbackError);
     return { ok: false, error: "Could not initialize branch playback." };
   }
 
@@ -86,6 +88,7 @@ export async function createBranch(input: {
     slug,
   });
   if (branchError) {
+    console.error("createBranch: branches insert failed", branchError);
     return { ok: false, error: "Could not create the branch." };
   }
 

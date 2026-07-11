@@ -47,14 +47,13 @@ export default async function BusinessLayout({
           <BusinessSidebarNav showStaff={showStaff} />
         </div>
 
-        <div className="flex items-center justify-between border-t border-border pt-4">
+        <div className="border-t border-border pt-4">
           <Link
             href="/dashboard"
             className="text-xs font-medium text-muted-foreground hover:text-foreground"
           >
             ← Back to Tazama
           </Link>
-          <ThemeToggle className="text-muted-foreground hover:bg-muted hover:text-foreground" />
         </div>
       </aside>
 
@@ -77,7 +76,10 @@ export default async function BusinessLayout({
       </header>
 
       <main className="sm:pl-64">
-        <div className="mx-auto max-w-6xl p-6 sm:p-10">{children}</div>
+        <div className="hidden items-center justify-end border-b border-border px-6 py-3 sm:flex lg:px-10">
+          <ThemeToggle className="text-muted-foreground hover:bg-muted hover:text-foreground" />
+        </div>
+        <div className="p-6 sm:p-10">{children}</div>
       </main>
     </div>
   );

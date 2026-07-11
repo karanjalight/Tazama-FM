@@ -81,14 +81,11 @@ export function BranchDetail({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          disabled={!canManage}
           className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-60"
         />
-        {canManage && (
-          <Button type="submit" disabled={pending || name === branch.name}>
-            Save name
-          </Button>
-        )}
+        <Button type="submit" disabled={pending || name === branch.name}>
+          Save name
+        </Button>
       </form>
 
       <section className="rounded-2xl border border-border bg-card p-5">

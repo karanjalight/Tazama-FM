@@ -261,3 +261,101 @@ export async function playToBranches(input: {
 
   return { ok: true, results };
 }
+
+const inviteSchema = z.object({
+  email: z.string().trim().email(),
+  role: z.enum(["admin", "manager"]),
+});
+
+export async function inviteStaff(input: {
+  email: string;
+  role: "admin" | "manager";
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!requireAdminLevel(viewer)) {
+    return { ok: false, error: "You don't have permission to invite staff." };
+  }
+  const parsed = inviteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Enter a valid email and role." };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin.from("business_staff").insert({
+    business_id: viewer.businessId,
+    email: parsed.data.email.toLowerCase(),
+    role: parsed.data.role,
+  });
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: "That email is already invited." };
+    }
+    return { ok: false, error: "Could not send the invite." };
+  }
+
+  revalidatePath("/business/staff");
+  return { ok: true };
+}
+
+export async function updateStaffBranches(input: {
+  staffId: string;
+  branchIds: string[];
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!requireAdminLevel(viewer)) {
+    return { ok: false, error: "You don't have permission to manage staff." };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { data: staff } = await admin
+    .from("business_staff")
+    .select("id, business_id")
+    .eq("id", input.staffId)
+    .eq("business_id", viewer.businessId)
+    .maybeSingle();
+  if (!staff) return { ok: false, error: "Staff member not found." };
+
+  await admin
+    .from("business_staff_branches")
+    .delete()
+    .eq("staff_id", input.staffId);
+
+  if (input.branchIds.length) {
+    const { error } = await admin.from("business_staff_branches").insert(
+      input.branchIds.map((branchId) => ({
+        staff_id: input.staffId,
+        branch_id: branchId,
+      })),
+    );
+    if (error) return { ok: false, error: "Could not update assignments." };
+  }
+
+  revalidatePath("/business/staff");
+  return { ok: true };
+}
+
+export async function revokeStaff(input: {
+  staffId: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!requireAdminLevel(viewer)) {
+    return { ok: false, error: "You don't have permission to remove staff." };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("business_staff")
+    .delete()
+    .eq("id", input.staffId)
+    .eq("business_id", viewer.businessId);
+  if (error) return { ok: false, error: "Could not remove staff member." };
+
+  revalidatePath("/business/staff");
+  return { ok: true };
+}

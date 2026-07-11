@@ -7,7 +7,7 @@ import { DEMO_AUTH, DEMO_COOKIE } from "@/lib/demo/demo-session";
 const AUTH_ONLY_PATHS = ["/login", "/signup"];
 
 /** Paths that require a signed-in user. */
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/rooms"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/rooms", "/business"];
 
 /**
  * Refreshes the Supabase auth session on every request and enforces coarse
@@ -17,9 +17,13 @@ const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/rooms"];
  * Called from the root `proxy.ts` (Next.js 16's renamed middleware).
  */
 export async function updateSession(request: NextRequest) {
-  // The kiosk player (`/player/*`) is public and unauthenticated — skip the
-  // Supabase round-trip entirely so a freshly-booted TV box loads it instantly.
-  if (request.nextUrl.pathname.startsWith("/player")) {
+  // The kiosk player (`/player/*`) and the device-pairing screen
+  // (`/business/pair`) are public and unauthenticated — skip the Supabase
+  // round-trip so a freshly-booted TV box loads instantly.
+  if (
+    request.nextUrl.pathname.startsWith("/player") ||
+    request.nextUrl.pathname === "/business/pair"
+  ) {
     return NextResponse.next({ request });
   }
 

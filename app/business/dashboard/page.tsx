@@ -1,33 +1,16 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Building2, Radio, Users, Wifi } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { Building2, Plus, Radio, Users, Wifi } from "lucide-react";
 
 import { getBusinessViewer } from "@/lib/business/viewer";
 import { getBusinessOverview } from "@/lib/business/queries";
+import { StatCard } from "@/components/business/stat-card";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Business Dashboard" };
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof Building2;
-  label: string;
-  value: string | number;
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <span className="grid size-9 place-items-center rounded-xl bg-muted text-foreground">
-        <Icon className="size-4.5" />
-      </span>
-      <p className="mt-3 text-2xl font-semibold tracking-tight text-foreground">
-        {value}
-      </p>
-      <p className="text-xs text-muted-foreground">{label}</p>
-    </div>
-  );
-}
 
 export default async function BusinessDashboardPage() {
   const viewer = await getBusinessViewer();
@@ -50,17 +33,31 @@ export default async function BusinessDashboardPage() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Building2} label="Branches" value={overview.branchCount} />
+        <StatCard
+          icon={Building2}
+          label="Branches"
+          value={overview.branchCount}
+          delayMs={0}
+        />
         <StatCard
           icon={Wifi}
           label="Devices online"
           value={`${overview.onlineCount}/${overview.branchCount}`}
+          live={overview.onlineCount > 0}
+          delayMs={60}
         />
-        <StatCard icon={Users} label="Staff" value={overview.staff.length} />
+        <StatCard
+          icon={Users}
+          label="Staff"
+          value={overview.staff.length}
+          delayMs={120}
+        />
         <StatCard
           icon={Radio}
           label="Now playing"
           value={overview.nowPlaying.filter((n) => n.isPlaying).length}
+          live={overview.nowPlaying.some((n) => n.isPlaying)}
+          delayMs={180}
         />
       </div>
 
@@ -72,40 +69,75 @@ export default async function BusinessDashboardPage() {
           {overview.nowPlaying.map((n) => (
             <div
               key={n.branchId}
-              className="rounded-2xl border border-border bg-card p-4"
+              className="flex gap-3 rounded-2xl border border-border bg-card p-4"
             >
-              <div className="flex items-center justify-between">
-                <p className="font-medium text-foreground">{n.branchName}</p>
-                <span
-                  className={
-                    n.online
-                      ? "inline-flex items-center gap-1.5 text-xs text-emerald-600"
-                      : "inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-                  }
-                >
-                  <span
-                    className={
-                      n.online
-                        ? "size-1.5 rounded-full bg-emerald-500"
-                        : "size-1.5 rounded-full bg-muted-foreground"
-                    }
-                  />
-                  {n.online ? "Online" : "Offline"}
+              {n.track?.thumbnailUrl ? (
+                <Image
+                  src={n.track.thumbnailUrl}
+                  alt=""
+                  width={48}
+                  height={48}
+                  className="size-12 shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
+                  <Radio className="size-4.5" />
                 </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate font-medium text-foreground">
+                    {n.branchName}
+                  </p>
+                  <span
+                    className={cn(
+                      "inline-flex shrink-0 items-center gap-1.5 text-xs",
+                      n.online ? "text-emerald-600" : "text-muted-foreground",
+                    )}
+                  >
+                    {n.online ? (
+                      <span className="relative flex size-1.5">
+                        <span className="absolute inline-flex size-full animate-live-ping rounded-full bg-emerald-500/70" />
+                        <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                      </span>
+                    ) : (
+                      <span className="size-1.5 rounded-full bg-muted-foreground" />
+                    )}
+                    {n.online ? "Online" : "Offline"}
+                  </span>
+                </div>
+                <p className="mt-1.5 truncate text-sm text-muted-foreground">
+                  {n.track
+                    ? `${n.track.title}${n.track.artist ? ` — ${n.track.artist}` : ""}`
+                    : n.isPlaying
+                      ? "Playing"
+                      : "Nothing queued"}
+                </p>
               </div>
-              <p className="mt-2 truncate text-sm text-muted-foreground">
-                {n.track
-                  ? `${n.track.title}${n.track.artist ? ` — ${n.track.artist}` : ""}`
-                  : n.isPlaying
-                    ? "Playing"
-                    : "Nothing queued"}
-              </p>
             </div>
           ))}
           {!overview.nowPlaying.length && (
-            <p className="text-sm text-muted-foreground">
-              No branches yet — add one to get started.
-            </p>
+            <div className="col-span-full flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border p-10 text-center">
+              <span className="grid size-11 place-items-center rounded-xl bg-muted text-muted-foreground">
+                <Building2 className="size-5" />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  No branches yet
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Add your first branch to start pairing devices and playing
+                  music.
+                </p>
+              </div>
+              <Link
+                href="/business/branches"
+                className={cn(buttonVariants({ variant: "brand" }), "mt-1 gap-1.5")}
+              >
+                <Plus className="size-4" />
+                Add a branch
+              </Link>
+            </div>
           )}
         </div>
       </section>

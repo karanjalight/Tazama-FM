@@ -319,18 +319,31 @@ export async function updateStaffBranches(input: {
     .maybeSingle();
   if (!staff) return { ok: false, error: "Staff member not found." };
 
-  await admin
+  const { data: existingRows } = await admin
     .from("business_staff_branches")
-    .delete()
+    .select("branch_id")
     .eq("staff_id", input.staffId);
+  const existingIds = new Set((existingRows ?? []).map((r) => r.branch_id as string));
+  const nextIds = new Set(input.branchIds);
 
-  if (input.branchIds.length) {
+  const toAdd = input.branchIds.filter((id) => !existingIds.has(id));
+  const toRemove = [...existingIds].filter((id) => !nextIds.has(id));
+
+  // Insert first: a failure here leaves existing assignments untouched, never
+  // destroying state the way a delete-then-insert would on partial failure.
+  if (toAdd.length) {
     const { error } = await admin.from("business_staff_branches").insert(
-      input.branchIds.map((branchId) => ({
-        staff_id: input.staffId,
-        branch_id: branchId,
-      })),
+      toAdd.map((branchId) => ({ staff_id: input.staffId, branch_id: branchId })),
     );
+    if (error) return { ok: false, error: "Could not update assignments." };
+  }
+
+  if (toRemove.length) {
+    const { error } = await admin
+      .from("business_staff_branches")
+      .delete()
+      .eq("staff_id", input.staffId)
+      .in("branch_id", toRemove);
     if (error) return { ok: false, error: "Could not update assignments." };
   }
 

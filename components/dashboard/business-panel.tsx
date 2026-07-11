@@ -49,14 +49,14 @@ export function BusinessPanel({
         </div>
 
         <Link
-          href="#"
+          href="/business/dashboard"
           className={cn(
             buttonVariants({ variant: "brand" }),
             "h-10 gap-2 rounded-xl px-4 text-[14px]",
           )}
         >
           <Plus className="size-4" />
-          Create a venue room
+          Go to business dashboard
         </Link>
       </div>
 

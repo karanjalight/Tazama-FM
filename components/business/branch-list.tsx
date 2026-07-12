@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { createBranch } from "@/app/business/actions";
 import { Button } from "@/components/ui/button";
+import { GenrePicker } from "@/components/rooms/genre-picker";
 import type { Branch } from "@/lib/business/types";
 
 export function BranchList({
@@ -19,36 +20,46 @@ export function BranchList({
 }) {
   const router = useRouter();
   const [name, setName] = React.useState("");
+  const [genres, setGenres] = React.useState<string[]>([]);
   const [pending, setPending] = React.useState(false);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     setPending(true);
-    const result = await createBranch({ name: name.trim() });
+    const result = await createBranch({ name: name.trim(), genres });
     setPending(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     setName("");
+    setGenres([]);
     router.refresh();
   }
 
   return (
     <div className="space-y-6">
       {canCreate && (
-        <form onSubmit={handleCreate} className="flex gap-2">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="New branch name (e.g. Westlands)"
-            className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm"
-          />
-          <Button type="submit" disabled={pending || !name.trim()}>
-            <Plus className="size-4" />
-            Add branch
-          </Button>
+        <form onSubmit={handleCreate} className="space-y-4 rounded-2xl border border-border bg-card p-4">
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="New branch name (e.g. Westlands)"
+              className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm"
+            />
+            <Button type="submit" disabled={pending || !name.trim()}>
+              <Plus className="size-4" />
+              Add branch
+            </Button>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-medium text-foreground">
+              What should this branch play?
+            </p>
+            <GenrePicker value={genres} onChange={setGenres} />
+          </div>
         </form>
       )}
 

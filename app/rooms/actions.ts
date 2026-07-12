@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoomViewer } from "@/lib/rooms/viewer";
+import { getOrCreateGuestViewer } from "@/lib/rooms/guest-session";
 import { getRoomBySlug, getRoomQueue } from "@/lib/rooms/queries";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
 import { ROOM_GENRES, MAX_ROOM_GENRES } from "@/lib/room-genres";
@@ -18,18 +19,18 @@ const VALID_GENRES = new Set(ROOM_GENRES.map((g) => g.value));
 
 /**
  * Resolve the acting identity for a room action: a real/demo viewer normally,
- * or a client-supplied guest actor — but ONLY when this action independently
- * confirms (via its own DB lookup, never trusting the client's claim) that the
- * target room belongs to a business branch. Consumer rooms are unaffected: a
- * guest actor passed against a non-branch room is rejected here.
+ * or — ONLY when this action independently confirms (via its own DB lookup,
+ * never trusting client input) that the target room belongs to a business
+ * branch — the anonymous guest identity from the `tz_room_guest` cookie
+ * (`getOrCreateGuestViewer`, resolved server-side, never client-supplied).
+ * Consumer rooms are unaffected: with no real viewer and no confirmed branch,
+ * this returns null.
  */
 async function resolveActor(
   roomId: string,
-  guest?: { id: string; name: string },
 ): Promise<{ id: string; name: string } | null> {
   const viewer = await getRoomViewer();
   if (viewer) return { id: viewer.id, name: viewer.name };
-  if (!guest?.id || !guest?.name) return null;
   const admin = createAdminClient();
   if (!admin) return null;
   const { data: room } = await admin
@@ -38,7 +39,8 @@ async function resolveActor(
     .eq("id", roomId)
     .maybeSingle();
   if (!room?.owner_business_id) return null;
-  return guest;
+  const guest = await getOrCreateGuestViewer();
+  return { id: guest.id, name: guest.name };
 }
 
 const createSchema = z.object({
@@ -180,9 +182,8 @@ export async function joinRoom(roomId: string): Promise<{ ok: boolean }> {
 export async function addToQueue(
   roomId: string,
   track: RoomTrack,
-  guest?: { id: string; name: string },
 ): Promise<{ ok: boolean }> {
-  const actor = await resolveActor(roomId, guest);
+  const actor = await resolveActor(roomId);
   const admin = createAdminClient();
   if (!actor || !admin) return { ok: false };
   const parsed = trackSchema.safeParse(track);
@@ -198,7 +199,6 @@ export async function addToQueue(
 
 export async function removeFromQueue(
   queueId: string,
-  guest?: { id: string; name: string },
 ): Promise<{ ok: boolean }> {
   const admin = createAdminClient();
   if (!admin) return { ok: false };
@@ -208,7 +208,7 @@ export async function removeFromQueue(
     .eq("id", queueId)
     .maybeSingle();
   if (!row) return { ok: false };
-  const actor = await resolveActor(row.room_id, guest);
+  const actor = await resolveActor(row.room_id);
   if (!actor) return { ok: false };
   // Host or the person who added it may remove (enforced via OR below).
   const hostId = (row as { rooms?: { host_id?: string } }).rooms?.host_id;
@@ -221,9 +221,8 @@ export async function removeFromQueue(
 export async function toggleLike(
   roomId: string,
   queueId: string,
-  guest?: { id: string; name: string },
 ): Promise<{ ok: boolean; liked: boolean }> {
-  const actor = await resolveActor(roomId, guest);
+  const actor = await resolveActor(roomId);
   const admin = createAdminClient();
   if (!actor || !admin) return { ok: false, liked: false };
 

@@ -511,7 +511,7 @@ export function RoomExperience({
   /* --------------------------- queue actions ---------------------------- */
 
   async function onAdd(track: RoomTrack) {
-    const res = await addToQueue(room.id, track, { id: viewer.id, name: viewer.name });
+    const res = await addToQueue(room.id, track);
     if (!res.ok) {
       toast.error("Couldn't add that track.");
       return;
@@ -540,14 +540,14 @@ export function RoomExperience({
             b.likeCount - a.likeCount || a.createdAt.localeCompare(b.createdAt),
         ),
     );
-    await toggleLikeAction(room.id, item.id, { id: viewer.id, name: viewer.name });
+    await toggleLikeAction(room.id, item.id);
     apiRef.current?.sendQueuePing();
     await refetchQueue();
   }
 
   async function onRemove(item: QueueItem) {
     setQueue((q) => q.filter((i) => i.id !== item.id));
-    await removeFromQueue(item.id, { id: viewer.id, name: viewer.name });
+    await removeFromQueue(item.id);
     apiRef.current?.sendQueuePing();
     await refetchQueue();
   }

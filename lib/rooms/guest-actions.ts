@@ -9,5 +9,14 @@ const MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 export async function ensureGuestCookie(id: string): Promise<void> {
   const store = await cookies();
   if (store.get(GUEST_COOKIE)?.value === id) return;
-  store.set(GUEST_COOKIE, id, { maxAge: MAX_AGE, path: "/", sameSite: "lax" });
+  // httpOnly: server actions now resolve the guest id from this cookie
+  // themselves (never from client-supplied arguments) — keeping it
+  // unreadable/unwritable by page JS closes the one remaining way a
+  // malicious script could still forge a different guest's identity.
+  store.set(GUEST_COOKIE, id, {
+    maxAge: MAX_AGE,
+    path: "/",
+    sameSite: "lax",
+    httpOnly: true,
+  });
 }

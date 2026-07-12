@@ -230,11 +230,13 @@ export async function archiveBranch(input: {
 const claimSchema = z.object({
   branchId: z.string().uuid(),
   code: z.string().trim().min(4).max(8),
+  name: z.string().trim().min(1, "Give this device a name.").max(40),
 });
 
 export async function claimDevice(input: {
   branchId: string;
   code: string;
+  name: string;
 }): Promise<ActionResult> {
   const viewer = await getBusinessViewer();
   if (!viewer || !canActOnBranch(viewer, input.branchId)) {
@@ -254,7 +256,7 @@ export async function claimDevice(input: {
   const code = parsed.data.code.toUpperCase();
   const { data: pairing } = await admin
     .from("device_pairings")
-    .select("id, expires_at, claimed_branch_id")
+    .select("id, expires_at, claimed_branch_id, device_token")
     .eq("code", code)
     .maybeSingle();
 
@@ -277,6 +279,18 @@ export async function claimDevice(input: {
     return { ok: false, error: "That code was just claimed by someone else." };
   }
 
+  // branch_devices is now the source of truth for pairing — the branch-level
+  // columns are left untouched (unused going forward, not worth a destructive
+  // column drop).
+  const { error: deviceError } = await admin.from("branch_devices").insert({
+    branch_id: branch.id,
+    name: parsed.data.name,
+    device_token: pairing.device_token,
+  });
+  if (deviceError) {
+    return { ok: false, error: "Could not finish pairing this device." };
+  }
+
   await admin
     .from("branches")
     .update({ device_paired_at: claimedAt, device_last_seen_at: claimedAt })
@@ -284,6 +298,31 @@ export async function claimDevice(input: {
 
   revalidatePath(`/business/branches/${branch.id}`);
   revalidatePath("/business/dashboard");
+  return { ok: true };
+}
+
+export async function forgetDevice(input: {
+  branchId: string;
+  deviceId: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("branch_devices")
+    .delete()
+    .eq("id", input.deviceId)
+    .eq("branch_id", branch.id);
+  if (error) return { ok: false, error: "Could not forget this device." };
+
+  revalidatePath(`/business/branches/${input.branchId}`);
   return { ok: true };
 }
 

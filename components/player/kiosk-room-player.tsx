@@ -82,13 +82,18 @@ export function KioskRoomPlayer({
   });
 
   // Send a heartbeat to the business dashboard if this is a branch kiosk.
+  // The persisted device token (set at claim time, see pairing-code.tsx)
+  // identifies THIS specific device — a branch can have several, all
+  // loading the same slug, so the slug alone can't tell them apart.
   React.useEffect(() => {
     if (!room.isBranch) return;
+    const deviceToken = window.localStorage.getItem("tz_device_token");
+    if (!deviceToken) return;
     const send = () => {
       fetch("/api/business/devices/heartbeat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: room.slug }),
+        body: JSON.stringify({ slug: room.slug, deviceToken }),
         keepalive: true,
       }).catch(() => {
         // Best-effort — a missed heartbeat just means "last seen" ages out.

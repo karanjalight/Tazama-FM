@@ -180,29 +180,6 @@ export async function updateBranchGenres(input: {
   return { ok: true };
 }
 
-export async function unpairDevice(input: {
-  branchId: string;
-}): Promise<ActionResult> {
-  const viewer = await getBusinessViewer();
-  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
-    return { ok: false, error: "You don't have access to this branch." };
-  }
-  const branch = await getBranch(viewer.businessId, input.branchId);
-  if (!branch) return { ok: false, error: "Branch not found." };
-
-  const admin = createAdminClient();
-  if (!admin) return { ok: false, error: "Not configured." };
-
-  const { error } = await admin
-    .from("branches")
-    .update({ device_paired_at: null, device_last_seen_at: null })
-    .eq("id", branch.id);
-  if (error) return { ok: false, error: "Could not unpair the device." };
-
-  revalidatePath(`/business/branches/${branch.id}`);
-  return { ok: true };
-}
-
 export async function archiveBranch(input: {
   branchId: string;
 }): Promise<ActionResult> {
@@ -230,11 +207,13 @@ export async function archiveBranch(input: {
 const claimSchema = z.object({
   branchId: z.string().uuid(),
   code: z.string().trim().min(4).max(8),
+  name: z.string().trim().min(1, "Give this device a name.").max(40),
 });
 
 export async function claimDevice(input: {
   branchId: string;
   code: string;
+  name: string;
 }): Promise<ActionResult> {
   const viewer = await getBusinessViewer();
   if (!viewer || !canActOnBranch(viewer, input.branchId)) {
@@ -254,7 +233,7 @@ export async function claimDevice(input: {
   const code = parsed.data.code.toUpperCase();
   const { data: pairing } = await admin
     .from("device_pairings")
-    .select("id, expires_at, claimed_branch_id")
+    .select("id, expires_at, claimed_branch_id, device_token")
     .eq("code", code)
     .maybeSingle();
 
@@ -277,6 +256,18 @@ export async function claimDevice(input: {
     return { ok: false, error: "That code was just claimed by someone else." };
   }
 
+  // branch_devices is now the source of truth for pairing — the branch-level
+  // columns are left untouched (unused going forward, not worth a destructive
+  // column drop).
+  const { error: deviceError } = await admin.from("branch_devices").insert({
+    branch_id: branch.id,
+    name: parsed.data.name,
+    device_token: pairing.device_token,
+  });
+  if (deviceError) {
+    return { ok: false, error: "Could not finish pairing this device." };
+  }
+
   await admin
     .from("branches")
     .update({ device_paired_at: claimedAt, device_last_seen_at: claimedAt })
@@ -284,6 +275,31 @@ export async function claimDevice(input: {
 
   revalidatePath(`/business/branches/${branch.id}`);
   revalidatePath("/business/dashboard");
+  return { ok: true };
+}
+
+export async function forgetDevice(input: {
+  branchId: string;
+  deviceId: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("branch_devices")
+    .delete()
+    .eq("id", input.deviceId)
+    .eq("branch_id", branch.id);
+  if (error) return { ok: false, error: "Could not forget this device." };
+
+  revalidatePath(`/business/branches/${input.branchId}`);
   return { ok: true };
 }
 
@@ -528,6 +544,81 @@ export async function setBranchPlayback(input: {
     .eq("room_id", branch.roomId);
   if (error) return { ok: false, error: "Could not update playback." };
 
+  revalidatePath(`/business/branches/${input.branchId}`);
+  return { ok: true };
+}
+
+const createManagerSchema = z.object({
+  email: z.string().trim().email(),
+  phone: z.string().trim().min(7, "Enter a valid phone number."),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+export async function createBranchManager(input: {
+  branchId: string;
+  email: string;
+  phone: string;
+  password: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!requireAdminLevel(viewer)) {
+    return { ok: false, error: "You don't have permission to add managers." };
+  }
+  const parsed = createManagerSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid details." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const email = parsed.data.email.toLowerCase();
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: { full_name: email.split("@")[0], phone: parsed.data.phone },
+  });
+  if (createError || !created.user) {
+    const message = createError?.message?.toLowerCase().includes("already")
+      ? "That email is already registered."
+      : "Could not create the account.";
+    return { ok: false, error: message };
+  }
+
+  const { data: staffRow, error: staffError } = await admin
+    .from("business_staff")
+    .insert({
+      business_id: viewer.businessId,
+      email,
+      user_id: created.user.id,
+      role: "manager",
+      accepted_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (staffError || !staffRow) {
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
+    if (staffError?.code === "23505") {
+      return {
+        ok: false,
+        error: "That email is already added as staff for this business.",
+      };
+    }
+    return { ok: false, error: "Account created, but could not add them as staff." };
+  }
+
+  const { error: branchLinkError } = await admin
+    .from("business_staff_branches")
+    .insert({ staff_id: staffRow.id, branch_id: branch.id });
+  if (branchLinkError) {
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
+    return { ok: false, error: "Account created, but could not assign the branch." };
+  }
+
+  revalidatePath("/business/staff");
   revalidatePath(`/business/branches/${input.branchId}`);
   return { ok: true };
 }

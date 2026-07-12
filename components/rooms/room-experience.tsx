@@ -371,6 +371,25 @@ export function RoomExperience({
     [channel.participants],
   );
 
+  // Branch-only: ping so the business dashboard can show a live visitor
+  // count. Guests never join room_members, so this is the only signal.
+  React.useEffect(() => {
+    if (!room.ownerBusinessId) return;
+    const ping = () => {
+      fetch("/api/rooms/presence-ping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ roomId: room.id, actorId: viewer.id }),
+        keepalive: true,
+      }).catch(() => {
+        // Best-effort — a missed ping just means the count ages out.
+      });
+    };
+    ping();
+    const id = setInterval(ping, 20_000);
+    return () => clearInterval(id);
+  }, [room.ownerBusinessId, room.id, viewer.id]);
+
   /* --------------------------- suggestions ------------------------------ */
 
   const refreshSuggestions = React.useCallback(async () => {

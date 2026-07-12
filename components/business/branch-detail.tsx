@@ -8,26 +8,34 @@ import {
   renameBranch,
   archiveBranch,
   claimDevice,
-  unpairDevice,
+  forgetDevice,
+  createBranchManager,
   updateBranchGenres,
 } from "@/app/business/actions";
 import { Button } from "@/components/ui/button";
 import { GenrePicker } from "@/components/rooms/genre-picker";
-import type { Branch } from "@/lib/business/types";
+import type { Branch, BranchDevice } from "@/lib/business/types";
 
 export function BranchDetail({
   branch,
   genres: initialGenres,
+  devices: initialDevices,
   canManage,
 }: {
   branch: Branch;
   genres: string[];
+  devices: BranchDevice[];
   canManage: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
   const [genres, setGenres] = React.useState(initialGenres);
+  const [devices, setDevices] = React.useState(initialDevices);
   const [code, setCode] = React.useState("");
+  const [deviceName, setDeviceName] = React.useState("");
+  const [managerEmail, setManagerEmail] = React.useState("");
+  const [managerPhone, setManagerPhone] = React.useState("");
+  const [managerPassword, setManagerPassword] = React.useState("");
   const [pending, setPending] = React.useState(false);
 
   async function handleRename(e: React.FormEvent) {
@@ -53,17 +61,29 @@ export function BranchDetail({
 
   async function handleClaim(e: React.FormEvent) {
     e.preventDefault();
-    if (!code.trim()) return;
+    if (!code.trim() || !deviceName.trim()) return;
     setPending(true);
-    const result = await claimDevice({ branchId: branch.id, code: code.trim() });
+    const result = await claimDevice({
+      branchId: branch.id,
+      code: code.trim(),
+      name: deviceName.trim(),
+    });
     setPending(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
     setCode("");
+    setDeviceName("");
     toast.success("Device paired.");
     router.refresh();
+  }
+
+  async function handleForget(deviceId: string) {
+    if (!confirm("Forget this device? It will need a new pairing code.")) return;
+    setDevices((d) => d.filter((x) => x.id !== deviceId));
+    const result = await forgetDevice({ branchId: branch.id, deviceId });
+    if (!result.ok) toast.error(result.error);
   }
 
   async function handleArchive() {
@@ -75,13 +95,25 @@ export function BranchDetail({
     else router.push("/business/branches");
   }
 
-  async function handleUnpair() {
-    if (!confirm("Unpair this device? The TV will need a new pairing code.")) return;
+  async function handleCreateManager(e: React.FormEvent) {
+    e.preventDefault();
+    if (!managerEmail.trim() || !managerPhone.trim() || !managerPassword) return;
     setPending(true);
-    const result = await unpairDevice({ branchId: branch.id });
+    const result = await createBranchManager({
+      branchId: branch.id,
+      email: managerEmail.trim(),
+      phone: managerPhone.trim(),
+      password: managerPassword,
+    });
     setPending(false);
-    if (!result.ok) toast.error(result.error);
-    else router.refresh();
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setManagerEmail("");
+    setManagerPhone("");
+    setManagerPassword("");
+    toast.success("Manager account created.");
   }
 
   return (
@@ -118,38 +150,92 @@ export function BranchDetail({
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-foreground">Device</h2>
-        {branch.devicePairedAt ? (
-          <div className="mt-2 flex items-center justify-between gap-3">
-            <p className="text-sm text-muted-foreground">
-              Paired. Last seen:{" "}
-              {branch.deviceLastSeenAt
-                ? new Date(branch.deviceLastSeenAt).toLocaleString()
-                : "never"}
-            </p>
-            <Button
-              onClick={handleUnpair}
-              disabled={pending}
-              variant="outline"
-              size="sm"
-            >
-              Unpair
-            </Button>
-          </div>
-        ) : (
-          <form onSubmit={handleClaim} className="mt-3 flex gap-2">
+        <h2 className="text-sm font-semibold text-foreground">Devices</h2>
+        {devices.length > 0 && (
+          <ul className="mt-3 space-y-2">
+            {devices.map((d) => (
+              <li
+                key={d.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2"
+              >
+                <div>
+                  <p className="text-sm font-medium text-foreground">{d.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {d.online ? "Online" : "Offline"} · Last seen:{" "}
+                    {d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString() : "never"}
+                  </p>
+                </div>
+                <Button
+                  onClick={() => handleForget(d.id)}
+                  variant="outline"
+                  size="sm"
+                >
+                  Forget
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form onSubmit={handleClaim} className="mt-3 flex flex-wrap gap-2">
+          <input
+            value={deviceName}
+            onChange={(e) => setDeviceName(e.target.value)}
+            placeholder="Device name (e.g. Main TV)"
+            className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm"
+          />
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Pairing code from the TV"
+            className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm uppercase"
+          />
+          <Button type="submit" disabled={pending || !code.trim() || !deviceName.trim()}>
+            Pair a device
+          </Button>
+        </form>
+      </section>
+
+      {canManage && (
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="text-sm font-semibold text-foreground">
+            Add a manager for this branch
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Creates a working account right away — they can sign in with this
+            email and password immediately, scoped to this branch.
+          </p>
+          <form onSubmit={handleCreateManager} className="mt-3 space-y-2">
             <input
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              placeholder="Enter the code shown on the TV"
-              className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm uppercase"
+              type="email"
+              value={managerEmail}
+              onChange={(e) => setManagerEmail(e.target.value)}
+              placeholder="Email"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
             />
-            <Button type="submit" disabled={pending || !code.trim()}>
-              Pair device
+            <input
+              value={managerPhone}
+              onChange={(e) => setManagerPhone(e.target.value)}
+              placeholder="Phone number"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            />
+            <input
+              type="password"
+              value={managerPassword}
+              onChange={(e) => setManagerPassword(e.target.value)}
+              placeholder="Password (min. 8 characters)"
+              className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+            />
+            <Button
+              type="submit"
+              disabled={
+                pending || !managerEmail.trim() || !managerPhone.trim() || !managerPassword
+              }
+            >
+              Create manager account
             </Button>
           </form>
-        )}
-      </section>
+        </section>
+      )}
 
       {canManage && (
         <Button onClick={handleArchive} disabled={pending} variant="outline">

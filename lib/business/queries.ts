@@ -6,6 +6,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   Branch,
+  BranchCardSummary,
+  BranchDevice,
   BranchNowPlaying,
   BusinessOverview,
   StaffMember,
@@ -13,6 +15,7 @@ import type {
 import type { RoomTrack } from "@/lib/rooms/types";
 
 const ONLINE_THRESHOLD_MS = 90_000;
+const PRESENCE_THRESHOLD_MS = 90_000;
 
 export function isOnline(lastSeenAt: string | null): boolean {
   if (!lastSeenAt) return false;
@@ -68,6 +71,121 @@ export async function getBranch(
     .eq("id", branchId)
     .maybeSingle();
   return data ? rowToBranch(data as BranchRow) : null;
+}
+
+interface BranchDeviceRow {
+  id: string;
+  name: string;
+  paired_at: string;
+  last_seen_at: string | null;
+}
+
+function rowToBranchDevice(row: BranchDeviceRow): BranchDevice {
+  return {
+    id: row.id,
+    name: row.name,
+    pairedAt: row.paired_at,
+    lastSeenAt: row.last_seen_at,
+    online: isOnline(row.last_seen_at),
+  };
+}
+
+export async function listBranchDevices(
+  branchId: string,
+): Promise<BranchDevice[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data } = await admin
+    .from("branch_devices")
+    .select("id, name, paired_at, last_seen_at")
+    .eq("branch_id", branchId)
+    .order("paired_at", { ascending: true });
+  return ((data ?? []) as BranchDeviceRow[]).map(rowToBranchDevice);
+}
+
+export async function countLivePresence(roomId: string): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 0;
+  const cutoff = new Date(Date.now() - PRESENCE_THRESHOLD_MS).toISOString();
+  const { count } = await admin
+    .from("room_presence")
+    .select("actor_id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .gte("last_seen_at", cutoff);
+  return count ?? 0;
+}
+
+export async function getBranchCardSummaries(
+  businessId: string,
+): Promise<BranchCardSummary[]> {
+  const branches = await listBranches(businessId);
+  if (!branches.length) return [];
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return branches.map((branch) => ({
+      branch,
+      devices: [],
+      onlineDeviceCount: 0,
+      liveVisitorCount: 0,
+      nowPlaying: null,
+      isPlaying: false,
+      lastSeenAt: null,
+    }));
+  }
+
+  const roomIds = branches.map((b) => b.roomId);
+  const branchIds = branches.map((b) => b.id);
+
+  const [{ data: playbackRows }, { data: deviceRows }, presenceCounts] =
+    await Promise.all([
+      admin
+        .from("room_playback")
+        .select("room_id, track, is_playing")
+        .in("room_id", roomIds),
+      admin
+        .from("branch_devices")
+        .select("id, branch_id, name, paired_at, last_seen_at")
+        .in("branch_id", branchIds),
+      Promise.all(roomIds.map((id) => countLivePresence(id))),
+    ]);
+
+  const playbackByRoom = new Map(
+    (
+      (playbackRows ?? []) as {
+        room_id: string;
+        track: unknown;
+        is_playing: boolean;
+      }[]
+    ).map((p) => [p.room_id, p]),
+  );
+  const devicesByBranch = new Map<string, BranchDevice[]>();
+  for (const row of (deviceRows ?? []) as (BranchDeviceRow & {
+    branch_id: string;
+  })[]) {
+    const list = devicesByBranch.get(row.branch_id) ?? [];
+    list.push(rowToBranchDevice(row));
+    devicesByBranch.set(row.branch_id, list);
+  }
+
+  return branches.map((branch, i) => {
+    const playback = playbackByRoom.get(branch.roomId);
+    const devices = devicesByBranch.get(branch.id) ?? [];
+    const lastSeenAt = devices.reduce<string | null>((latest, d) => {
+      if (!d.lastSeenAt) return latest;
+      if (!latest || d.lastSeenAt > latest) return d.lastSeenAt;
+      return latest;
+    }, null);
+    return {
+      branch,
+      devices,
+      onlineDeviceCount: devices.filter((d) => d.online).length,
+      liveVisitorCount: presenceCounts[i] ?? 0,
+      nowPlaying: (playback?.track as RoomTrack | null) ?? null,
+      isPlaying: playback?.is_playing ?? false,
+      lastSeenAt,
+    };
+  });
 }
 
 export async function listStaff(businessId: string): Promise<StaffMember[]> {

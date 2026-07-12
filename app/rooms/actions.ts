@@ -16,6 +16,31 @@ import type { RoomTrack, QueueItem } from "@/lib/rooms/types";
 
 const VALID_GENRES = new Set(ROOM_GENRES.map((g) => g.value));
 
+/**
+ * Resolve the acting identity for a room action: a real/demo viewer normally,
+ * or a client-supplied guest actor — but ONLY when this action independently
+ * confirms (via its own DB lookup, never trusting the client's claim) that the
+ * target room belongs to a business branch. Consumer rooms are unaffected: a
+ * guest actor passed against a non-branch room is rejected here.
+ */
+async function resolveActor(
+  roomId: string,
+  guest?: { id: string; name: string },
+): Promise<{ id: string; name: string } | null> {
+  const viewer = await getRoomViewer();
+  if (viewer) return { id: viewer.id, name: viewer.name };
+  if (!guest?.id || !guest?.name) return null;
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data: room } = await admin
+    .from("rooms")
+    .select("owner_business_id")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (!room?.owner_business_id) return null;
+  return guest;
+}
+
 const createSchema = z.object({
   name: z.string().trim().min(2, "Give your hangout a name.").max(60),
   about: z.string().trim().max(280).default(""),
@@ -155,35 +180,39 @@ export async function joinRoom(roomId: string): Promise<{ ok: boolean }> {
 export async function addToQueue(
   roomId: string,
   track: RoomTrack,
+  guest?: { id: string; name: string },
 ): Promise<{ ok: boolean }> {
-  const viewer = await getRoomViewer();
+  const actor = await resolveActor(roomId, guest);
   const admin = createAdminClient();
-  if (!viewer || !admin) return { ok: false };
+  if (!actor || !admin) return { ok: false };
   const parsed = trackSchema.safeParse(track);
   if (!parsed.success) return { ok: false };
   const { error } = await admin.from("room_queue").insert({
     room_id: roomId,
     track: parsed.data,
-    added_by: viewer.id,
+    added_by: actor.id,
+    added_by_name: actor.name,
   });
   return { ok: !error };
 }
 
 export async function removeFromQueue(
   queueId: string,
+  guest?: { id: string; name: string },
 ): Promise<{ ok: boolean }> {
-  const viewer = await getRoomViewer();
   const admin = createAdminClient();
-  if (!viewer || !admin) return { ok: false };
-  // Host or the person who added it may remove (enforced via OR below).
+  if (!admin) return { ok: false };
   const { data: row } = await admin
     .from("room_queue")
     .select("id, added_by, room_id, rooms(host_id)")
     .eq("id", queueId)
     .maybeSingle();
   if (!row) return { ok: false };
+  const actor = await resolveActor(row.room_id, guest);
+  if (!actor) return { ok: false };
+  // Host or the person who added it may remove (enforced via OR below).
   const hostId = (row as { rooms?: { host_id?: string } }).rooms?.host_id;
-  const canRemove = row.added_by === viewer.id || hostId === viewer.id;
+  const canRemove = row.added_by === actor.id || hostId === actor.id;
   if (!canRemove) return { ok: false };
   const { error } = await admin.from("room_queue").delete().eq("id", queueId);
   return { ok: !error };
@@ -192,16 +221,17 @@ export async function removeFromQueue(
 export async function toggleLike(
   roomId: string,
   queueId: string,
+  guest?: { id: string; name: string },
 ): Promise<{ ok: boolean; liked: boolean }> {
-  const viewer = await getRoomViewer();
+  const actor = await resolveActor(roomId, guest);
   const admin = createAdminClient();
-  if (!viewer || !admin) return { ok: false, liked: false };
+  if (!actor || !admin) return { ok: false, liked: false };
 
   const { data: existing } = await admin
     .from("room_track_likes")
     .select("queue_id")
     .eq("queue_id", queueId)
-    .eq("user_id", viewer.id)
+    .eq("user_id", actor.id)
     .maybeSingle();
 
   if (existing) {
@@ -209,13 +239,13 @@ export async function toggleLike(
       .from("room_track_likes")
       .delete()
       .eq("queue_id", queueId)
-      .eq("user_id", viewer.id);
+      .eq("user_id", actor.id);
     return { ok: !error, liked: false };
   }
 
   const { error } = await admin.from("room_track_likes").insert({
     queue_id: queueId,
-    user_id: viewer.id,
+    user_id: actor.id,
     room_id: roomId,
   });
   return { ok: !error, liked: true };

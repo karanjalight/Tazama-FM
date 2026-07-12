@@ -498,10 +498,31 @@ export async function setBranchPlayback(input: {
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
 
+  // The kiosk mirrors `room_playback` by computing
+  // `positionMs + (isPlaying ? now - updatedAt : 0)` and seeking whenever
+  // that drifts from where it actually is. `position_ms` is only ever
+  // written at track-start (always 0) — a bare `is_playing` toggle with no
+  // position update left it stale, so every pause/resume made the kiosk
+  // seek back to 0 instead of holding its place. Freeze the estimated live
+  // position on pause (elapsed time since the last update, while it was
+  // playing) so a subsequent resume computes back to roughly the same spot.
+  const { data: current } = await admin
+    .from("room_playback")
+    .select("position_ms, is_playing, updated_at")
+    .eq("room_id", branch.roomId)
+    .maybeSingle();
+
+  let positionMs = current?.position_ms ?? 0;
+  if (!input.isPlaying && current?.is_playing) {
+    const elapsed = Date.now() - new Date(current.updated_at).getTime();
+    positionMs = Math.max(0, positionMs + elapsed);
+  }
+
   const { error } = await admin
     .from("room_playback")
     .update({
       is_playing: input.isPlaying,
+      position_ms: positionMs,
       updated_at: new Date().toISOString(),
     })
     .eq("room_id", branch.roomId);

@@ -353,7 +353,14 @@ export async function getRoomQueue(
       id: i.id,
       roomId: i.room_id,
       track,
-      addedBy: i.added_by,
+      // Never expose a guest's raw actor id to other viewers: it's also the
+      // sole removal credential (removeFromQueue authorizes on
+      // added_by === actor.id), and unlike a real signed-in user's id, a
+      // guest id is a bare, replayable cookie value with no other identity
+      // check behind it — anyone who read it off the screen could forge it
+      // into their own request to impersonate that guest. Nothing in the
+      // UI actually renders `addedBy` (only `addedByName`), so this is free.
+      addedBy: i.added_by?.startsWith("guest-") ? null : i.added_by,
       addedByName:
         (i.added_by ? adderNames.get(i.added_by) : null) ??
         i.added_by_name ??

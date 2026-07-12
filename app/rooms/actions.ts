@@ -179,6 +179,11 @@ export async function joinRoom(roomId: string): Promise<{ ok: boolean }> {
   return { ok: !error };
 }
 
+/** Caps how many unplayed items one room's queue can hold — a guest song
+ * request needs no account, so this is the backstop against a script (or an
+ * over-enthusiastic shopper) flooding a branch's queue with unlimited adds. */
+const MAX_QUEUE_LENGTH = 100;
+
 export async function addToQueue(
   roomId: string,
   track: RoomTrack,
@@ -188,6 +193,14 @@ export async function addToQueue(
   if (!actor || !admin) return { ok: false };
   const parsed = trackSchema.safeParse(track);
   if (!parsed.success) return { ok: false };
+
+  const { count } = await admin
+    .from("room_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .eq("played", false);
+  if ((count ?? 0) >= MAX_QUEUE_LENGTH) return { ok: false };
+
   const { error } = await admin.from("room_queue").insert({
     room_id: roomId,
     track: parsed.data,

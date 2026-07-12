@@ -30,9 +30,10 @@ returns boolean language sql security definer stable set search_path = public as
   );
 $$;
 
--- 2. branches: add a public SELECT policy (non-sensitive metadata — name,
---    slug, volume, pairing timestamps; no staff/business financial data) so
---    an anonymous kiosk can read+subscribe to its own branch's volume.
+-- 2. branches: add a public SELECT policy so an anonymous kiosk can
+--    read+subscribe to its own branch's row. RLS is row-level only — it
+--    can't hide columns — so step 4 below separately narrows exactly which
+--    columns the anon role can see through this policy.
 drop policy if exists "branches_select_public" on public.branches;
 create policy "branches_select_public" on public.branches for select using (true);
 
@@ -47,3 +48,18 @@ begin
     execute 'alter publication supabase_realtime add table public.branches';
   end if;
 end $$;
+
+-- 4. Restrict the anon role to only the columns a kiosk actually needs.
+--    Without this, step 2's row-level policy combined with Supabase's
+--    default "grant all on tables to anon" schema privilege would expose
+--    every column — including business_id (correlatable to the owning
+--    account) and archived_at — not just the intended name/slug/volume/
+--    pairing-timestamp metadata. Authenticated business staff are
+--    unaffected: they keep full-column access via the existing
+--    business_id-scoped is_business_staff() policy, and every server-side
+--    read in this app already goes through the service-role client anyway
+--    (which bypasses grants and RLS entirely), so this only tightens what
+--    an anonymous browser/kiosk client can see.
+revoke select on public.branches from anon;
+grant select (id, room_id, name, slug, volume, device_paired_at, device_last_seen_at)
+  on public.branches to anon;

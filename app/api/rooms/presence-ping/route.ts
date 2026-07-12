@@ -23,6 +23,18 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ ok: false }, { status: 503 });
 
+  // Presence is scoped to branch rooms only — consumer rooms never get
+  // presence data, and forging a roomId for an arbitrary/non-branch room
+  // must not write anything.
+  const { data: room } = await admin
+    .from("rooms")
+    .select("id, owner_business_id")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (!room?.owner_business_id) {
+    return NextResponse.json({ ok: false }, { status: 404 });
+  }
+
   await admin.from("room_presence").upsert(
     { room_id: roomId, actor_id: actorId, last_seen_at: new Date().toISOString() },
     { onConflict: "room_id,actor_id" },

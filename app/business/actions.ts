@@ -180,29 +180,6 @@ export async function updateBranchGenres(input: {
   return { ok: true };
 }
 
-export async function unpairDevice(input: {
-  branchId: string;
-}): Promise<ActionResult> {
-  const viewer = await getBusinessViewer();
-  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
-    return { ok: false, error: "You don't have access to this branch." };
-  }
-  const branch = await getBranch(viewer.businessId, input.branchId);
-  if (!branch) return { ok: false, error: "Branch not found." };
-
-  const admin = createAdminClient();
-  if (!admin) return { ok: false, error: "Not configured." };
-
-  const { error } = await admin
-    .from("branches")
-    .update({ device_paired_at: null, device_last_seen_at: null })
-    .eq("id", branch.id);
-  if (error) return { ok: false, error: "Could not unpair the device." };
-
-  revalidatePath(`/business/branches/${branch.id}`);
-  return { ok: true };
-}
-
 export async function archiveBranch(input: {
   branchId: string;
 }): Promise<ActionResult> {

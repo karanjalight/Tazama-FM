@@ -26,6 +26,7 @@ import { ParticipantsPanel } from "@/components/rooms/participants-panel";
 import { ReactionBar, type FloatingItem } from "@/components/rooms/room-reactions";
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomChannel } from "@/lib/rooms/use-room-channel";
+import { useBranchPlayback } from "@/lib/business/use-branch-playback";
 import { roomGenreLabel } from "@/lib/room-genres";
 import { cn } from "@/lib/utils";
 import { FREE_MINUTES_CAP, type SubscriptionPlan } from "@/lib/billing/plans";
@@ -362,6 +363,9 @@ export function RoomExperience({
     },
   });
   React.useEffect(() => void (apiRef.current = channel));
+  // A branch has no human host broadcasting — mirror its playback via
+  // Postgres Changes instead (the same mechanism the kiosk player uses).
+  useBranchPlayback(room.id, !!room.ownerBusinessId, handlePlayback);
   React.useEffect(
     () => void (participantsRef.current = channel.participants),
     [channel.participants],

@@ -15,6 +15,8 @@ import { listLikedIds } from "@/lib/likes/store";
 import { getPlanForAccount } from "@/lib/billing/subscription";
 import { listenerCapFor } from "@/lib/billing/plans";
 import { getOrigin } from "@/lib/origin";
+import { getOrCreateGuestViewer } from "@/lib/rooms/guest-session";
+import { GuestSessionSync } from "@/components/rooms/guest-session-sync";
 
 // A room is live state — always render fresh, never cache.
 export const dynamic = "force-dynamic";
@@ -36,16 +38,24 @@ export default async function RoomPage({
 }) {
   const { slug } = await params;
 
-  const viewer = await getRoomViewer();
-  if (!viewer) redirect("/login");
-
   const room = await getRoomBySlug(slug);
   if (!room) notFound();
 
+  const isBranch = !!room.ownerBusinessId;
+
+  let viewer = await getRoomViewer();
+  let isGuest = false;
+  if (!viewer && isBranch) {
+    viewer = await getOrCreateGuestViewer();
+    isGuest = true;
+  }
+  if (!viewer) redirect("/login");
+
   const isHost = room.hostId === viewer.id;
 
-  // Private rooms are visible only to the host or invited members.
-  if (room.access === "private" && !isHost) {
+  // Private rooms are visible only to the host or invited members — except a
+  // branch, which is "unlisted, but shareable by direct link," not invite-only.
+  if (room.access === "private" && !isHost && !isBranch) {
     const member = await isRoomMember(room.id, viewer.id);
     if (!member) notFound();
   }
@@ -64,6 +74,7 @@ export default async function RoomPage({
 
   return (
     <LikesProvider initialLikedIds={likedIds} enabled={!!profile}>
+      {isGuest && <GuestSessionSync id={viewer.id} />}
       <RoomExperience
         room={room}
         viewer={viewer}

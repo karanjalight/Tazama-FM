@@ -424,3 +424,81 @@ export async function revokeStaff(input: {
   revalidatePath("/business/staff");
   return { ok: true };
 }
+
+export async function removeBranchQueueItem(input: {
+  branchId: string;
+  queueId: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("room_queue")
+    .delete()
+    .eq("id", input.queueId)
+    .eq("room_id", branch.roomId);
+  if (error) return { ok: false, error: "Could not remove track." };
+
+  revalidatePath(`/business/branches/${input.branchId}`);
+  return { ok: true };
+}
+
+export async function setBranchPlayback(input: {
+  branchId: string;
+  isPlaying: boolean;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("room_playback")
+    .update({
+      is_playing: input.isPlaying,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("room_id", branch.roomId);
+  if (error) return { ok: false, error: "Could not update playback." };
+
+  revalidatePath(`/business/branches/${input.branchId}`);
+  return { ok: true };
+}
+
+export async function setBranchVolume(input: {
+  branchId: string;
+  volume: number;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const clamped = Math.min(100, Math.max(0, Math.round(input.volume)));
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("branches")
+    .update({ volume: clamped })
+    .eq("id", branch.id);
+  if (error) return { ok: false, error: "Could not update volume." };
+
+  revalidatePath(`/business/branches/${input.branchId}`);
+  return { ok: true };
+}

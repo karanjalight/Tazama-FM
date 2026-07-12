@@ -9,12 +9,39 @@ import { z } from "zod";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoomViewer } from "@/lib/rooms/viewer";
+import { getOrCreateGuestViewer } from "@/lib/rooms/guest-session";
 import { getRoomBySlug, getRoomQueue } from "@/lib/rooms/queries";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
 import { ROOM_GENRES, MAX_ROOM_GENRES } from "@/lib/room-genres";
 import type { RoomTrack, QueueItem } from "@/lib/rooms/types";
 
 const VALID_GENRES = new Set(ROOM_GENRES.map((g) => g.value));
+
+/**
+ * Resolve the acting identity for a room action: a real/demo viewer normally,
+ * or — ONLY when this action independently confirms (via its own DB lookup,
+ * never trusting client input) that the target room belongs to a business
+ * branch — the anonymous guest identity from the `tz_room_guest` cookie
+ * (`getOrCreateGuestViewer`, resolved server-side, never client-supplied).
+ * Consumer rooms are unaffected: with no real viewer and no confirmed branch,
+ * this returns null.
+ */
+async function resolveActor(
+  roomId: string,
+): Promise<{ id: string; name: string } | null> {
+  const viewer = await getRoomViewer();
+  if (viewer) return { id: viewer.id, name: viewer.name };
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data: room } = await admin
+    .from("rooms")
+    .select("owner_business_id")
+    .eq("id", roomId)
+    .maybeSingle();
+  if (!room?.owner_business_id) return null;
+  const guest = await getOrCreateGuestViewer();
+  return { id: guest.id, name: guest.name };
+}
 
 const createSchema = z.object({
   name: z.string().trim().min(2, "Give your hangout a name.").max(60),
@@ -152,19 +179,33 @@ export async function joinRoom(roomId: string): Promise<{ ok: boolean }> {
   return { ok: !error };
 }
 
+/** Caps how many unplayed items one room's queue can hold — a guest song
+ * request needs no account, so this is the backstop against a script (or an
+ * over-enthusiastic shopper) flooding a branch's queue with unlimited adds. */
+const MAX_QUEUE_LENGTH = 100;
+
 export async function addToQueue(
   roomId: string,
   track: RoomTrack,
 ): Promise<{ ok: boolean }> {
-  const viewer = await getRoomViewer();
+  const actor = await resolveActor(roomId);
   const admin = createAdminClient();
-  if (!viewer || !admin) return { ok: false };
+  if (!actor || !admin) return { ok: false };
   const parsed = trackSchema.safeParse(track);
   if (!parsed.success) return { ok: false };
+
+  const { count } = await admin
+    .from("room_queue")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", roomId)
+    .eq("played", false);
+  if ((count ?? 0) >= MAX_QUEUE_LENGTH) return { ok: false };
+
   const { error } = await admin.from("room_queue").insert({
     room_id: roomId,
     track: parsed.data,
-    added_by: viewer.id,
+    added_by: actor.id,
+    added_by_name: actor.name,
   });
   return { ok: !error };
 }
@@ -172,18 +213,19 @@ export async function addToQueue(
 export async function removeFromQueue(
   queueId: string,
 ): Promise<{ ok: boolean }> {
-  const viewer = await getRoomViewer();
   const admin = createAdminClient();
-  if (!viewer || !admin) return { ok: false };
-  // Host or the person who added it may remove (enforced via OR below).
+  if (!admin) return { ok: false };
   const { data: row } = await admin
     .from("room_queue")
     .select("id, added_by, room_id, rooms(host_id)")
     .eq("id", queueId)
     .maybeSingle();
   if (!row) return { ok: false };
+  const actor = await resolveActor(row.room_id);
+  if (!actor) return { ok: false };
+  // Host or the person who added it may remove (enforced via OR below).
   const hostId = (row as { rooms?: { host_id?: string } }).rooms?.host_id;
-  const canRemove = row.added_by === viewer.id || hostId === viewer.id;
+  const canRemove = row.added_by === actor.id || hostId === actor.id;
   if (!canRemove) return { ok: false };
   const { error } = await admin.from("room_queue").delete().eq("id", queueId);
   return { ok: !error };
@@ -193,15 +235,15 @@ export async function toggleLike(
   roomId: string,
   queueId: string,
 ): Promise<{ ok: boolean; liked: boolean }> {
-  const viewer = await getRoomViewer();
+  const actor = await resolveActor(roomId);
   const admin = createAdminClient();
-  if (!viewer || !admin) return { ok: false, liked: false };
+  if (!actor || !admin) return { ok: false, liked: false };
 
   const { data: existing } = await admin
     .from("room_track_likes")
     .select("queue_id")
     .eq("queue_id", queueId)
-    .eq("user_id", viewer.id)
+    .eq("user_id", actor.id)
     .maybeSingle();
 
   if (existing) {
@@ -209,13 +251,13 @@ export async function toggleLike(
       .from("room_track_likes")
       .delete()
       .eq("queue_id", queueId)
-      .eq("user_id", viewer.id);
+      .eq("user_id", actor.id);
     return { ok: !error, liked: false };
   }
 
   const { error } = await admin.from("room_track_likes").insert({
     queue_id: queueId,
-    user_id: viewer.id,
+    user_id: actor.id,
     room_id: roomId,
   });
   return { ok: !error, liked: true };

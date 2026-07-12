@@ -145,3 +145,17 @@ export async function getBusinessOverview(
     nowPlaying,
   };
 }
+
+/** The kiosk player page needs a branch's current volume by room id — it has
+ * no businessId context (it's public/unauthenticated), so this reads directly
+ * by room_id rather than going through the businessId-scoped Branch queries. */
+export async function getBranchVolume(roomId: string): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 80;
+  const { data } = await admin
+    .from("branches")
+    .select("volume")
+    .eq("room_id", roomId)
+    .maybeSingle();
+  return typeof data?.volume === "number" ? data.volume : 80;
+}

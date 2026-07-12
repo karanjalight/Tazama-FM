@@ -7,7 +7,7 @@ import { DEMO_AUTH, DEMO_COOKIE } from "@/lib/demo/demo-session";
 const AUTH_ONLY_PATHS = ["/login", "/signup"];
 
 /** Paths that require a signed-in user. */
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/rooms", "/business"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/business"];
 
 /**
  * Refreshes the Supabase auth session on every request and enforces coarse

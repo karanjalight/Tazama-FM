@@ -2,14 +2,18 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
-  let slug: unknown;
+  let body: { slug?: unknown; deviceToken?: unknown };
   try {
-    ({ slug } = await request.json());
+    body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
+  const { slug, deviceToken } = body;
   if (typeof slug !== "string" || !slug) {
     return NextResponse.json({ error: "Missing slug." }, { status: 400 });
+  }
+  if (typeof deviceToken !== "string" || !deviceToken) {
+    return NextResponse.json({ error: "Missing deviceToken." }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -24,10 +28,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 404 });
   }
 
-  await admin
+  // Only touch a device row that's actually paired to THIS branch's room —
+  // an unrecognized/forgotten token silently no-ops rather than erroring.
+  const { data: branch } = await admin
     .from("branches")
-    .update({ device_last_seen_at: new Date().toISOString() })
-    .eq("room_id", room.id);
+    .select("id")
+    .eq("room_id", room.id)
+    .maybeSingle();
+  if (!branch) return NextResponse.json({ ok: false }, { status: 404 });
+
+  await admin
+    .from("branch_devices")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("branch_id", branch.id)
+    .eq("device_token", deviceToken);
 
   return NextResponse.json({ ok: true });
 }

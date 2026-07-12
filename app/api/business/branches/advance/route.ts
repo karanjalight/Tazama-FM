@@ -87,14 +87,17 @@ export async function POST(request: Request) {
     }
   }
 
-  if (next) {
-    await admin
-      .from("room_playback")
-      .upsert(
-        { room_id: room.id, track: next, position_ms: 0, is_playing: true },
-        { onConflict: "room_id" },
-      );
-  }
+  await admin
+    .from("room_playback")
+    .upsert(
+      {
+        room_id: room.id,
+        track: next,
+        position_ms: 0,
+        is_playing: next !== null,
+      },
+      { onConflict: "room_id" },
+    );
 
   return NextResponse.json({ track: next });
 }

@@ -623,6 +623,13 @@ export async function createBranchManager(input: {
     .select("id")
     .single();
   if (staffError || !staffRow) {
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
+    if (staffError?.code === "23505") {
+      return {
+        ok: false,
+        error: "That email is already added as staff for this business.",
+      };
+    }
     return { ok: false, error: "Account created, but could not add them as staff." };
   }
 
@@ -630,6 +637,7 @@ export async function createBranchManager(input: {
     .from("business_staff_branches")
     .insert({ staff_id: staffRow.id, branch_id: branch.id });
   if (branchLinkError) {
+    await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
     return { ok: false, error: "Account created, but could not assign the branch." };
   }
 

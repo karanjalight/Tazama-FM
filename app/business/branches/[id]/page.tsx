@@ -48,6 +48,7 @@ export default async function BranchDetailPage({
       {branch.devicePairedAt && room && (
         <BranchQueuePanel
           branchId={branch.id}
+          branchSlug={branch.slug}
           roomId={room.id}
           initialTrack={playback?.track ?? null}
           initialIsPlaying={playback?.isPlaying ?? false}

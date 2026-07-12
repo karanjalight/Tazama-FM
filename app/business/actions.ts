@@ -571,6 +571,73 @@ export async function setBranchPlayback(input: {
   return { ok: true };
 }
 
+const createManagerSchema = z.object({
+  email: z.string().trim().email(),
+  phone: z.string().trim().min(7, "Enter a valid phone number."),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+export async function createBranchManager(input: {
+  branchId: string;
+  email: string;
+  phone: string;
+  password: string;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!requireAdminLevel(viewer)) {
+    return { ok: false, error: "You don't have permission to add managers." };
+  }
+  const parsed = createManagerSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid details." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const email = parsed.data.email.toLowerCase();
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password: parsed.data.password,
+    email_confirm: true,
+    user_metadata: { full_name: email.split("@")[0], phone: parsed.data.phone },
+  });
+  if (createError || !created.user) {
+    const message = createError?.message?.toLowerCase().includes("already")
+      ? "That email is already registered."
+      : "Could not create the account.";
+    return { ok: false, error: message };
+  }
+
+  const { data: staffRow, error: staffError } = await admin
+    .from("business_staff")
+    .insert({
+      business_id: viewer.businessId,
+      email,
+      user_id: created.user.id,
+      role: "manager",
+      accepted_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (staffError || !staffRow) {
+    return { ok: false, error: "Account created, but could not add them as staff." };
+  }
+
+  const { error: branchLinkError } = await admin
+    .from("business_staff_branches")
+    .insert({ staff_id: staffRow.id, branch_id: branch.id });
+  if (branchLinkError) {
+    return { ok: false, error: "Account created, but could not assign the branch." };
+  }
+
+  revalidatePath("/business/staff");
+  revalidatePath(`/business/branches/${input.branchId}`);
+  return { ok: true };
+}
+
 export async function setBranchVolume(input: {
   branchId: string;
   volume: number;

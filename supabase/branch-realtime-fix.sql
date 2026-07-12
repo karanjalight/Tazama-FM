@@ -60,6 +60,11 @@ end $$;
 --    read in this app already goes through the service-role client anyway
 --    (which bypasses grants and RLS entirely), so this only tightens what
 --    an anonymous browser/kiosk client can see.
-revoke select on public.branches from anon;
+--    We narrow the authenticated role identically: the branches_select_public
+--    policy (using (true), no role qualifier) also applies to authenticated,
+--    so a signed-in customer reading a branch's room row through the browser
+--    Supabase client would otherwise still see every column via that role's
+--    default full-column grant.
+revoke select on public.branches from anon, authenticated;
 grant select (id, room_id, name, slug, volume, device_paired_at, device_last_seen_at)
-  on public.branches to anon;
+  on public.branches to anon, authenticated;

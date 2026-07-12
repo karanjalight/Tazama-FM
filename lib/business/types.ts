@@ -51,6 +51,25 @@ export interface BusinessOverview {
   nowPlaying: BranchNowPlaying[];
 }
 
+export interface BranchDevice {
+  id: string;
+  name: string;
+  pairedAt: string;
+  lastSeenAt: string | null;
+  online: boolean;
+}
+
+/** Everything a branch's list-page card needs, in one shape. */
+export interface BranchCardSummary {
+  branch: Branch;
+  devices: BranchDevice[];
+  onlineDeviceCount: number;
+  liveVisitorCount: number;
+  nowPlaying: RoomTrack | null;
+  isPlaying: boolean;
+  lastSeenAt: string | null;
+}
+
 /** Common server-action result shape (mirrors `app/rooms/actions.ts`'s convention). */
 export type ActionResult =
   | { ok: true }

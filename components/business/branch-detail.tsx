@@ -8,7 +8,7 @@ import {
   renameBranch,
   archiveBranch,
   claimDevice,
-  playToBranches,
+  unpairDevice,
   updateBranchGenres,
 } from "@/app/business/actions";
 import { Button } from "@/components/ui/button";
@@ -75,20 +75,13 @@ export function BranchDetail({
     else router.push("/business/branches");
   }
 
-  async function handleTestPlay() {
+  async function handleUnpair() {
+    if (!confirm("Unpair this device? The TV will need a new pairing code.")) return;
     setPending(true);
-    const result = await playToBranches({
-      branchIds: [branch.id],
-      track: {
-        youtubeId: "dQw4w9WgXcQ",
-        title: "Test track",
-        artist: null,
-        thumbnailUrl: null,
-      },
-    });
+    const result = await unpairDevice({ branchId: branch.id });
     setPending(false);
     if (!result.ok) toast.error(result.error);
-    else toast.success("Sent to this branch.");
+    else router.refresh();
   }
 
   return (
@@ -127,12 +120,22 @@ export function BranchDetail({
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold text-foreground">Device</h2>
         {branch.devicePairedAt ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            Paired. Last seen:{" "}
-            {branch.deviceLastSeenAt
-              ? new Date(branch.deviceLastSeenAt).toLocaleString()
-              : "never"}
-          </p>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">
+              Paired. Last seen:{" "}
+              {branch.deviceLastSeenAt
+                ? new Date(branch.deviceLastSeenAt).toLocaleString()
+                : "never"}
+            </p>
+            <Button
+              onClick={handleUnpair}
+              disabled={pending}
+              variant="outline"
+              size="sm"
+            >
+              Unpair
+            </Button>
+          </div>
         ) : (
           <form onSubmit={handleClaim} className="mt-3 flex gap-2">
             <input
@@ -147,12 +150,6 @@ export function BranchDetail({
           </form>
         )}
       </section>
-
-      {branch.devicePairedAt && (
-        <Button onClick={handleTestPlay} disabled={pending} variant="outline">
-          Send a test track to this branch
-        </Button>
-      )}
 
       {canManage && (
         <Button onClick={handleArchive} disabled={pending} variant="outline">

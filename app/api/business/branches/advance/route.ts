@@ -35,6 +35,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not a branch." }, { status: 404 });
   }
 
+  const { data: branch } = await admin
+    .from("branches")
+    .select("device_paired_at")
+    .eq("room_id", room.id)
+    .maybeSingle();
+  if (!branch?.device_paired_at) {
+    return NextResponse.json({ error: "Device not paired." }, { status: 404 });
+  }
+
   const { data: queueRows } = await admin
     .from("room_queue")
     .select("id, track")
@@ -53,7 +62,12 @@ export async function POST(request: Request) {
       .eq("id", queueRows[0].id);
   } else {
     const [{ data: existingQueue }, { data: playback }] = await Promise.all([
-      admin.from("room_queue").select("track").eq("room_id", room.id),
+      admin
+        .from("room_queue")
+        .select("track")
+        .eq("room_id", room.id)
+        .order("created_at", { ascending: false })
+        .limit(30),
       admin
         .from("room_playback")
         .select("track")
@@ -85,6 +99,14 @@ export async function POST(request: Request) {
       );
       if (!insertError) next = suggestions[0];
     }
+
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await admin
+      .from("room_queue")
+      .delete()
+      .eq("room_id", room.id)
+      .eq("played", true)
+      .lt("created_at", cutoff);
   }
 
   await admin
@@ -95,6 +117,7 @@ export async function POST(request: Request) {
         track: next,
         position_ms: 0,
         is_playing: next !== null,
+        updated_at: new Date().toISOString(),
       },
       { onConflict: "room_id" },
     );

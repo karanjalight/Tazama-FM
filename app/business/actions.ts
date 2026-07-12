@@ -17,6 +17,7 @@ const VALID_GENRES = new Set(ROOM_GENRES.map((g) => g.value));
 
 const genresSchema = z
   .array(z.string())
+  .min(1, "Pick at least one genre.")
   .max(MAX_ROOM_GENRES)
   .refine((gs) => gs.every((g) => VALID_GENRES.has(g)), "Unknown genre.");
 
@@ -297,6 +298,7 @@ export async function playToBranches(input: {
             track: parsedTrack.data,
             position_ms: 0,
             is_playing: true,
+            updated_at: new Date().toISOString(),
           },
           { onConflict: "room_id" },
         );

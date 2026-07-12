@@ -13,6 +13,7 @@ import {
 import { Cover } from "@/components/cover";
 import { Scrubber } from "@/components/player/controls";
 import { Equalizer } from "@/components/brand/equalizer";
+import { LikeButton } from "@/components/likes/like-button";
 import {
   FloatingReactions,
   type FloatingItem,
@@ -129,6 +130,17 @@ export function RoomStage({
               {nowPlaying?.artist ?? (isHost ? "Add a track to begin" : "—")}
             </p>
           </div>
+
+          {nowPlaying && (
+            <LikeButton
+              track={{
+                videoId: nowPlaying.youtubeId,
+                title: nowPlaying.title,
+                artist: nowPlaying.artist,
+                thumbnailUrl: nowPlaying.thumbnailUrl,
+              }}
+            />
+          )}
 
           {!isHost && (
             <button

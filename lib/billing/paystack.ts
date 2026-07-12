@@ -5,6 +5,7 @@
 import crypto from "crypto";
 
 import { getPlan, type SubscriptionPlan } from "@/lib/billing/plans";
+import { AI_PRODUCT, AI_PREMIUM_USD } from "@/lib/billing/ai";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -67,6 +68,48 @@ export async function initSubscriptionCheckout(input: {
   }
 }
 
+/**
+ * Start a one-off checkout for the AI premium add-on ($3). Passes metadata
+ * { product: "ai", user_id } so both the webhook and the redirect callback can
+ * grant 30 days of premium to the right user. One-off (no recurring plan) keeps
+ * it aligned with the expiry-based premium_access model.
+ */
+export async function initAiPremiumCheckout(input: {
+  email: string;
+  userId: string;
+  callbackUrl: string;
+}): Promise<{ authorizationUrl?: string; error?: string }> {
+  const key = secret();
+  if (!key) return { error: "Billing isn't configured yet." };
+
+  try {
+    const res = await fetch(`${PAYSTACK_BASE}/transaction/initialize`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: input.email,
+        amount: Math.round(AI_PREMIUM_USD * 100), // smallest currency unit
+        callback_url: input.callbackUrl,
+        metadata: { product: AI_PRODUCT, user_id: input.userId },
+      }),
+    });
+    const json = (await res.json().catch(() => null)) as {
+      status?: boolean;
+      message?: string;
+      data?: { authorization_url?: string };
+    } | null;
+    if (!res.ok || !json?.status) {
+      return { error: json?.message ?? "Could not start checkout." };
+    }
+    return { authorizationUrl: json.data?.authorization_url };
+  } catch {
+    return { error: "Could not reach Paystack." };
+  }
+}
+
 /** Verify a webhook signature (HMAC SHA512 of the raw body with the secret key). */
 export function verifyWebhook(rawBody: string, signature: string | null): boolean {
   const key = secret();
@@ -83,6 +126,8 @@ export async function verifyTransaction(reference: string): Promise<{
   plan?: SubscriptionPlan;
   accountId?: string;
   customerCode?: string;
+  product?: string;
+  userId?: string;
 }> {
   const key = secret();
   if (!key) return { ok: false };
@@ -94,7 +139,12 @@ export async function verifyTransaction(reference: string): Promise<{
     const json = (await res.json().catch(() => null)) as {
       data?: {
         status?: string;
-        metadata?: { account_id?: string; plan?: SubscriptionPlan };
+        metadata?: {
+          account_id?: string;
+          plan?: SubscriptionPlan;
+          product?: string;
+          user_id?: string;
+        };
         customer?: { customer_code?: string };
       };
     } | null;
@@ -104,6 +154,8 @@ export async function verifyTransaction(reference: string): Promise<{
       plan: json.data.metadata?.plan,
       accountId: json.data.metadata?.account_id,
       customerCode: json.data.customer?.customer_code,
+      product: json.data.metadata?.product,
+      userId: json.data.metadata?.user_id,
     };
   } catch {
     return { ok: false };

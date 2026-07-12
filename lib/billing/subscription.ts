@@ -31,6 +31,28 @@ export async function getPlanForAccount(
   return PLANS.has(data.plan) ? (data.plan as SubscriptionPlan) : "free";
 }
 
+/** Full subscription row for display (plan + status + renewal). Null when none. */
+export async function getSubscriptionForAccount(
+  accountId: string,
+): Promise<SubscriptionRecord | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+
+  const { data } = await admin
+    .from("subscriptions")
+    .select("plan, status, current_period_end")
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (!data) return null;
+  return {
+    accountId,
+    plan: PLANS.has(data.plan) ? (data.plan as SubscriptionPlan) : "free",
+    status: (data.status as string) ?? "active",
+    currentPeriodEnd: (data.current_period_end as string | null) ?? null,
+  };
+}
+
 /** Upsert a subscription (called by the Paystack webhook). */
 export async function upsertSubscription(input: {
   accountId: string;

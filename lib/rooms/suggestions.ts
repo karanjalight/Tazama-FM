@@ -1,47 +1,100 @@
 /**
  * Taste-aware suggestion engine. SERVER ONLY.
  *
- * The room's "up next" pool is built from the COLLECTIVE taste of whoever is in
- * the room: each participant's saved (curated) genre preferences are weighted by
- * how many people share them, blended with the room's own genre tags. Curated
- * genres are served straight from the cached catalog; room tags fall back to a
- * live YouTube search so the big catalog still contributes.
+ * The room's "Up Next" pool is anchored on the ROOM'S OWN genres — a hip-hop
+ * room suggests hip-hop. {@link planSuggestions} decides the per-genre slot mix
+ * (room genres dominate; members re-weight within them, and a member whose taste
+ * is in an adjacent family adds a small, capped nudge). Each planned genre is
+ * seeded read-through and served most-viewed-first, then interleaved (room
+ * buckets lead) into the final pool.
  */
-import { getCachedTracksByGenre } from "@/lib/tracks";
-import { searchTracks } from "@/lib/youtube/search";
-import { GENRE_VALUES, genreLabel } from "@/lib/genres";
-import { roomGenreLabel } from "@/lib/room-genres";
+import { ensureGenreSeeded, type Track } from "@/lib/tracks";
+import { genreFamily, genreCacheKey, genreLabel } from "@/lib/genres";
+import { planSuggestions } from "@/lib/rooms/suggestion-plan";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 export interface SuggestionInput {
-  /** Curated genre values (from participants' preferences), most-shared first. */
-  curatedGenres: string[];
-  /** Room tag values (big catalog) for extra colour. */
+  /** The room's tag slugs (host's preset) — the universe of the playlist. */
   roomGenres: string[];
+  /** Present members' genre slugs, flat and WITH repeats (for true weighting). */
+  participantGenres: string[];
   /** youtubeIds already played or queued — never suggest these. */
   exclude: string[];
   limit?: number;
+  /** Share of the pool reserved for room genres (0..1). Default 0.8. */
+  anchorShare?: number;
 }
 
-function dedupe(tracks: RoomTrack[], exclude: Set<string>): RoomTrack[] {
+/** Pull a few extra per genre so dedupe/exclude can't starve a bucket. */
+const OVERFETCH = 3;
+
+function toRoomTrack(t: Track): RoomTrack {
+  return {
+    youtubeId: t.youtubeId,
+    title: t.title,
+    artist: t.artist,
+    thumbnailUrl: t.thumbnailUrl,
+  };
+}
+
+interface Bucket {
+  kind: "room" | "adjacent";
+  slots: number;
+  tracks: RoomTrack[];
+}
+
+const kindRank = (k: "room" | "adjacent") => (k === "room" ? 0 : 1);
+
+/**
+ * Weighted round-robin: room buckets (most-represented first) lead, each
+ * contributing up to its `slots` before we backfill from leftovers. Dedupes by
+ * youtubeId and skips excluded ids. Pure.
+ */
+function assembleMix(
+  buckets: Bucket[],
+  exclude: Set<string>,
+  limit: number,
+): RoomTrack[] {
   const seen = new Set(exclude);
   const out: RoomTrack[] = [];
-  for (const t of tracks) {
-    if (!t.youtubeId || seen.has(t.youtubeId)) continue;
-    seen.add(t.youtubeId);
-    out.push(t);
-  }
-  return out;
-}
 
-/** Round-robin across the per-genre buckets so the mix stays varied. */
-function interleave(buckets: RoomTrack[][]): RoomTrack[] {
-  const out: RoomTrack[] = [];
-  const longest = Math.max(0, ...buckets.map((b) => b.length));
-  for (let i = 0; i < longest; i++) {
-    for (const b of buckets) if (b[i]) out.push(b[i]);
+  const ordered = [...buckets].sort(
+    (a, b) => kindRank(a.kind) - kindRank(b.kind) || b.slots - a.slots,
+  );
+  const cursor = ordered.map(() => 0);
+  const taken = ordered.map(() => 0);
+
+  // Pass 1 — respect the slot shape (proportions per genre).
+  let progressed = true;
+  while (out.length < limit && progressed) {
+    progressed = false;
+    for (let bi = 0; bi < ordered.length && out.length < limit; bi++) {
+      const b = ordered[bi];
+      if (taken[bi] >= b.slots) continue;
+      while (cursor[bi] < b.tracks.length) {
+        const t = b.tracks[cursor[bi]++];
+        if (!t.youtubeId || seen.has(t.youtubeId)) continue;
+        seen.add(t.youtubeId);
+        out.push(t);
+        taken[bi]++;
+        progressed = true;
+        break;
+      }
+    }
   }
-  return out;
+
+  // Pass 2 — backfill from leftovers (room first) when buckets ran short.
+  for (let bi = 0; bi < ordered.length && out.length < limit; bi++) {
+    const b = ordered[bi];
+    while (cursor[bi] < b.tracks.length && out.length < limit) {
+      const t = b.tracks[cursor[bi]++];
+      if (!t.youtubeId || seen.has(t.youtubeId)) continue;
+      seen.add(t.youtubeId);
+      out.push(t);
+    }
+  }
+
+  return out.slice(0, limit);
 }
 
 export async function buildSuggestions(
@@ -50,61 +103,28 @@ export async function buildSuggestions(
   const limit = input.limit ?? 24;
   const exclude = new Set(input.exclude);
 
-  // 1. Curated genres → cached catalog (cheap, already seeded).
-  const curated = [...new Set(input.curatedGenres)].filter((g) =>
-    GENRE_VALUES.includes(g),
-  );
-  const curatedBuckets = await Promise.all(
-    curated.slice(0, 5).map(async (g) => {
-      const tracks = await getCachedTracksByGenre(g, 10);
-      return tracks.map<RoomTrack>((t) => ({
-        youtubeId: t.youtubeId,
-        title: t.title,
-        artist: t.artist,
-        thumbnailUrl: t.thumbnailUrl,
-      }));
+  // Canonicalize so legacy alias slugs (e.g. "hip-hop-rap") and curated slugs
+  // ("hip-hop") collapse to one bucket — correct weighting, no double-counting.
+  const plan = planSuggestions({
+    roomGenres: input.roomGenres.map(genreCacheKey),
+    participantGenres: input.participantGenres.map(genreCacheKey),
+    familyOf: genreFamily,
+    limit,
+    anchorShare: input.anchorShare,
+  });
+  if (plan.length === 0) return [];
+
+  const buckets = await Promise.all(
+    plan.map(async (p): Promise<Bucket> => {
+      const tracks = await ensureGenreSeeded(
+        p.value,
+        Math.max(p.slots + OVERFETCH, 6),
+      );
+      return { kind: p.kind, slots: p.slots, tracks: tracks.map(toRoomTrack) };
     }),
   );
 
-  let buckets = curatedBuckets;
-
-  // 2. If we don't have much, let the room tags pull fresh tracks live.
-  const have = buckets.reduce((n, b) => n + b.length, 0);
-  if (have < limit) {
-    const tags = [...new Set(input.roomGenres)].slice(0, 2);
-    const tagBuckets = await Promise.all(
-      tags.map(async (tag) => {
-        try {
-          const hits = await searchTracks(`${roomGenreLabel(tag)} music`, 8);
-          return hits.map<RoomTrack>((h) => ({
-            youtubeId: h.youtubeId,
-            title: h.title,
-            artist: h.artist,
-            thumbnailUrl: h.thumbnailUrl,
-          }));
-        } catch {
-          return [] as RoomTrack[];
-        }
-      }),
-    );
-    buckets = [...buckets, ...tagBuckets];
-  }
-
-  return dedupe(interleave(buckets), exclude).slice(0, limit);
-}
-
-/**
- * Rank curated genre VALUES by how many participants share them, so the most
- * popular taste in the room leads the suggestions. Pure — runs on the client too.
- */
-export function rankGenresByPopularity(genreLists: string[][]): string[] {
-  const tally = new Map<string, number>();
-  for (const list of genreLists) {
-    for (const g of new Set(list)) tally.set(g, (tally.get(g) ?? 0) + 1);
-  }
-  return [...tally.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([g]) => g);
+  return assembleMix(buckets, exclude, limit);
 }
 
 export { genreLabel };

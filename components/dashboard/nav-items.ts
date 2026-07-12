@@ -1,9 +1,12 @@
 import {
   Compass,
   Library,
+  ListMusic,
   Mic2,
   Radio,
   Search,
+  Settings,
+  Sparkles,
   House,
   type LucideIcon,
 } from "lucide-react";
@@ -19,11 +22,14 @@ export interface NavItem {
 /** Shared dashboard nav, used by both the desktop sidebar and the mobile drawer. */
 export const dashboardNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: House, exact: true },
+  { label: "Chat", href: "/dashboard/chat", icon: Sparkles },
   { label: "Search", href: "/dashboard/search", icon: Search },
   { label: "Artists", href: "/dashboard/artists", icon: Mic2 },
   { label: "Browse", href: "/dashboard/browse", icon: Compass },
   { label: "Live", href: "/dashboard/live", icon: Radio },
   { label: "Library", href: "/dashboard/library", icon: Library },
+  { label: "Playlists", href: "/dashboard/playlists", icon: ListMusic },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 
 /** Whether a nav item should be highlighted for the current pathname. */

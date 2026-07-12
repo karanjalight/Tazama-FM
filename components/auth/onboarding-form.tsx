@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Phone, User } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { genericErrorMessage } from "@/lib/auth/messages";
+import { navigateAfterAuth } from "@/lib/auth/navigate";
 import {
   businessDetailsSchema,
   validate,
@@ -26,7 +26,6 @@ import { usePrefersReducedMotion } from "@/components/motion/use-prefers-reduced
 const phoneRe = /^[+]?[\d\s().-]{7,20}$/;
 
 export function OnboardingForm({ initialName }: { initialName: string }) {
-  const router = useRouter();
   const reduce = usePrefersReducedMotion();
 
   const [step, setStep] = React.useState<1 | 2>(1);
@@ -83,7 +82,7 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
     if (!user) {
       setLoading(false);
       toast.error("Your session expired. Please log in again.");
-      router.push("/login");
+      navigateAfterAuth("/login");
       return;
     }
 
@@ -118,8 +117,7 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
     }
 
     toast.success("You're all set 🎉");
-    router.push("/dashboard");
-    router.refresh();
+    navigateAfterAuth("/dashboard");
   }
 
   const slide = (dir: 1 | -1) =>

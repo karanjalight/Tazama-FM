@@ -1,4 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { genreCacheKey } from "@/lib/genres";
+import { searchGenreTracks } from "@/lib/youtube/search";
 
 /** A playable track from the shared catalog (metadata only — YouTube is the CDN). */
 export interface Track {
@@ -64,6 +66,53 @@ export async function getCachedTracksByGenre(
 }
 
 /**
+ * Read-through seed for ONE genre. Guarantees the genre's canonical cache bucket
+ * holds at least `min` playable tracks (seeded most-viewed-first), then returns
+ * them. Used by the room suggestion engine and the dashboard seed route so ANY
+ * picked genre — curated, native, or room tag — self-warms on first use.
+ *
+ * SERVER ONLY. Best-effort: degrades to whatever cache exists if the service
+ * role key or YouTube key is missing, or a search fails.
+ */
+export async function ensureGenreSeeded(
+  value: string,
+  min = TRACKS_PER_GENRE,
+): Promise<Track[]> {
+  const key = genreCacheKey(value);
+  const want = Math.max(min, TRACKS_PER_GENRE);
+
+  const cached = await getCachedTracksByGenre(key, want);
+  if (cached.length >= min) return cached;
+
+  const admin = createAdminClient();
+  if (!admin) return cached;
+
+  let found;
+  try {
+    found = await searchGenreTracks(value, want);
+  } catch {
+    return cached;
+  }
+
+  if (found.length) {
+    const rows = found.map((t) => ({
+      youtube_id: t.youtubeId,
+      title: t.title,
+      artist: t.artist,
+      genre: key,
+      thumbnail_url: t.thumbnailUrl,
+      is_playable: true,
+    }));
+    // Idempotent; youtube_id is globally unique so a video keeps its first genre.
+    await admin
+      .from("tracks")
+      .upsert(rows, { onConflict: "youtube_id", ignoreDuplicates: true });
+  }
+
+  return getCachedTracksByGenre(key, want);
+}
+
+/**
  * Every playable track (newest first), for in-memory grouping by the discovery
  * feed. One query, then we slice/group/shuffle on the server. SERVER ONLY.
  */
@@ -78,6 +127,20 @@ export async function getAllPlayableTracks(limit = 500): Promise<Track[]> {
     .limit(limit);
   if (!data) return [];
   return (data as TrackRow[]).map(rowToTrack);
+}
+
+/**
+ * Exact number of playable tracks in the catalog — the real "tracks in rotation"
+ * figure. Uses a head count so it's not capped by a fetch limit. SERVER ONLY.
+ */
+export async function countPlayableTracks(): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 0;
+  const { count } = await admin
+    .from("tracks")
+    .select("id", { count: "exact", head: true })
+    .eq("is_playable", true);
+  return count ?? 0;
 }
 
 /**

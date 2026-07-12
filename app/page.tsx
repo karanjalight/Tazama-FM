@@ -7,18 +7,21 @@ import { HowItWorks } from "@/components/sections/how-it-works";
 import { ForBusiness } from "@/components/sections/for-business";
 import { SiteFooter } from "@/components/sections/site-footer";
 import { LandingPlayerProvider } from "@/components/landing/landing-player";
-import { getTrendingTracks, getTrendingArtists } from "@/lib/tracks";
-import { getPublicRooms } from "@/lib/rooms/queries";
+import {
+  getCachedTrendingTracks,
+  getCachedTrendingArtists,
+  getCachedPublicRooms,
+} from "@/lib/landing-data";
 import { getHeaderAuth } from "@/lib/auth/profile";
 
-// Reflect the live catalog + rooms on every load.
-export const dynamic = "force-dynamic";
-
+// Catalog + rooms come from the cached reads (revalidated every few minutes), so
+// the landing no longer hits Supabase on every request. The page stays dynamic
+// only for the per-visitor auth header (getHeaderAuth reads cookies).
 export default async function Home() {
   const [tracks, artists, rooms, auth] = await Promise.all([
-    getTrendingTracks(18),
-    getTrendingArtists(10),
-    getPublicRooms(8),
+    getCachedTrendingTracks(18),
+    getCachedTrendingArtists(10),
+    getCachedPublicRooms(8),
     getHeaderAuth(),
   ]);
 

@@ -9,8 +9,10 @@ import { NowPlayingBar } from "@/components/dashboard/now-playing-bar";
 import { DashboardMain } from "@/components/dashboard/dashboard-main";
 import { PlayerProvider } from "@/components/player/player-provider";
 import { NowPlayingPanel } from "@/components/player/now-playing-panel";
+import { LikesProvider } from "@/components/likes/likes-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentProfile } from "@/lib/auth/profile";
+import { listLikedIds } from "@/lib/likes/store";
 import { getPlanForAccount } from "@/lib/billing/subscription";
 import { getOrigin } from "@/lib/origin";
 
@@ -24,9 +26,10 @@ export default async function DashboardLayout({
   if (!profile.onboardingComplete) redirect("/onboarding");
 
   // Needed by the sidebar's "Create a room" wizard (plan gating + share URLs).
-  const [currentPlan, origin] = await Promise.all([
+  const [currentPlan, origin, likedIds] = await Promise.all([
     getPlanForAccount(profile.id),
     getOrigin(),
+    listLikedIds(profile.id),
   ]);
 
   const isBusiness = profile.accountType === "business";
@@ -38,6 +41,7 @@ export default async function DashboardLayout({
     : "Individual";
 
   return (
+    <LikesProvider initialLikedIds={likedIds}>
     <PlayerProvider>
       <div className="min-h-svh bg-background text-foreground">
         <Sidebar
@@ -85,5 +89,6 @@ export default async function DashboardLayout({
         <NowPlayingPanel />
       </div>
     </PlayerProvider>
+    </LikesProvider>
   );
 }

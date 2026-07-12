@@ -6,7 +6,7 @@ import { Search, X } from "lucide-react";
 
 import { TrackCard, TrackCardSkeleton } from "@/components/dashboard/track-card";
 import { RoomSummaryCard } from "@/components/rooms/room-summary-card";
-import { GENRES } from "@/lib/genres";
+import { FEATURED_GENRES } from "@/lib/genres";
 import type { Track } from "@/lib/tracks";
 import type { RoomSummary } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
@@ -152,7 +152,7 @@ function GenreShortcuts() {
         Browse by genre
       </h2>
       <div className="flex flex-wrap gap-2.5">
-        {GENRES.map((g) => (
+        {FEATURED_GENRES.map((g) => (
           <Link
             key={g.value}
             href={`/dashboard/browse/${g.value}`}

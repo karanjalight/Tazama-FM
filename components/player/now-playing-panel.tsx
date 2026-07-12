@@ -17,6 +17,7 @@ import { Equalizer } from "@/components/brand/equalizer";
 import { PlayPauseIcon, Scrubber, VolumeSlider } from "./controls";
 import { formatTime } from "./format";
 import { usePlayer } from "./player-provider";
+import { LikeButton } from "@/components/likes/like-button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -111,6 +112,16 @@ export function NowPlayingPanel() {
                   {current.artist ?? "Unknown artist"}
                 </p>
               </div>
+              <LikeButton
+                size="md"
+                track={{
+                  videoId: current.youtubeId,
+                  title: current.title,
+                  artist: current.artist,
+                  thumbnailUrl: current.thumbnailUrl,
+                }}
+                className="-mr-1.5 shrink-0"
+              />
             </div>
 
             <div className="mt-4 space-y-1.5">

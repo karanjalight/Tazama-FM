@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { createClient } from "@/lib/supabase/server";
@@ -30,8 +31,15 @@ export interface CurrentProfile {
 /**
  * Loads the signed-in user's profile (and business details, if any) for use in
  * Server Components. Returns null when there's no authenticated user.
+ *
+ * Wrapped in React `cache()` so the per-request result is memoized: the
+ * dashboard layout + page (and `getHeaderAuth`) all call this, and without
+ * memoization each call would re-run `auth.getUser()` — a network round-trip to
+ * Supabase — plus the profile query, serializing several hundred ms onto every
+ * render. With `cache()` it runs once per request.
  */
-export async function getCurrentProfile(): Promise<CurrentProfile | null> {
+export const getCurrentProfile = cache(
+  async (): Promise<CurrentProfile | null> => {
   const supabase = await createClient();
   const {
     data: { user },
@@ -81,7 +89,8 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     onboardingComplete: profile.onboarding_complete,
     business,
   };
-}
+  },
+);
 
 function demoToProfile(d: DemoUser): CurrentProfile {
   return {

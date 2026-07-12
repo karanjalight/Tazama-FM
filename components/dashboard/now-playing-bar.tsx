@@ -17,6 +17,7 @@ import { Equalizer } from "@/components/brand/equalizer";
 import { PlayPauseIcon, Scrubber, VolumeSlider } from "@/components/player/controls";
 import { formatTime } from "@/components/player/format";
 import { usePlayer } from "@/components/player/player-provider";
+import { LikeButton } from "@/components/likes/like-button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -104,6 +105,16 @@ export function NowPlayingBar() {
                 </p>
               </div>
             </>
+          )}
+          {current && (
+            <LikeButton
+              track={{
+                videoId: current.youtubeId,
+                title: current.title,
+                artist: current.artist,
+                thumbnailUrl: current.thumbnailUrl,
+              }}
+            />
           )}
         </div>
 

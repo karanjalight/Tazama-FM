@@ -1,10 +1,11 @@
 "use client";
 
-import { Heart, Pause, Play } from "lucide-react";
+import { Pause, Play } from "lucide-react";
 
 import { Cover } from "@/components/cover";
 import { Equalizer } from "@/components/brand/equalizer";
 import { usePlayer } from "@/components/player/player-provider";
+import { LikeButton } from "@/components/likes/like-button";
 import { playCount } from "@/lib/play-count";
 import { cn, formatCount } from "@/lib/utils";
 import type { Track } from "@/lib/tracks";
@@ -85,13 +86,15 @@ export function TrackRow({
         {formatCount(playCount(track.youtubeId))}
       </span>
 
-      <button
-        type="button"
-        aria-label="Like"
-        className="grid size-8 place-items-center rounded-full text-muted-foreground opacity-0 transition hover:text-brand group-hover:opacity-100 focus-visible:opacity-100"
-      >
-        <Heart className="size-4" />
-      </button>
+      <LikeButton
+        track={{
+          videoId: track.youtubeId,
+          title: track.title,
+          artist: track.artist,
+          thumbnailUrl: track.thumbnailUrl,
+        }}
+        className="opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 aria-pressed:opacity-100"
+      />
     </div>
   );
 }

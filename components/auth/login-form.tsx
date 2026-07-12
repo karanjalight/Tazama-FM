@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Mail } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,10 +13,10 @@ import { SubmitButton } from "./submit-button";
 import { createClient } from "@/lib/supabase/client";
 import { DEMO_AUTH, getDemoUser, saveDemoUser } from "@/lib/demo/demo-session";
 import { authErrorMessage } from "@/lib/auth/messages";
+import { navigateAfterAuth } from "@/lib/auth/navigate";
 import { loginSchema, validate, type FieldErrors } from "@/lib/auth/validation";
 
 export function LoginForm() {
-  const router = useRouter();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [errors, setErrors] = React.useState<FieldErrors>({});
@@ -27,6 +26,10 @@ export function LoginForm() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("error")) {
+      const reason = params.get("reason");
+      // The `reason` (e.g. provider not enabled / redirect not allowlisted) is
+      // logged to help diagnose production OAuth config without leaking it in UI.
+      if (reason) console.warn("[oauth] sign-in failed:", reason);
       toast.error("Google sign-in didn't complete. Please try again.");
       window.history.replaceState(null, "", window.location.pathname);
     }
@@ -49,8 +52,7 @@ export function LoginForm() {
       if (account && account.email.toLowerCase() === email.trim().toLowerCase()) {
         saveDemoUser(account); // re-open the session
         toast.success("Welcome back to Tazama");
-        router.push("/dashboard");
-        router.refresh();
+        navigateAfterAuth("/dashboard");
         return;
       }
       setLoading(false);
@@ -81,8 +83,7 @@ export function LoginForm() {
       .single();
 
     toast.success("Welcome back to Tazama");
-    router.push(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
-    router.refresh();
+    navigateAfterAuth(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
   }
 
   return (

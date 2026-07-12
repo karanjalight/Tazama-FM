@@ -4,9 +4,11 @@ import { getRoomViewer } from "@/lib/rooms/viewer";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
 
 /**
- * POST { curatedGenres, roomGenres, exclude } → { tracks }
- * Taste-aware "up next" pool for a room, computed from the collective genre
- * preferences of who's currently present (sent by the client from presence).
+ * POST { roomGenres, participantGenres, exclude } → { tracks }
+ * "Up Next" pool for a room, anchored on the room's own genres and re-weighted
+ * by who's currently present (sent by the client from presence). `roomGenres` is
+ * the universe; `participantGenres` is the flat member-taste list (with repeats).
+ * Accepts the legacy `curatedGenres` field as a fallback for participantGenres.
  */
 export async function POST(request: Request) {
   const viewer = await getRoomViewer();
@@ -15,8 +17,9 @@ export async function POST(request: Request) {
   }
 
   let body: {
-    curatedGenres?: unknown;
     roomGenres?: unknown;
+    participantGenres?: unknown;
+    curatedGenres?: unknown;
     exclude?: unknown;
   };
   try {
@@ -30,8 +33,8 @@ export async function POST(request: Request) {
 
   try {
     const tracks = await buildSuggestions({
-      curatedGenres: asStrings(body.curatedGenres),
       roomGenres: asStrings(body.roomGenres),
+      participantGenres: asStrings(body.participantGenres ?? body.curatedGenres),
       exclude: asStrings(body.exclude),
     });
     return NextResponse.json({ tracks });

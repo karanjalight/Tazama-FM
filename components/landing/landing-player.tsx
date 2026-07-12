@@ -133,6 +133,17 @@ export function LandingPlayerProvider({
     [],
   );
 
+  // Warm the player shortly after mount so the FIRST play click can call
+  // loadVideoById *synchronously*, inside the user-activation window. The old
+  // behavior created the player lazily on the click itself, but the async
+  // API-script load + onReady chain outlived the gesture — so Android Chrome
+  // (Media Engagement Index = 0 on a fresh TV box) silently blocked playback.
+  // Deferred so it never competes with first paint; the iframe stays offscreen.
+  React.useEffect(() => {
+    const id = window.setTimeout(() => ensurePlayer(), 800);
+    return () => window.clearTimeout(id);
+  }, [ensurePlayer]);
+
   const value = React.useMemo<LandingPlayerContextValue>(
     () => ({ current, isPlaying, isBuffering, isCurrent, play, toggle, stop }),
     [current, isPlaying, isBuffering, isCurrent, play, toggle, stop],

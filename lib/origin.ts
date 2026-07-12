@@ -1,10 +1,21 @@
 import { headers } from "next/headers";
 
-/** Best-effort request origin for share links / URL previews. SERVER ONLY. */
+import { resolveSiteOrigin } from "@/lib/auth/site-origin";
+
+/**
+ * Best-effort request origin for share links, checkout callback URLs, etc.
+ * SERVER ONLY.
+ *
+ * Mirrors resolveSiteOrigin's precedence: the actual forwarded host wins over
+ * NEXT_PUBLIC_SITE_URL, so a stale/misconfigured env var (e.g. left at the
+ * dev default) can't send production redirects back to localhost.
+ */
 export async function getOrigin(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
   const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? "http";
-  return `${proto}://${host}`;
+  return resolveSiteOrigin({
+    forwardedHost: h.get("x-forwarded-host"),
+    forwardedProto: h.get("x-forwarded-proto"),
+    siteUrl: process.env.NEXT_PUBLIC_SITE_URL,
+    requestOrigin: `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`,
+  });
 }

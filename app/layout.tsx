@@ -3,6 +3,8 @@ import { Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { ServiceWorkerRegister } from "@/components/pwa/service-worker-register";
+import { InstallBanner } from "@/components/pwa/install-banner";
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -28,6 +30,11 @@ export const metadata: Metadata = {
   },
   description,
   applicationName: "Tazama",
+  appleWebApp: {
+    capable: true,
+    title: "Tazama",
+    statusBarStyle: "black",
+  },
   keywords: [
     "Tazama",
     "listen together",
@@ -91,7 +98,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          <InstallBanner />
           <Toaster />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

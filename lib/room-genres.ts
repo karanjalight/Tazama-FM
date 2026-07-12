@@ -1,12 +1,19 @@
 /**
  * Room genre catalog — the big, searchable taxonomy used to tag a room's vibe
- * in the create-room wizard ("What's playing in the booth?"). Distinct from the
- * curated, *seedable* `lib/genres.ts` (those 12 drive the YouTube catalog).
+ * in the create-room wizard ("What's playing in the booth?").
+ *
+ * This is now the UNION of the seedable, metadata-rich catalog (`lib/genres.ts`
+ * — curated + native/regional genres, which drive the YouTube cache and the
+ * room suggestion engine) and the big legacy breadth taxonomy below. Catalog
+ * genres lead (featured first) so popular & native genres are the most
+ * discoverable; the breadth fills the long tail. De-duplicated by canonical
+ * value so a genre never appears twice.
  *
  * Labels are kept verbatim; the stored value is a deterministic slug. Pure data,
  * safe on client + server.
  */
 import { slugify } from "@/lib/rooms/slug";
+import { GENRES, FEATURED_GENRES, genreCacheKey, genreLabel } from "@/lib/genres";
 
 const RAW = `Play Anything
 Pop
@@ -478,25 +485,43 @@ export interface RoomGenre {
   label: string;
 }
 
-/** The full catalog, in catalog order, de-duplicated by slug value. */
+/** The full catalog, de-duplicated by canonical value. */
 export const ROOM_GENRES: RoomGenre[] = (() => {
   const seen = new Set<string>();
   const out: RoomGenre[] = [];
+
+  const push = (value: string, label: string) => {
+    const canonical = genreCacheKey(value);
+    if (!value || seen.has(value) || seen.has(canonical)) return;
+    seen.add(value);
+    seen.add(canonical);
+    out.push({ value, label });
+  };
+
+  // 0. "Anything goes" sentinel stays the first, default option.
+  push("play-anything", "Play Anything");
+
+  // 1. Catalog genres — featured (popular + key natives) first, then the rest.
+  const featuredValues = new Set(FEATURED_GENRES.map((g) => g.value));
+  for (const g of FEATURED_GENRES) push(g.value, g.label);
+  for (const g of GENRES) if (!featuredValues.has(g.value)) push(g.value, g.label);
+
+  // 2. The legacy breadth taxonomy fills the long tail (skips anything already
+  //    covered by the catalog, including via aliases).
   for (const label of RAW.split("\n")) {
     const name = label.trim();
-    if (!name) continue;
-    const value = slugify(name);
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    out.push({ value, label: name });
+    if (name) push(slugify(name), name);
   }
+
   return out;
 })();
 
 const BY_VALUE = new Map(ROOM_GENRES.map((g) => [g.value, g]));
 
 export function roomGenreLabel(value: string): string {
-  return BY_VALUE.get(value)?.label ?? value;
+  // Fall back to the catalog (resolves legacy alias slugs like "hip-hop-rap"),
+  // then to a title-cased slug — so older rooms still render a clean label.
+  return BY_VALUE.get(value)?.label ?? genreLabel(value);
 }
 
 /** Max genres a room can be tagged with. */

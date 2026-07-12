@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { searchGenreTracks, type YouTubeTrack } from "@/lib/youtube/search";
 import { getCachedTracksByGenre, TRACKS_PER_GENRE } from "@/lib/tracks";
-import { GENRE_VALUES } from "@/lib/genres";
+import { resolveGenre, genreCacheKey } from "@/lib/genres";
 import { DEMO_AUTH, DEMO_COOKIE, parseDemoCookie } from "@/lib/demo/demo-session";
 
 /**
@@ -28,9 +28,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  if (typeof genre !== "string" || !GENRE_VALUES.includes(genre)) {
+  if (typeof genre !== "string" || !resolveGenre(genre)) {
     return NextResponse.json({ error: "Unknown genre." }, { status: 400 });
   }
+  // Canonical bucket — aliases collapse so legacy/curated slugs share one cache.
+  const cacheKey = genreCacheKey(genre);
 
   // ── Auth: a real Supabase session, or a demo session ──────────────────────
   const supabase = await createClient();
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
   }
 
   // ── 1. Serve straight from cache when it's already warm ───────────────────
-  const cached = await getCachedTracksByGenre(genre, TRACKS_PER_GENRE);
+  const cached = await getCachedTracksByGenre(cacheKey, TRACKS_PER_GENRE);
   if (cached.length >= TRACKS_PER_GENRE) {
     return NextResponse.json({ tracks: cached, cached: true });
   }
@@ -84,7 +86,7 @@ export async function POST(request: Request) {
       youtube_id: t.youtubeId,
       title: t.title,
       artist: t.artist,
-      genre,
+      genre: cacheKey,
       thumbnail_url: t.thumbnailUrl,
       is_playable: true,
     }));
@@ -101,6 +103,6 @@ export async function POST(request: Request) {
   }
 
   // Re-read so the response reflects the merged, ordered catalog.
-  const fresh = await getCachedTracksByGenre(genre, TRACKS_PER_GENRE);
+  const fresh = await getCachedTracksByGenre(cacheKey, TRACKS_PER_GENRE);
   return NextResponse.json({ tracks: fresh, seeded: true });
 }

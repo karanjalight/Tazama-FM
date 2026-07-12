@@ -25,6 +25,7 @@ interface RoomRow {
   genres: string[];
   is_live: boolean;
   created_at: string;
+  owner_business_id: string | null;
 }
 
 function mapRoom(r: RoomRow): Room {
@@ -38,6 +39,7 @@ function mapRoom(r: RoomRow): Room {
     genres: r.genres ?? [],
     isLive: r.is_live,
     createdAt: r.created_at,
+    ownerBusinessId: r.owner_business_id,
   };
 }
 
@@ -197,6 +199,31 @@ export async function getLiveRooms(limit = 24): Promise<RoomSummary[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
   return summarize((data ?? []) as RoomRow[]);
+}
+
+/**
+ * Distinct people across all live public rooms — the real "people listening"
+ * figure for the dashboard. Counts unique members so someone in two rooms isn't
+ * double-counted, and only live rooms contribute. SERVER ONLY.
+ */
+export async function countLiveListeners(): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 0;
+  const { data: live } = await admin
+    .from("rooms")
+    .select("id")
+    .eq("access", "public")
+    .eq("is_live", true);
+  const ids = (live ?? []).map((r) => r.id as string);
+  if (ids.length === 0) return 0;
+  const { data: members } = await admin
+    .from("room_members")
+    .select("user_id")
+    .in("room_id", ids);
+  const distinct = new Set(
+    (members ?? []).map((m) => (m as { user_id: string }).user_id),
+  );
+  return distinct.size;
 }
 
 /** Live, public rooms for the discovery strip (optionally excluding own). */

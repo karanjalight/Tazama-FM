@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Mail, Phone, User } from "lucide-react";
 import { toast } from "sonner";
@@ -22,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { DEMO_AUTH, makeDemoUser, saveDemoUser } from "@/lib/demo/demo-session";
 import { authErrorMessage, genericErrorMessage } from "@/lib/auth/messages";
+import { navigateAfterAuth } from "@/lib/auth/navigate";
 import {
   accountDetailsSchema,
   businessDetailsSchema,
@@ -34,7 +34,6 @@ import { usePrefersReducedMotion } from "@/components/motion/use-prefers-reduced
 type Step = 1 | 2 | 3 | 4;
 
 export function SignupForm() {
-  const router = useRouter();
   const reduce = usePrefersReducedMotion();
 
   const [step, setStep] = React.useState<Step>(1);
@@ -140,8 +139,7 @@ export function SignupForm() {
         }),
       );
       toast.success("Welcome to Tazama 🎉");
-      router.push("/dashboard");
-      router.refresh();
+      navigateAfterAuth("/dashboard");
       return;
     }
 
@@ -170,7 +168,7 @@ export function SignupForm() {
     if (!data.session || !data.user) {
       setLoading(false);
       toast("Almost there — check your email to confirm your account.");
-      router.push("/login");
+      navigateAfterAuth("/login");
       return;
     }
 
@@ -209,8 +207,7 @@ export function SignupForm() {
     }
 
     toast.success("Welcome to Tazama 🎉");
-    router.push("/dashboard");
-    router.refresh();
+    navigateAfterAuth("/dashboard");
   }
 
   const motionProps = reduce

@@ -5,7 +5,7 @@ import { Play, Pause, Volume2, VolumeX, Radio, Loader2 } from "lucide-react";
 
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomFollower } from "@/lib/rooms/use-room-follower";
-import { useBranchPlayback, requestAdvance } from "@/lib/business/use-branch-playback";
+import { useBranchPlayback, useBranchVolume, requestAdvance } from "@/lib/business/use-branch-playback";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 import type { RoomPlayback, RoomTrack } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
@@ -32,14 +32,16 @@ export function KioskRoomPlayer({
   room,
   hostName,
   initialPlayback,
+  initialVolume = 80,
 }: {
   room: { id: string; slug: string; name: string; isBranch?: boolean };
   hostName: string | null;
   initialPlayback: RoomPlayback | null;
+  initialVolume?: number;
 }) {
   const [started, setStarted] = React.useState(false);
   const [muted, setMuted] = React.useState(true);
-  const [volume, setVolume] = React.useState(80);
+  const [volume, setVolume] = React.useState(initialVolume);
   const [synced, setSynced] = React.useState(true);
   const [controlsVisible, setControlsVisible] = React.useState(true);
   const [nowPlaying, setNowPlaying] = React.useState<RoomTrack | null>(
@@ -57,7 +59,7 @@ export function KioskRoomPlayer({
   const syncedRef = React.useRef(true);
   const ytPlayingRef = React.useRef(false);
   const readyAppliedRef = React.useRef(false);
-  const volumeRef = React.useRef(80);
+  const volumeRef = React.useRef(initialVolume);
   const hideTimerRef = React.useRef<number | null>(null);
   const applyHostPayloadRef = React.useRef<((p: PlaybackPayload) => void) | null>(null);
 
@@ -159,6 +161,12 @@ export function KioskRoomPlayer({
   const { connected, requestSync } = useRoomFollower(room.id, handlePlayback);
 
   useBranchPlayback(room.id, !!room.isBranch, handlePlayback);
+
+  useBranchVolume(room.id, !!room.isBranch, (v) => {
+    volumeRef.current = v;
+    setVolume(v);
+    ytRef.current.setVolume(v);
+  });
 
   // When the player becomes ready, start muted + in sync from the last snapshot.
   const ready = yt.ready;

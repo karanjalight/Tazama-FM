@@ -96,3 +96,46 @@ export async function requestAdvance(
     return null;
   }
 }
+
+interface BranchVolumeRow {
+  volume: number;
+}
+
+/** Subscribes to a branch's own `volume` column so a remote admin change
+ * (Task 6/7) reaches an already-loaded kiosk immediately. Filters by
+ * `room_id` (not `branches.id`) since the kiosk only knows its room's id. */
+export function useBranchVolume(
+  roomId: string,
+  enabled: boolean,
+  onVolume: (volume: number) => void,
+): void {
+  const cbRef = React.useRef(onVolume);
+  React.useEffect(() => {
+    cbRef.current = onVolume;
+  });
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`branch-volume:${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "branches",
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const row = payload.new as BranchVolumeRow | undefined;
+          if (row && typeof row.volume === "number") cbRef.current(row.volume);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [roomId, enabled]);
+}

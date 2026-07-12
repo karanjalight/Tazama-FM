@@ -4,6 +4,7 @@ import { KioskPlayer } from "@/components/player/kiosk-player";
 import { KioskRoomPlayer } from "@/components/player/kiosk-room-player";
 import { resolveKioskPlaylist, kioskTitle } from "@/lib/player/kiosk-playlist";
 import { getRoomBySlug, getRoomPlayback } from "@/lib/rooms/queries";
+import { getBranchVolume } from "@/lib/business/queries";
 
 /**
  * Lightweight kiosk player for Android TV boxes (restaurants/clubs/hotels).
@@ -51,7 +52,10 @@ export default async function PlayerPage({
   // A public room slug → mirror the host's live video.
   const room = await getRoomBySlug(slug);
   if (room && (room.access === "public" || room.ownerBusinessId)) {
-    const initialPlayback = await getRoomPlayback(room.id);
+    const [initialPlayback, initialVolume] = await Promise.all([
+      getRoomPlayback(room.id),
+      room.ownerBusinessId ? getBranchVolume(room.id) : Promise.resolve(80),
+    ]);
     return (
       <KioskRoomPlayer
         room={{
@@ -62,6 +66,7 @@ export default async function PlayerPage({
         }}
         hostName={null}
         initialPlayback={initialPlayback}
+        initialVolume={initialVolume}
       />
     );
   }

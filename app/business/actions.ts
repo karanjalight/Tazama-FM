@@ -7,10 +7,18 @@ import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch, listBranches } from "@/lib/business/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
+import { ROOM_GENRES, MAX_ROOM_GENRES } from "@/lib/room-genres";
 import type { ActionResult } from "@/lib/business/types";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 const nameSchema = z.string().trim().min(2).max(60);
+
+const VALID_GENRES = new Set(ROOM_GENRES.map((g) => g.value));
+
+const genresSchema = z
+  .array(z.string())
+  .max(MAX_ROOM_GENRES)
+  .refine((gs) => gs.every((g) => VALID_GENRES.has(g)), "Unknown genre.");
 
 async function uniqueSlug(base: string): Promise<string> {
   const admin = createAdminClient();
@@ -37,14 +45,19 @@ function requireAdminLevel(
 
 export async function createBranch(input: {
   name: string;
+  genres: string[];
 }): Promise<ActionResult> {
   const viewer = await getBusinessViewer();
   if (!requireAdminLevel(viewer)) {
     return { ok: false, error: "You don't have permission to add branches." };
   }
-  const parsed = nameSchema.safeParse(input.name);
-  if (!parsed.success) {
+  const parsedName = nameSchema.safeParse(input.name);
+  if (!parsedName.success) {
     return { ok: false, error: "Enter a branch name (2-60 characters)." };
+  }
+  const parsedGenres = genresSchema.safeParse(input.genres);
+  if (!parsedGenres.success) {
+    return { ok: false, error: "Pick a valid set of genres." };
   }
 
   const admin = createAdminClient();
@@ -52,16 +65,16 @@ export async function createBranch(input: {
     return { ok: false, error: "Not configured (missing service-role key)." };
   }
 
-  const slug = await uniqueSlug(parsed.data);
+  const slug = await uniqueSlug(parsedName.data);
   const { data: room, error: roomError } = await admin
     .from("rooms")
     .insert({
       slug,
       host_id: viewer.businessId,
-      name: parsed.data,
+      name: parsedName.data,
       about: "",
       access: "private",
-      genres: [],
+      genres: parsedGenres.data,
       is_live: false,
       owner_business_id: viewer.businessId,
     })
@@ -83,7 +96,7 @@ export async function createBranch(input: {
   const { error: branchError } = await admin.from("branches").insert({
     business_id: viewer.businessId,
     room_id: room.id,
-    name: parsed.data,
+    name: parsedName.data,
     slug,
   });
   if (branchError) {
@@ -123,6 +136,35 @@ export async function renameBranch(input: {
   revalidatePath("/business/branches");
   revalidatePath(`/business/branches/${branch.id}`);
   revalidatePath("/business/dashboard");
+  return { ok: true };
+}
+
+export async function updateBranchGenres(input: {
+  branchId: string;
+  genres: string[];
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const parsed = genresSchema.safeParse(input.genres);
+  if (!parsed.success) {
+    return { ok: false, error: "Pick a valid set of genres." };
+  }
+
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin
+    .from("rooms")
+    .update({ genres: parsed.data })
+    .eq("id", branch.roomId);
+  if (error) return { ok: false, error: "Could not update genres." };
+
+  revalidatePath(`/business/branches/${branch.id}`);
   return { ok: true };
 }
 

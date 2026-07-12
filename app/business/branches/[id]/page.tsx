@@ -3,8 +3,9 @@ import { redirect, notFound } from "next/navigation";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch } from "@/lib/business/queries";
-import { getRoomBySlug } from "@/lib/rooms/queries";
+import { getRoomBySlug, getRoomQueue } from "@/lib/rooms/queries";
 import { BranchDetail } from "@/components/business/branch-detail";
+import { BranchQueuePanel } from "@/components/business/branch-queue-panel";
 
 export const metadata: Metadata = { title: "Branch — Business Dashboard" };
 
@@ -22,6 +23,7 @@ export default async function BranchDetailPage({
   if (!branch) notFound();
 
   const room = await getRoomBySlug(branch.slug);
+  const queue = room ? await getRoomQueue(room.id, null) : [];
 
   return (
     <div className="space-y-6">
@@ -35,6 +37,9 @@ export default async function BranchDetailPage({
         genres={room?.genres ?? []}
         canManage={viewer.role === "owner" || viewer.role === "admin"}
       />
+      {branch.devicePairedAt && (
+        <BranchQueuePanel branchId={branch.id} roomId={branch.roomId} initialQueue={queue} />
+      )}
     </div>
   );
 }

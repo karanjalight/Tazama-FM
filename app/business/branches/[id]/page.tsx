@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch } from "@/lib/business/queries";
+import { getRoomBySlug } from "@/lib/rooms/queries";
 import { BranchDetail } from "@/components/business/branch-detail";
 
 export const metadata: Metadata = { title: "Branch — Business Dashboard" };
@@ -20,6 +21,8 @@ export default async function BranchDetailPage({
   const branch = await getBranch(viewer.businessId, id);
   if (!branch) notFound();
 
+  const room = await getRoomBySlug(branch.slug);
+
   return (
     <div className="space-y-6">
       <header>
@@ -29,6 +32,7 @@ export default async function BranchDetailPage({
       </header>
       <BranchDetail
         branch={branch}
+        genres={room?.genres ?? []}
         canManage={viewer.role === "owner" || viewer.role === "admin"}
       />
     </div>

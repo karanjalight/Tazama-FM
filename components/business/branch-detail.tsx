@@ -9,19 +9,24 @@ import {
   archiveBranch,
   claimDevice,
   playToBranches,
+  updateBranchGenres,
 } from "@/app/business/actions";
 import { Button } from "@/components/ui/button";
+import { GenrePicker } from "@/components/rooms/genre-picker";
 import type { Branch } from "@/lib/business/types";
 
 export function BranchDetail({
   branch,
+  genres: initialGenres,
   canManage,
 }: {
   branch: Branch;
+  genres: string[];
   canManage: boolean;
 }) {
   const router = useRouter();
   const [name, setName] = React.useState(branch.name);
+  const [genres, setGenres] = React.useState(initialGenres);
   const [code, setCode] = React.useState("");
   const [pending, setPending] = React.useState(false);
 
@@ -33,6 +38,17 @@ export function BranchDetail({
     setPending(false);
     if (!result.ok) toast.error(result.error);
     else router.refresh();
+  }
+
+  async function handleSaveGenres() {
+    setPending(true);
+    const result = await updateBranchGenres({ branchId: branch.id, genres });
+    setPending(false);
+    if (!result.ok) toast.error(result.error);
+    else {
+      toast.success("Genres updated.");
+      router.refresh();
+    }
   }
 
   async function handleClaim(e: React.FormEvent) {
@@ -81,12 +97,32 @@ export function BranchDetail({
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          disabled={!canManage}
           className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-60"
         />
-        <Button type="submit" disabled={pending || name === branch.name}>
-          Save name
-        </Button>
+        {canManage && (
+          <Button type="submit" disabled={pending || name === branch.name}>
+            Save name
+          </Button>
+        )}
       </form>
+
+      <section className="rounded-2xl border border-border bg-card p-5">
+        <h2 className="text-sm font-semibold text-foreground">
+          What this branch plays
+        </h2>
+        <div className="mt-3">
+          <GenrePicker value={genres} onChange={setGenres} />
+        </div>
+        <Button
+          onClick={handleSaveGenres}
+          disabled={pending}
+          className="mt-3"
+          size="sm"
+        >
+          Save genres
+        </Button>
+      </section>
 
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold text-foreground">Device</h2>

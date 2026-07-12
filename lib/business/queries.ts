@@ -14,7 +14,7 @@ import type { RoomTrack } from "@/lib/rooms/types";
 
 const ONLINE_THRESHOLD_MS = 90_000;
 
-function isOnline(lastSeenAt: string | null): boolean {
+export function isOnline(lastSeenAt: string | null): boolean {
   if (!lastSeenAt) return false;
   return Date.now() - new Date(lastSeenAt).getTime() < ONLINE_THRESHOLD_MS;
 }

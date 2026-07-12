@@ -26,6 +26,7 @@ import { ParticipantsPanel } from "@/components/rooms/participants-panel";
 import { ReactionBar, type FloatingItem } from "@/components/rooms/room-reactions";
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomChannel } from "@/lib/rooms/use-room-channel";
+import { useBranchPlayback } from "@/lib/business/use-branch-playback";
 import { roomGenreLabel } from "@/lib/room-genres";
 import { cn } from "@/lib/utils";
 import { FREE_MINUTES_CAP, type SubscriptionPlan } from "@/lib/billing/plans";
@@ -362,6 +363,9 @@ export function RoomExperience({
     },
   });
   React.useEffect(() => void (apiRef.current = channel));
+  // A branch has no human host broadcasting — mirror its playback via
+  // Postgres Changes instead (the same mechanism the kiosk player uses).
+  useBranchPlayback(room.id, !!room.ownerBusinessId, handlePlayback);
   React.useEffect(
     () => void (participantsRef.current = channel.participants),
     [channel.participants],
@@ -507,7 +511,7 @@ export function RoomExperience({
   /* --------------------------- queue actions ---------------------------- */
 
   async function onAdd(track: RoomTrack) {
-    const res = await addToQueue(room.id, track);
+    const res = await addToQueue(room.id, track, { id: viewer.id, name: viewer.name });
     if (!res.ok) {
       toast.error("Couldn't add that track.");
       return;
@@ -536,14 +540,14 @@ export function RoomExperience({
             b.likeCount - a.likeCount || a.createdAt.localeCompare(b.createdAt),
         ),
     );
-    await toggleLikeAction(room.id, item.id);
+    await toggleLikeAction(room.id, item.id, { id: viewer.id, name: viewer.name });
     apiRef.current?.sendQueuePing();
     await refetchQueue();
   }
 
   async function onRemove(item: QueueItem) {
     setQueue((q) => q.filter((i) => i.id !== item.id));
-    await removeFromQueue(item.id);
+    await removeFromQueue(item.id, { id: viewer.id, name: viewer.name });
     apiRef.current?.sendQueuePing();
     await refetchQueue();
   }

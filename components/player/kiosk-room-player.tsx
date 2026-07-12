@@ -5,6 +5,7 @@ import { Play, Pause, Volume2, VolumeX, Radio, Loader2 } from "lucide-react";
 
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomFollower } from "@/lib/rooms/use-room-follower";
+import { useBranchPlayback, requestAdvance } from "@/lib/business/use-branch-playback";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 import type { RoomPlayback, RoomTrack } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
@@ -58,10 +59,18 @@ export function KioskRoomPlayer({
   const readyAppliedRef = React.useRef(false);
   const volumeRef = React.useRef(80);
   const hideTimerRef = React.useRef<number | null>(null);
+  const applyHostPayloadRef = React.useRef<((p: PlaybackPayload) => void) | null>(null);
 
   React.useEffect(() => void (syncedRef.current = synced), [synced]);
 
-  const { api: yt, containerRef } = useYouTube({ onEnded: () => {} });
+  const handleEnded = React.useCallback(() => {
+    if (!room.isBranch) return;
+    requestAdvance(room.slug).then((p) => {
+      if (p) applyHostPayloadRef.current?.(p);
+    });
+  }, [room.isBranch, room.slug]);
+
+  const { api: yt, containerRef } = useYouTube({ onEnded: handleEnded });
 
   // `yt` is a fresh object each render (position polls 4×/s); keep a stable ref.
   const ytRef = React.useRef(yt);
@@ -130,6 +139,10 @@ export function KioskRoomPlayer({
     [loadTrack],
   );
 
+  React.useEffect(() => {
+    applyHostPayloadRef.current = applyHostPayload;
+  });
+
   const handlePlayback = React.useCallback(
     (p: PlaybackPayload) => {
       lastPayloadRef.current = p;
@@ -144,6 +157,8 @@ export function KioskRoomPlayer({
   );
 
   const { connected, requestSync } = useRoomFollower(room.id, handlePlayback);
+
+  useBranchPlayback(room.id, !!room.isBranch, handlePlayback);
 
   // When the player becomes ready, start muted + in sync from the last snapshot.
   const ready = yt.ready;
@@ -172,6 +187,18 @@ export function KioskRoomPlayer({
       requestSync();
     }
   }, [ready, applyHostPayload, requestSync, initialPlayback]);
+
+  // Kick off the curated queue the first time a branch kiosk has nothing
+  // queued yet (fresh branch, or the queue genuinely ran dry).
+  const kickedOffRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!room.isBranch || !ready || nowPlaying || kickedOffRef.current) return;
+    kickedOffRef.current = true;
+    requestAdvance(room.slug).then((p) => {
+      if (p) applyHostPayloadRef.current?.(p);
+      else kickedOffRef.current = false; // nothing available yet — allow retry
+    });
+  }, [room.isBranch, ready, nowPlaying, room.slug]);
 
   /* ------------------------------- controls ------------------------------- */
 

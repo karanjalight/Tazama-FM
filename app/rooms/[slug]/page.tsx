@@ -74,7 +74,7 @@ export default async function RoomPage({
 
   return (
     <LikesProvider initialLikedIds={likedIds} enabled={!!profile}>
-      {isGuest && <GuestSessionSync id={viewer.id} />}
+      {isGuest && <GuestSessionSync />}
       <RoomExperience
         room={room}
         viewer={viewer}

@@ -40,7 +40,7 @@ export function signGuestCookieValue(id: string): string {
 }
 
 /** Verify a raw cookie value, returning the id only if the signature matches. */
-function verifyGuestCookieValue(value: string): string | null {
+export function verifyGuestCookieValue(value: string): string | null {
   const dot = value.lastIndexOf(".");
   if (dot === -1) return null;
   const id = value.slice(0, dot);
@@ -50,7 +50,7 @@ function verifyGuestCookieValue(value: string): string | null {
   return id;
 }
 
-function randomGuestId(): string {
+export function randomGuestId(): string {
   return `guest-${randomUUID()}`;
 }
 

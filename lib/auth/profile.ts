@@ -24,6 +24,7 @@ export interface CurrentProfile {
   accountType: AccountType | null;
   avatarKey: string | null;
   genrePreferences: string[];
+  activityPublic: boolean;
   onboardingComplete: boolean;
   business?: BusinessInfo;
 }
@@ -86,6 +87,7 @@ export const getCurrentProfile = cache(
     accountType: profile.account_type,
     avatarKey: profile.avatar_key,
     genrePreferences: profile.genre_preferences ?? [],
+    activityPublic: profile.activity_public ?? true,
     onboardingComplete: profile.onboarding_complete,
     business,
   };
@@ -101,6 +103,7 @@ function demoToProfile(d: DemoUser): CurrentProfile {
     accountType: d.accountType,
     avatarKey: d.avatarKey,
     genrePreferences: d.genres ?? [],
+    activityPublic: true,
     onboardingComplete: true,
     business: d.business,
   };

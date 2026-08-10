@@ -48,6 +48,9 @@ export function ProfileTab({ profile }: { profile: CurrentProfile }) {
     profile.accountType ?? "individual",
   );
   const [avatarKey, setAvatarKey] = React.useState(profile.avatarKey ?? "");
+  const [activityPublic, setActivityPublic] = React.useState(
+    profile.activityPublic,
+  );
   const [business, setBusiness] = React.useState<BusinessValues>({
     businessName: profile.business?.businessName ?? "",
     businessPhone: profile.business?.businessPhone ?? "",
@@ -94,6 +97,7 @@ export function ProfileTab({ profile }: { profile: CurrentProfile }) {
       account_type: accountType,
       avatar_key: accountType === "individual" ? avatarKey : null,
       onboarding_complete: true,
+      activity_public: activityPublic,
     });
     if (profileError) {
       setLoading(false);
@@ -191,6 +195,23 @@ export function ProfileTab({ profile }: { profile: CurrentProfile }) {
               disabled={loading}
             />
           )}
+
+          <div className="flex items-center justify-between rounded-xl border border-border p-4">
+            <div>
+              <Label htmlFor="activity-public">Share my listening activity</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Lets other users see what you've been playing in Discover and the
+                activity feed. Turn off to keep your plays private.
+              </p>
+            </div>
+            <input
+              id="activity-public"
+              type="checkbox"
+              checked={activityPublic}
+              onChange={(e) => setActivityPublic(e.target.checked)}
+              className="size-5 accent-brand"
+            />
+          </div>
         </CardContent>
 
         <CardFooter className="justify-end">

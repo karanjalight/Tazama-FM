@@ -104,10 +104,11 @@ export async function getOrCreateDmConversation(
     .single();
   if (error || !conv) return null;
 
-  await admin.from("conversation_participants").insert([
+  const { error: participantsError } = await admin.from("conversation_participants").insert([
     { conversation_id: conv.id as string, user_id: userA },
     { conversation_id: conv.id as string, user_id: userB },
   ]);
+  if (participantsError) return null;
   return conv.id as string;
 }
 
@@ -129,9 +130,10 @@ export async function createGroupConversation(
     .single();
   if (error || !conv) return null;
 
-  await admin
+  const { error: participantsError } = await admin
     .from("conversation_participants")
     .insert(uniqueIds.map((userId) => ({ conversation_id: conv.id as string, user_id: userId })));
+  if (participantsError) return null;
   return conv.id as string;
 }
 

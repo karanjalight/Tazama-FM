@@ -19,21 +19,17 @@ export function UserCard({
   avatarKey,
   subtitle,
   className,
+  disableLink = false,
 }: {
   id: string;
   fullName: string;
   avatarKey: string | null;
   subtitle?: string;
   className?: string;
+  disableLink?: boolean;
 }) {
-  return (
-    <Link
-      href={`/dashboard/people/${id}`}
-      className={cn(
-        "flex items-center gap-3 rounded-xl border border-border bg-background p-3 transition-colors hover:border-foreground/20",
-        className,
-      )}
-    >
+  const content = (
+    <>
       {avatarKey ? (
         <span className="relative size-11 shrink-0 overflow-hidden rounded-full bg-muted">
           <Image src={avatarSrc(avatarKey)} alt="" fill sizes="44px" className="object-cover" />
@@ -47,10 +43,20 @@ export function UserCard({
         <p className="truncate text-sm font-medium text-foreground">
           {fullName || "Tazama listener"}
         </p>
-        {subtitle && (
-          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-        )}
+        {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
       </div>
+    </>
+  );
+
+  const classes = cn(
+    "flex items-center gap-3 rounded-xl border border-border bg-background p-3 transition-colors hover:border-foreground/20",
+    className,
+  );
+
+  if (disableLink) return <div className={classes}>{content}</div>;
+  return (
+    <Link href={`/dashboard/people/${id}`} className={classes}>
+      {content}
     </Link>
   );
 }

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { listConversationsForUser } from "@/lib/chats/store";
-import { ConversationList } from "@/components/chats/conversation-list";
+import { ChatsInboxShell } from "@/components/chats/chats-inbox-shell";
 
 export const metadata: Metadata = { title: "Chats" };
 
@@ -13,10 +13,5 @@ export default async function ChatsPage() {
 
   const conversations = await listConversationsForUser(profile.id);
 
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-semibold text-foreground">Chats</h1>
-      <ConversationList conversations={conversations} />
-    </div>
-  );
+  return <ChatsInboxShell conversations={conversations} />;
 }

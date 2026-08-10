@@ -9,6 +9,7 @@ import {
   markRead,
 } from "@/lib/chats/store";
 import { logPlayAction } from "@/lib/social/actions";
+import { searchUsersByName, type UserSummary } from "@/lib/social/discovery";
 import type { ChatMessage, SendMessageInput } from "@/lib/chats/types";
 
 export async function startDmAction(
@@ -55,4 +56,10 @@ export async function trackSharePlayedAction(messageId: string): Promise<void> {
   const message = await getMessageById(messageId);
   if (!message || message.kind !== "track" || !message.track) return;
   await logPlayAction(message.track, "chat");
+}
+
+export async function searchUsersAction(query: string): Promise<UserSummary[]> {
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
+  return searchUsersByName(query, profile.id);
 }

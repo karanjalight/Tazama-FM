@@ -31,6 +31,7 @@ import { roomGenreLabel } from "@/lib/room-genres";
 import { cn } from "@/lib/utils";
 import { FREE_MINUTES_CAP, type SubscriptionPlan } from "@/lib/billing/plans";
 import { roomUrl } from "@/lib/rooms/slug";
+import { logPlayAction } from "@/lib/social/actions";
 import {
   addToQueue,
   toggleLike as toggleLikeAction,
@@ -155,9 +156,18 @@ export function RoomExperience({
     ytPlayingRef.current = yt.isPlaying;
   });
 
-  const loadTrack = React.useCallback((youtubeId: string) => {
-    appliedIdRef.current = youtubeId;
-    ytRef.current.load(youtubeId);
+  const loadTrack = React.useCallback((track: RoomTrack) => {
+    appliedIdRef.current = track.youtubeId;
+    ytRef.current.load(track.youtubeId);
+    void logPlayAction(
+      {
+        youtubeId: track.youtubeId,
+        title: track.title,
+        artist: track.artist,
+        thumbnailUrl: track.thumbnailUrl,
+      },
+      "room",
+    );
   }, []);
 
   // Apply a pending seek (and optional pause) once playback actually starts.
@@ -207,7 +217,7 @@ export function RoomExperience({
       if (recentIdsRef.current.size > 50) {
         recentIdsRef.current = new Set([...recentIdsRef.current].slice(-30));
       }
-      loadTrack(track.youtubeId);
+      loadTrack(track);
       // Only the host drives the shared room (broadcast + persist). A solo
       // listener just plays locally.
       if (isHost) {
@@ -279,7 +289,7 @@ export function RoomExperience({
       }
       const expected = p.positionMs + (p.isPlaying ? Date.now() - p.at : 0);
       if (appliedIdRef.current !== p.track.youtubeId) {
-        loadTrack(p.track.youtubeId);
+        loadTrack(p.track);
         pendingSeekRef.current = expected;
         pauseAfterLoadRef.current = !p.isPlaying;
         return;
@@ -470,13 +480,13 @@ export function RoomExperience({
     const snap = initialPlayback;
     if (isHost) {
       if (snap?.track) {
-        loadTrack(snap.track.youtubeId);
+        loadTrack(snap.track);
         pendingSeekRef.current = snap.positionMs;
         pauseAfterLoadRef.current = !snap.isPlaying;
       }
     } else {
       if (snap?.track && snap.isPlaying) {
-        loadTrack(snap.track.youtubeId);
+        loadTrack(snap.track);
         pendingSeekRef.current = snap.positionMs;
       }
       setTimeout(() => apiRef.current?.requestSync(), 700);

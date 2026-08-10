@@ -17,6 +17,7 @@ import {
 } from "./yt";
 import { PlayerStage } from "./player-stage";
 import { recordRecent } from "./recent";
+import { logPlayAction } from "@/lib/social/actions";
 
 /** The minimal track shape the player needs (a catalog `Track` satisfies it). */
 export interface PlayerTrack {
@@ -258,6 +259,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setDurationMs(0);
       setIsBuffering(true);
       commandLoad(track.youtubeId);
+      void logPlayAction(
+        {
+          youtubeId: track.youtubeId,
+          title: track.title,
+          artist: track.artist,
+          thumbnailUrl: track.thumbnailUrl,
+        },
+        "dashboard",
+      );
     },
     [commandLoad],
   );
@@ -305,6 +315,15 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       setDurationMs(0);
       setIsBuffering(true);
       commandLoad(track2.youtubeId);
+      void logPlayAction(
+        {
+          youtubeId: track2.youtubeId,
+          title: track2.title,
+          artist: track2.artist,
+          thumbnailUrl: track2.thumbnailUrl,
+        },
+        "dashboard",
+      );
     },
     [commandLoad],
   );

@@ -2,6 +2,7 @@ import {
   Compass,
   Library,
   ListMusic,
+  MessageCircle,
   Mic2,
   Radio,
   Search,
@@ -24,6 +25,7 @@ export interface NavItem {
 export const dashboardNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: House, exact: true },
   { label: "Concierge", href: "/dashboard/chat", icon: Sparkles },
+  { label: "Chats", href: "/dashboard/chats", icon: MessageCircle },
   { label: "People", href: "/dashboard/people", icon: Users },
   { label: "Search", href: "/dashboard/search", icon: Search },
   { label: "Artists", href: "/dashboard/artists", icon: Mic2 },

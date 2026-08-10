@@ -22,7 +22,7 @@ export function Composer({
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && submit()}
+        onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && submit()}
         placeholder="Message…"
         className="flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm outline-none focus:border-brand"
       />

@@ -4,9 +4,11 @@ import { getCurrentProfile } from "@/lib/auth/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listUserActivity } from "@/lib/social/play-history";
 import { listBlockedIds } from "@/lib/social/blocks";
+import { listUserBadges } from "@/lib/gamification/store";
 import { Cover } from "@/components/cover";
 import { BlockButton } from "@/components/people/block-button";
 import { MessageButton } from "@/components/people/message-button";
+import { BadgeRow } from "@/components/people/badge-row";
 
 export default async function PersonProfilePage({
   params,
@@ -27,9 +29,10 @@ export default async function PersonProfilePage({
     .maybeSingle();
   if (!target) notFound();
 
-  const [activity, blockedIds] = await Promise.all([
+  const [activity, blockedIds, badgeKeys] = await Promise.all([
     listUserActivity(userId, viewer.id),
     listBlockedIds(viewer.id),
+    listUserBadges(userId),
   ]);
 
   return (
@@ -49,6 +52,10 @@ export default async function PersonProfilePage({
             />
           </div>
         )}
+      </div>
+
+      <div className="mt-4">
+        <BadgeRow badgeKeys={badgeKeys} />
       </div>
 
       <h2 className="mt-8 text-sm font-semibold text-muted-foreground uppercase tracking-wide">

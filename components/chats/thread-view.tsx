@@ -67,14 +67,14 @@ export function ThreadView({
         otherUserId={headerOtherUserId}
         avatarKey={headerAvatarKey}
       />
-      <div className="flex-1 space-y-2 overflow-y-auto p-4">
+      <div className="flex-1 space-y-2 overflow-y-auto bg-muted/30 p-4">
         {messages.map((m) => (
           <MessageBubble key={m.id} message={m} isOwn={m.senderId === viewerId} />
         ))}
         <div ref={bottomRef} />
       </div>
       {blocked ? (
-        <p className="border-t border-border p-4 text-center text-sm text-muted-foreground">
+        <p className="border-t border-border bg-background p-4 text-center text-sm text-muted-foreground">
           This conversation is unavailable.
         </p>
       ) : (

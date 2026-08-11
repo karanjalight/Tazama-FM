@@ -22,7 +22,7 @@ export function ThreadHeader({
   avatarKey: string | null;
 }) {
   return (
-    <div className="flex items-center gap-1 border-b border-border px-2 py-2">
+    <div className="flex items-center gap-1 border-b border-border bg-background px-2 py-2 shadow-soft">
       <Link
         href="/dashboard/chats"
         aria-label="Back to chats"

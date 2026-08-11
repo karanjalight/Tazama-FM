@@ -40,7 +40,7 @@ export function ConversationList({ conversations }: { conversations: Conversatio
   }
 
   return (
-    <div className="mt-4 space-y-1">
+    <div className="mt-4 space-y-2">
       {conversations.map((c) => {
         const title = titleFor(c);
         const avatarKey = avatarKeyFor(c);
@@ -48,7 +48,7 @@ export function ConversationList({ conversations }: { conversations: Conversatio
           <Link
             key={c.id}
             href={`/dashboard/chats/${c.id}`}
-            className="flex items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-muted/60"
+            className="flex items-center gap-3 rounded-2xl border border-border bg-background p-3 shadow-soft transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-lift"
           >
             {avatarKey ? (
               <span className="relative size-11 shrink-0 overflow-hidden rounded-full bg-muted">

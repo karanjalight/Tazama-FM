@@ -1,12 +1,17 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 
 import { MessageBubble } from "@/components/chats/message-bubble";
 import { Composer } from "@/components/chats/composer";
 import { ThreadHeader } from "@/components/chats/thread-header";
 import { useConversationChannel } from "@/lib/chats/use-conversation-channel";
-import { sendMessageAction, markReadAction } from "@/app/dashboard/chats/actions";
+import {
+  sendMessageAction,
+  markReadAction,
+  uploadVoiceNoteAction,
+} from "@/app/dashboard/chats/actions";
 import type { ChatMessage, SharedTrack } from "@/lib/chats/types";
 
 export function ThreadView({
@@ -30,6 +35,10 @@ export function ThreadView({
 }) {
   const [messages, setMessages] = React.useState(initialMessages);
   const bottomRef = React.useRef<HTMLDivElement | null>(null);
+  // Set when a notification click routed here as .../chatId?playVoice=messageId
+  // (see public/sw.js's notificationclick handler) — the target message
+  // autoplays once it's on screen instead of requiring a manual tap.
+  const playVoiceId = useSearchParams().get("playVoice");
 
   const { sendMessage: broadcast } = useConversationChannel(conversationId, (incoming) => {
     setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
@@ -59,6 +68,19 @@ export function ThreadView({
     }
   }
 
+  async function handleSendVoice(blob: Blob, mimeType: string, durationMs: number) {
+    const formData = new FormData();
+    formData.set("conversationId", conversationId);
+    formData.set("durationMs", String(Math.round(durationMs)));
+    formData.set("audio", blob, `voice.${mimeType.includes("ogg") ? "ogg" : "webm"}`);
+
+    const res = await uploadVoiceNoteAction(formData);
+    if (res.ok && res.message) {
+      setMessages((prev) => [...prev, res.message!]);
+      broadcast(res.message);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       <ThreadHeader
@@ -69,7 +91,12 @@ export function ThreadView({
       />
       <div className="flex-1 space-y-2 overflow-y-auto bg-muted/30 p-4">
         {messages.map((m) => (
-          <MessageBubble key={m.id} message={m} isOwn={m.senderId === viewerId} />
+          <MessageBubble
+            key={m.id}
+            message={m}
+            isOwn={m.senderId === viewerId}
+            autoPlayVoice={m.id === playVoiceId}
+          />
         ))}
         <div ref={bottomRef} />
       </div>
@@ -78,7 +105,11 @@ export function ThreadView({
           This conversation is unavailable.
         </p>
       ) : (
-        <Composer onSend={handleSend} onShareTrack={handleShareTrack} />
+        <Composer
+          onSend={handleSend}
+          onShareTrack={handleShareTrack}
+          onSendVoice={handleSendVoice}
+        />
       )}
     </div>
   );

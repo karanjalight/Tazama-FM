@@ -11,6 +11,13 @@ import {
 } from "@/lib/chats/store";
 import { searchUsersByName, type UserSummary } from "@/lib/social/discovery";
 import { onTrackShared, onSharedTrackPlayed } from "@/lib/gamification/store";
+import {
+  uploadVoiceNote,
+  getVoiceNoteSignedUrl,
+  markVoiceNotePlayed,
+  listPendingVoiceNotes,
+  type PendingVoiceNote,
+} from "@/lib/voice/store";
 import type { ChatMessage, SendMessageInput } from "@/lib/chats/types";
 
 export async function startDmAction(
@@ -73,4 +80,69 @@ export async function searchUsersAction(query: string): Promise<UserSummary[]> {
   const profile = await getCurrentProfile();
   if (!profile) return [];
   return searchUsersByName(query, profile.id);
+}
+
+/**
+ * Upload a recorded voice note and send it as a message, in one action.
+ * `isParticipant` is checked before uploading (not just left to sendMessage's
+ * own check) so an unauthorized request never burns storage on a file that
+ * can't be attached to a message anyway.
+ */
+export async function uploadVoiceNoteAction(
+  formData: FormData,
+): Promise<{ ok: boolean; message?: ChatMessage }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { ok: false };
+
+  const conversationId = formData.get("conversationId");
+  const durationMs = formData.get("durationMs");
+  const file = formData.get("audio");
+  if (
+    typeof conversationId !== "string" ||
+    typeof durationMs !== "string" ||
+    !(file instanceof File)
+  ) {
+    return { ok: false };
+  }
+  if (!(await isParticipant(conversationId, profile.id))) return { ok: false };
+
+  const uploaded = await uploadVoiceNote(conversationId, profile.id, file);
+  if (!uploaded) return { ok: false };
+
+  const message = await sendMessage(conversationId, profile.id, {
+    kind: "voice",
+    voice: { path: uploaded.path, durationMs: Number(durationMs) || 0 },
+  });
+  if (!message) return { ok: false };
+  return { ok: true, message };
+}
+
+/** A fresh signed URL for playback, re-checking participation on every call. */
+export async function getVoiceNoteUrlAction(messageId: string): Promise<{ url: string | null }> {
+  const profile = await getCurrentProfile();
+  if (!profile) return { url: null };
+
+  const message = await getMessageById(messageId);
+  if (!message || message.kind !== "voice" || !message.voice) return { url: null };
+  if (!(await isParticipant(message.conversationId, profile.id))) return { url: null };
+
+  const url = await getVoiceNoteSignedUrl(message.voice.path);
+  return { url };
+}
+
+export async function markVoiceNotePlayedAction(messageId: string): Promise<void> {
+  const profile = await getCurrentProfile();
+  if (!profile) return;
+
+  const message = await getMessageById(messageId);
+  if (!message || message.kind !== "voice") return;
+  if (!(await isParticipant(message.conversationId, profile.id))) return;
+
+  await markVoiceNotePlayed(messageId, profile.id);
+}
+
+export async function listPendingVoiceNotesAction(): Promise<PendingVoiceNote[]> {
+  const profile = await getCurrentProfile();
+  if (!profile) return [];
+  return listPendingVoiceNotes(profile.id);
 }

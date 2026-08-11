@@ -11,6 +11,7 @@ import { DashboardMain } from "@/components/dashboard/dashboard-main";
 import { PlayerProvider } from "@/components/player/player-provider";
 import { NowPlayingPanel } from "@/components/player/now-playing-panel";
 import { LikesProvider } from "@/components/likes/likes-provider";
+import { VoiceProvider } from "@/components/voice/voice-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { listLikedIds } from "@/lib/likes/store";
@@ -44,6 +45,7 @@ export default async function DashboardLayout({
   return (
     <LikesProvider initialLikedIds={likedIds}>
     <PlayerProvider>
+      <VoiceProvider viewerId={profile.id} />
       <div className="min-h-svh bg-background text-foreground">
         <Sidebar
           name={displayName}

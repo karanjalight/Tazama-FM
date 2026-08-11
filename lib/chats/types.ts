@@ -5,13 +5,21 @@ export interface SharedTrack {
   thumbnailUrl: string | null;
 }
 
+/** `path` is a private Storage object path, never a public URL — playback
+ * always goes through a fresh signed URL fetched right before playing. */
+export interface VoiceNote {
+  path: string;
+  durationMs: number;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
   senderId: string;
-  kind: "text" | "track";
+  kind: "text" | "track" | "voice";
   body: string | null;
   track: SharedTrack | null;
+  voice: VoiceNote | null;
   createdAt: string;
 }
 
@@ -31,7 +39,8 @@ export interface ConversationSummary {
 }
 
 export interface SendMessageInput {
-  kind: "text" | "track";
+  kind: "text" | "track" | "voice";
   body?: string;
   track?: SharedTrack;
+  voice?: VoiceNote;
 }

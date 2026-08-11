@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 
 import { ConversationList } from "@/components/chats/conversation-list";
 import { NewConversationDialog } from "@/components/chats/new-conversation-dialog";
+import { NotificationPermissionPrompt } from "@/components/voice/notification-permission-prompt";
 import { cn } from "@/lib/utils";
 import type { ConversationSummary } from "@/lib/chats/types";
 
@@ -47,6 +48,9 @@ export function ChatsSplitShell({
           >
             <Plus className="size-4" />
           </button>
+        </div>
+        <div className="mt-4">
+          <NotificationPermissionPrompt />
         </div>
         <ConversationList conversations={conversations} />
       </div>

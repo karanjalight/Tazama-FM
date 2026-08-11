@@ -12,7 +12,7 @@ import type {
 } from "@/lib/chats/types";
 
 function rowToMessage(row: Record<string, unknown>): ChatMessage {
-  const kind = row.kind as "text" | "track";
+  const kind = row.kind as "text" | "track" | "voice";
   return {
     id: row.id as string,
     conversationId: row.conversation_id as string,
@@ -28,12 +28,19 @@ function rowToMessage(row: Record<string, unknown>): ChatMessage {
             thumbnailUrl: (row.thumbnail_url as string | null) ?? null,
           }
         : null,
+    voice:
+      kind === "voice"
+        ? {
+            path: row.voice_path as string,
+            durationMs: (row.voice_duration_ms as number | null) ?? 0,
+          }
+        : null,
     createdAt: row.created_at as string,
   };
 }
 
 const MESSAGE_COLUMNS =
-  "id, conversation_id, sender_id, kind, body, youtube_id, title, artist, thumbnail_url, created_at";
+  "id, conversation_id, sender_id, kind, body, youtube_id, title, artist, thumbnail_url, voice_path, voice_duration_ms, created_at";
 
 export async function isParticipant(conversationId: string, userId: string): Promise<boolean> {
   const admin = createAdminClient();
@@ -265,6 +272,7 @@ export async function sendMessage(
   if (await isConversationBlocked(conversationId, senderId)) return null;
   if (input.kind === "text" && !input.body?.trim()) return null;
   if (input.kind === "track" && !input.track?.youtubeId) return null;
+  if (input.kind === "voice" && !input.voice?.path) return null;
 
   const { data, error } = await admin
     .from("messages")
@@ -277,6 +285,8 @@ export async function sendMessage(
       title: input.track?.title ?? null,
       artist: input.track?.artist ?? null,
       thumbnail_url: input.track?.thumbnailUrl ?? null,
+      voice_path: input.voice?.path ?? null,
+      voice_duration_ms: input.voice?.durationMs ?? null,
     })
     .select(MESSAGE_COLUMNS)
     .single();

@@ -5,6 +5,13 @@
  *   • navigations → network-first, falling back to the offline page
  *   • everything else (Supabase / auth / API) → network-only passthrough
  * Its job is installability + an offline fallback, not full offline support.
+ *
+ * Also handles notificationclick for voice-note fallback notifications shown
+ * via registration.showNotification() from page code (see
+ * components/voice/voice-provider.tsx) — NOT a `push` event handler; this app
+ * doesn't use the Push API, so nothing here fires while Tazama is fully
+ * closed. It only routes clicks on notifications the page itself was able to
+ * trigger while still open (even if backgrounded/frozen).
  */
 const CACHE = "tazama-static-v2";
 const OFFLINE_URL = "/offline.html";
@@ -72,4 +79,29 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Everything else (API / auth / data) → network-only passthrough (no respondWith).
+});
+
+// Route a voice-note notification click to the right conversation, focusing
+// an already-open Tazama tab if there is one rather than always opening a
+// new one.
+self.addEventListener("notificationclick", (event) => {
+  const targetUrl = event.notification.data && event.notification.data.url;
+  event.notification.close();
+  if (!targetUrl) return;
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clients) => {
+        const absoluteTarget = new URL(targetUrl, self.location.origin).href;
+        for (const client of clients) {
+          if (client.url.startsWith(self.location.origin) && "focus" in client) {
+            client.focus();
+            if ("navigate" in client) client.navigate(absoluteTarget);
+            return;
+          }
+        }
+        return self.clients.openWindow(absoluteTarget);
+      }),
+  );
 });

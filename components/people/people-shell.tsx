@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DiscoverGrid } from "@/components/people/discover-grid";
 import { DiscoverFeedMobile } from "@/components/people/discover-feed-mobile";
 import { ActivityRow } from "@/components/people/activity-row";
+import { LeaderboardPodium } from "@/components/people/leaderboard-podium";
 import { LeaderboardRow } from "@/components/people/leaderboard-row";
 import { cn } from "@/lib/utils";
 import type { SuggestedUser } from "@/lib/social/discovery";
@@ -70,28 +71,37 @@ export function PeopleShell({
       )}
 
       {tab === "activity" && (
-        <div className="mt-6 space-y-2">
-          {activity.length === 0 && (
+        <div className="mt-6">
+          {activity.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Nothing playing yet — activity from public listeners shows up here.
             </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {activity.map((entry, i) => (
+                <ActivityRow key={`${entry.userId}-${entry.youtubeId}-${i}`} entry={entry} />
+              ))}
+            </div>
           )}
-          {activity.map((entry, i) => (
-            <ActivityRow key={`${entry.userId}-${entry.youtubeId}-${i}`} entry={entry} />
-          ))}
         </div>
       )}
 
       {tab === "leaderboard" && (
-        <div className="mt-6 space-y-2">
-          {leaderboard.length === 0 && (
+        <div className="mt-6">
+          {leaderboard.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No points on the board yet — go play something.
             </p>
+          ) : (
+            <>
+              <LeaderboardPodium top3={leaderboard.slice(0, 3)} />
+              <div className="mt-4 space-y-2">
+                {leaderboard.slice(3).map((entry, i) => (
+                  <LeaderboardRow key={entry.userId} entry={entry} rank={i + 4} />
+                ))}
+              </div>
+            </>
           )}
-          {leaderboard.map((entry, i) => (
-            <LeaderboardRow key={entry.userId} entry={entry} rank={i + 1} />
-          ))}
         </div>
       )}
     </div>

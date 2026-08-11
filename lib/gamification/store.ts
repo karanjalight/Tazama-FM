@@ -206,6 +206,19 @@ export async function getLeaderboard(viewerId: string, limit = 50): Promise<Lead
     .filter((e): e is LeaderboardEntry => e !== null);
 }
 
+/** One user's all-time point total — same ledger the leaderboard sums, just for one person. */
+export async function getUserPoints(userId: string): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 0;
+
+  const { data, error } = await admin.from("point_events").select("points").eq("user_id", userId);
+  if (error) {
+    console.error("getUserPoints failed", userId, error);
+    return 0;
+  }
+  return (data ?? []).reduce((sum, e) => sum + (e.points as number), 0);
+}
+
 export async function listUserBadges(userId: string): Promise<string[]> {
   const admin = createAdminClient();
   if (!admin) return [];

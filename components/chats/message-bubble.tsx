@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { SharedTrackCard } from "@/components/chats/shared-track-card";
 import type { ChatMessage } from "@/lib/chats/types";
 
 export function MessageBubble({
@@ -8,7 +9,15 @@ export function MessageBubble({
   message: ChatMessage;
   isOwn: boolean;
 }) {
-  if (message.kind === "track") return null; // Task 6 adds track rendering
+  if (message.kind === "track") {
+    return (
+      <div className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
+        <div className="w-full max-w-[75%]">
+          <SharedTrackCard message={message} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("flex", isOwn ? "justify-end" : "justify-start")}>

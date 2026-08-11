@@ -6,7 +6,7 @@ import { MessageBubble } from "@/components/chats/message-bubble";
 import { Composer } from "@/components/chats/composer";
 import { useConversationChannel } from "@/lib/chats/use-conversation-channel";
 import { sendMessageAction, markReadAction } from "@/app/dashboard/chats/actions";
-import type { ChatMessage } from "@/lib/chats/types";
+import type { ChatMessage, SharedTrack } from "@/lib/chats/types";
 
 export function ThreadView({
   conversationId,
@@ -42,6 +42,14 @@ export function ThreadView({
     }
   }
 
+  async function handleShareTrack(track: SharedTrack) {
+    const res = await sendMessageAction(conversationId, { kind: "track", track });
+    if (res.ok && res.message) {
+      setMessages((prev) => [...prev, res.message!]);
+      broadcast(res.message);
+    }
+  }
+
   return (
     <div className="flex h-[calc(100svh-8rem)] flex-col">
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
@@ -55,7 +63,7 @@ export function ThreadView({
           This conversation is unavailable.
         </p>
       ) : (
-        <Composer onSend={handleSend} />
+        <Composer onSend={handleSend} onShareTrack={handleShareTrack} />
       )}
     </div>
   );

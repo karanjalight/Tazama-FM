@@ -3,7 +3,8 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 
-import { UserCard } from "@/components/people/user-card";
+import { DiscoverGrid } from "@/components/people/discover-grid";
+import { DiscoverFeedMobile } from "@/components/people/discover-feed-mobile";
 import { ActivityRow } from "@/components/people/activity-row";
 import { LeaderboardRow } from "@/components/people/leaderboard-row";
 import { cn } from "@/lib/utils";
@@ -54,21 +55,17 @@ export function PeopleShell({
       </div>
 
       {tab === "discover" && (
-        <div className="mt-6 space-y-2">
-          {suggestions.length === 0 && (
+        <div className="mt-6">
+          {suggestions.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No suggestions yet — pick a few genres in Settings to get started.
             </p>
+          ) : (
+            <>
+              <DiscoverFeedMobile suggestions={suggestions} />
+              <DiscoverGrid suggestions={suggestions} />
+            </>
           )}
-          {suggestions.map((u) => (
-            <UserCard
-              key={u.id}
-              id={u.id}
-              fullName={u.fullName}
-              avatarKey={u.avatarKey}
-              subtitle="Similar taste"
-            />
-          ))}
         </div>
       )}
 

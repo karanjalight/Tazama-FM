@@ -11,6 +11,8 @@ export interface UserSummary {
 
 export interface SuggestedUser extends UserSummary {
   score: number;
+  /** Distinct tracks played (all-time) — a "songs listened to" stat for discovery cards. */
+  songsListened: number;
 }
 
 const CANDIDATE_POOL_SIZE = 200;
@@ -59,17 +61,26 @@ export async function getSuggestedUsers(
     .limit(500);
   const viewerTrackIds = new Set((viewerPlays ?? []).map((r) => r.youtube_id as string));
 
+  // Fetched once, used two ways below: shared-track scoring (only matters if
+  // the viewer has history of their own) and each candidate's distinct-songs
+  // count (always wanted, for the "songs listened to" stat on discovery cards).
+  const candidateIds = pool.map((p) => p.id as string);
+  const { data: candidatePlays } = await admin
+    .from("play_history")
+    .select("user_id, youtube_id")
+    .in("user_id", candidateIds)
+    .limit(5000);
+
   const sharedByUser = new Map<string, number>();
-  if (viewerTrackIds.size > 0) {
-    const candidateIds = pool.map((p) => p.id as string);
-    const { data: candidatePlays } = await admin
-      .from("play_history")
-      .select("user_id, youtube_id")
-      .in("user_id", candidateIds)
-      .limit(5000);
-    for (const row of candidatePlays ?? []) {
-      if (!viewerTrackIds.has(row.youtube_id as string)) continue;
-      const uid = row.user_id as string;
+  const distinctTracksByUser = new Map<string, Set<string>>();
+  for (const row of candidatePlays ?? []) {
+    const uid = row.user_id as string;
+    const youtubeId = row.youtube_id as string;
+
+    if (!distinctTracksByUser.has(uid)) distinctTracksByUser.set(uid, new Set());
+    distinctTracksByUser.get(uid)!.add(youtubeId);
+
+    if (viewerTrackIds.has(youtubeId)) {
       sharedByUser.set(uid, (sharedByUser.get(uid) ?? 0) + 1);
     }
   }
@@ -95,6 +106,7 @@ export async function getSuggestedUsers(
         fullName: (p.full_name as string) ?? "",
         avatarKey: (p.avatar_key as string | null) ?? null,
         score: r.score,
+        songsListened: distinctTracksByUser.get(r.userId)?.size ?? 0,
       };
     })
     .filter((u): u is SuggestedUser => u !== null);

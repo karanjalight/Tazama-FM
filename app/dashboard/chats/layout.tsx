@@ -14,5 +14,9 @@ export default async function ChatsLayout({
 
   const conversations = await listConversationsForUser(profile.id);
 
-  return <ChatsSplitShell conversations={conversations}>{children}</ChatsSplitShell>;
+  return (
+    <ChatsSplitShell conversations={conversations} viewerId={profile.id}>
+      {children}
+    </ChatsSplitShell>
+  );
 }

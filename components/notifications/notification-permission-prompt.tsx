@@ -8,7 +8,7 @@ import { notificationPermissionState } from "@/lib/voice/capabilities";
 const DISMISSED_KEY = "tz.voice.notif-prompt-dismissed";
 
 /**
- * A one-time, dismissible opt-in for voice-note notifications — never
+ * A one-time, dismissible opt-in for chat notifications — never
  * auto-requests permission (that's a hard requirement: requesting on page
  * load without a user gesture gets browsers to auto-deny future prompts).
  * Shown only when permission is still in its default ("never asked") state.
@@ -46,7 +46,7 @@ export function NotificationPermissionPrompt() {
         <Bell className="size-4" />
       </span>
       <p className="flex-1 text-xs text-muted-foreground">
-        Get notified when a voice note arrives and Tazama&rsquo;s in the background.
+        Get notified about new messages and voice notes when Tazama&rsquo;s in the background.
       </p>
       <button
         type="button"

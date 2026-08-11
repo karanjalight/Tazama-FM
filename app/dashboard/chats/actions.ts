@@ -8,6 +8,9 @@ import {
   getMessageById,
   isParticipant,
   markRead,
+  getSenderName,
+  countUnreadConversations,
+  getConversationSummary,
 } from "@/lib/chats/store";
 import { searchUsersByName, type UserSummary } from "@/lib/social/discovery";
 import { onTrackShared, onSharedTrackPlayed } from "@/lib/gamification/store";
@@ -18,7 +21,7 @@ import {
   listPendingVoiceNotes,
   type PendingVoiceNote,
 } from "@/lib/voice/store";
-import type { ChatMessage, SendMessageInput } from "@/lib/chats/types";
+import type { ChatMessage, ConversationSummary, SendMessageInput } from "@/lib/chats/types";
 
 export async function startDmAction(
   otherUserId: string,
@@ -145,4 +148,47 @@ export async function listPendingVoiceNotesAction(): Promise<PendingVoiceNote[]>
   const profile = await getCurrentProfile();
   if (!profile) return [];
   return listPendingVoiceNotes(profile.id);
+}
+
+export interface MessageNotificationPreview {
+  senderName: string;
+  preview: string;
+  conversationId: string;
+}
+
+/** Sender name + a short preview line for a toast/OS notification. Re-checks
+ * participation itself — never trust a client-supplied messageId blindly. */
+export async function getMessageNotificationAction(
+  messageId: string,
+): Promise<MessageNotificationPreview | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+
+  const message = await getMessageById(messageId);
+  if (!message || message.senderId === profile.id) return null;
+  if (!(await isParticipant(message.conversationId, profile.id))) return null;
+
+  const senderName = await getSenderName(message.senderId);
+  const preview =
+    message.kind === "track"
+      ? `🎵 Shared a track: ${message.track?.title ?? "a song"}`
+      : message.kind === "voice"
+        ? "🎙️ Sent a voice note"
+        : (message.body ?? "").slice(0, 140);
+
+  return { senderName, preview, conversationId: message.conversationId };
+}
+
+export async function getUnreadChatsCountAction(): Promise<number> {
+  const profile = await getCurrentProfile();
+  if (!profile) return 0;
+  return countUnreadConversations(profile.id);
+}
+
+export async function getConversationSummaryAction(
+  conversationId: string,
+): Promise<ConversationSummary | null> {
+  const profile = await getCurrentProfile();
+  if (!profile) return null;
+  return getConversationSummary(conversationId, profile.id);
 }

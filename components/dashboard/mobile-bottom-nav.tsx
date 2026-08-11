@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { House, MessageCircle, Search, Sparkles, type LucideIcon } from "lucide-react";
 
 import { CreateRoomButton } from "@/components/dashboard/create-room-button";
+import { useChatsUnreadCount } from "@/components/notifications/notification-provider";
 import { cn } from "@/lib/utils";
 import type { AccountType } from "@/components/auth/account-type-toggle";
 import type { SubscriptionPlan } from "@/lib/billing/plans";
@@ -30,7 +31,7 @@ function isActive(item: Item, pathname: string): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
-function NavLink({ item, active }: { item: Item; active: boolean }) {
+function NavLink({ item, active, badge }: { item: Item; active: boolean; badge?: number }) {
   const Icon = item.icon;
   return (
     <Link
@@ -38,7 +39,17 @@ function NavLink({ item, active }: { item: Item; active: boolean }) {
       aria-current={active ? "page" : undefined}
       className="flex flex-1 flex-col items-center gap-0.5 py-1"
     >
-      <Icon className={cn("size-5", active ? "text-foreground" : "text-muted-foreground")} />
+      <span className="relative">
+        <Icon className={cn("size-5", active ? "text-foreground" : "text-muted-foreground")} />
+        {Boolean(badge) && (
+          <span
+            aria-label={`${badge} unread`}
+            className="absolute -right-2 -top-1.5 grid min-w-3.5 place-items-center rounded-full bg-brand px-1 text-[9px] font-semibold leading-3.5 text-white"
+          >
+            {badge! > 9 ? "9+" : badge}
+          </span>
+        )}
+      </span>
       <span
         className={cn(
           "text-[11px] font-medium",
@@ -68,6 +79,7 @@ export function MobileBottomNav({
   origin: string;
 }) {
   const pathname = usePathname() ?? "";
+  const unreadChats = useChatsUnreadCount();
 
   return (
     <nav
@@ -90,7 +102,12 @@ export function MobileBottomNav({
       </div>
 
       {AFTER.map((item) => (
-        <NavLink key={item.href} item={item} active={isActive(item, pathname)} />
+        <NavLink
+          key={item.href}
+          item={item}
+          active={isActive(item, pathname)}
+          badge={item.href === "/dashboard/chats" ? unreadChats : undefined}
+        />
       ))}
     </nav>
   );

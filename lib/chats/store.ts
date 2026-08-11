@@ -303,3 +303,110 @@ export async function markRead(conversationId: string, userId: string): Promise<
     .eq("conversation_id", conversationId)
     .eq("user_id", userId);
 }
+
+export async function getSenderName(userId: string): Promise<string> {
+  const admin = createAdminClient();
+  if (!admin) return "Someone";
+  const { data } = await admin
+    .from("profiles")
+    .select("full_name")
+    .eq("id", userId)
+    .maybeSingle();
+  return (data?.full_name as string | null) || "Someone";
+}
+
+/** How many conversations have activity since the viewer last read them —
+ * powers the nav badge, so it must match listConversationsForUser's own
+ * per-row `unread` definition exactly. */
+export async function countUnreadConversations(userId: string): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin) return 0;
+
+  const { data: myRows } = await admin
+    .from("conversation_participants")
+    .select("conversation_id, last_read_at")
+    .eq("user_id", userId);
+  const myConvIds = (myRows ?? []).map((r) => r.conversation_id as string);
+  if (myConvIds.length === 0) return 0;
+  const lastReadByConv = new Map(
+    (myRows ?? []).map((r) => [r.conversation_id as string, r.last_read_at as string]),
+  );
+
+  let count = 0;
+  for (const convId of myConvIds) {
+    const { data: lastMsgRows } = await admin
+      .from("messages")
+      .select("created_at")
+      .eq("conversation_id", convId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const lastCreatedAt = lastMsgRows?.[0]?.created_at as string | undefined;
+    const lastReadAt = lastReadByConv.get(convId);
+    if (lastCreatedAt && lastReadAt && new Date(lastCreatedAt) > new Date(lastReadAt)) count++;
+  }
+  return count;
+}
+
+/** Single-conversation twin of listConversationsForUser — used to fetch just
+ * the one conversation a brand-new incoming message belongs to when a client
+ * hasn't loaded it yet (e.g. the first message of a DM someone just started
+ * with you), without refetching everything. */
+export async function getConversationSummary(
+  conversationId: string,
+  userId: string,
+): Promise<ConversationSummary | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  if (!(await isParticipant(conversationId, userId))) return null;
+
+  const { data: conv } = await admin
+    .from("conversations")
+    .select("id, kind, name")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (!conv) return null;
+
+  const { data: participants } = await admin
+    .from("conversation_participants")
+    .select("user_id, last_read_at")
+    .eq("conversation_id", conversationId);
+  const otherIds = (participants ?? [])
+    .map((p) => p.user_id as string)
+    .filter((id) => id !== userId);
+  const { data: profiles } =
+    otherIds.length > 0
+      ? await admin.from("profiles").select("id, full_name, avatar_key").in("id", otherIds)
+      : { data: [] };
+  const profileById = new Map((profiles ?? []).map((p) => [p.id as string, p]));
+  const others: ConversationParticipant[] = otherIds.map((id) => {
+    const profile = profileById.get(id);
+    return {
+      id,
+      fullName: (profile?.full_name as string) ?? "",
+      avatarKey: (profile?.avatar_key as string | null) ?? null,
+    };
+  });
+
+  const { data: lastMsgRows } = await admin
+    .from("messages")
+    .select(MESSAGE_COLUMNS)
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const lastMessage = lastMsgRows?.[0] ? rowToMessage(lastMsgRows[0]) : null;
+
+  const lastReadAt = (participants ?? []).find((p) => p.user_id === userId)
+    ?.last_read_at as string | undefined;
+  const unread = Boolean(
+    lastMessage && lastReadAt && new Date(lastMessage.createdAt) > new Date(lastReadAt),
+  );
+
+  return {
+    id: conv.id as string,
+    kind: conv.kind as "dm" | "group",
+    name: (conv.name as string | null) ?? null,
+    otherParticipants: others,
+    lastMessage,
+    unread,
+  };
+}

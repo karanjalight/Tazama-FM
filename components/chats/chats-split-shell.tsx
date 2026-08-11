@@ -28,7 +28,9 @@ export function ChatsSplitShell({
   const onThread = pathname !== "/dashboard/chats";
 
   return (
-    <div className="flex h-[calc(100svh-8rem)]">
+    // Mobile chrome: 3.5rem header + 5rem now-playing bar + 4rem bottom nav.
+    // Desktop: just the 5rem now-playing bar (no mobile header/bottom nav).
+    <div className="flex h-[calc(100svh-12.5rem)] md:h-[calc(100svh-5rem)]">
       <div
         className={cn(
           "w-full flex-col overflow-y-auto border-r border-border px-4 py-6 md:flex md:w-80 md:shrink-0",

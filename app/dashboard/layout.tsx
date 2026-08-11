@@ -56,7 +56,7 @@ export default async function DashboardLayout({
         />
 
       <div className="md:pl-64">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-background/85 px-4 py-3 backdrop-blur-xl md:hidden">
+        <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur-xl md:hidden">
           <div className="flex items-center gap-1.5">
             <MobileSidebar
               name={displayName}

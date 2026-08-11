@@ -50,7 +50,7 @@ export default async function PersonProfilePage({
   const fullName = (target.full_name as string) || "Tazama listener";
 
   return (
-    <div className="mx-auto max-w-3xl py-8">
+    <div className="mx-auto py-8">
       <div className="flex items-center gap-6 sm:gap-10">
         {avatarKey ? (
           <span className="relative size-24 shrink-0 overflow-hidden rounded-full bg-muted sm:size-32">

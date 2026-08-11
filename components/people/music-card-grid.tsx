@@ -19,7 +19,7 @@ export function MusicCardGrid({ entries }: { entries: ActivityEntry[] }) {
   }
 
   return (
-    <div className="grid grid-cols-3 gap-1 sm:gap-2">
+    <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 sm:gap-2 lg:grid-cols-6">
       {entries.map((entry, i) => (
         <button
           key={`${entry.youtubeId}-${i}`}

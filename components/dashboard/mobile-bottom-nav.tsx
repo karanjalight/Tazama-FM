@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, MessageCircle, Search, Users, type LucideIcon } from "lucide-react";
+import { House, MessageCircle, Search, Sparkles, type LucideIcon } from "lucide-react";
 
 import { CreateRoomButton } from "@/components/dashboard/create-room-button";
 import { cn } from "@/lib/utils";
@@ -21,8 +21,8 @@ const BEFORE: Item[] = [
   { label: "Search", href: "/dashboard/search", icon: Search },
 ];
 const AFTER: Item[] = [
+  { label: "AI Chat", href: "/dashboard/chat", icon: Sparkles },
   { label: "Chats", href: "/dashboard/chats", icon: MessageCircle },
-  { label: "People", href: "/dashboard/people", icon: Users },
 ];
 
 function isActive(item: Item, pathname: string): boolean {

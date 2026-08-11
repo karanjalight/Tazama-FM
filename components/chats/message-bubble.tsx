@@ -12,9 +12,7 @@ export function MessageBubble({
   if (message.kind === "track") {
     return (
       <div className={cn("flex", isOwn ? "justify-end" : "justify-start")}>
-        <div className="w-full max-w-[75%]">
-          <SharedTrackCard message={message} />
-        </div>
+        <SharedTrackCard message={message} />
       </div>
     );
   }

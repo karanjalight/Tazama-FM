@@ -71,3 +71,19 @@ export async function unlike(userId: string, videoId: string): Promise<boolean> 
     .eq("video_id", videoId);
   return !error;
 }
+
+/**
+ * How many users (across the whole app, not just the caller) have liked a
+ * track — `liked_tracks`' own RLS only lets a user see their own rows, so
+ * this needs the service-role client, same as the leaderboard's totals.
+ */
+export async function countLikes(videoId: string): Promise<number> {
+  const admin = createAdminClient();
+  if (!admin || !videoId) return 0;
+
+  const { count } = await admin
+    .from("liked_tracks")
+    .select("*", { count: "exact", head: true })
+    .eq("video_id", videoId);
+  return count ?? 0;
+}

@@ -6,6 +6,7 @@ import { listUserActivity } from "@/lib/social/play-history";
 import { listBlockedIds } from "@/lib/social/blocks";
 import { Cover } from "@/components/cover";
 import { BlockButton } from "@/components/people/block-button";
+import { MessageButton } from "@/components/people/message-button";
 
 export default async function PersonProfilePage({
   params,
@@ -40,10 +41,13 @@ export default async function PersonProfilePage({
           </h1>
         </div>
         {viewer.id !== userId && (
-          <BlockButton
-            targetUserId={userId}
-            initiallyBlocked={blockedIds.includes(userId)}
-          />
+          <div className="flex items-center gap-2">
+            <MessageButton targetUserId={userId} />
+            <BlockButton
+              targetUserId={userId}
+              initiallyBlocked={blockedIds.includes(userId)}
+            />
+          </div>
         )}
       </div>
 

@@ -5,7 +5,7 @@
 import crypto from "crypto";
 
 import { getPlan, type SubscriptionPlan } from "@/lib/billing/plans";
-import { AI_PRODUCT, AI_PREMIUM_USD } from "@/lib/billing/ai";
+import { AI_PRODUCT, AI_PREMIUM_KES } from "@/lib/billing/ai";
 
 const PAYSTACK_BASE = "https://api.paystack.co";
 
@@ -69,10 +69,16 @@ export async function initSubscriptionCheckout(input: {
 }
 
 /**
- * Start a one-off checkout for the AI premium add-on ($3). Passes metadata
+ * Start a one-off checkout for the AI premium add-on (Ksh 80). Passes metadata
  * { product: "ai", user_id } so both the webhook and the redirect callback can
  * grant 30 days of premium to the right user. One-off (no recurring plan) keeps
  * it aligned with the expiry-based premium_access model.
+ *
+ * `currency` is explicit — without it Paystack falls back to the account's
+ * default currency. That's how this used to charge Ksh 3 instead of a
+ * meaningful amount: the old code sent `amount: 300` assuming USD cents, but
+ * with no currency field a KES-default account reads that as 300 KES
+ * subunits — i.e. Ksh 3.00, not $3.
  */
 export async function initAiPremiumCheckout(input: {
   email: string;
@@ -91,7 +97,8 @@ export async function initAiPremiumCheckout(input: {
       },
       body: JSON.stringify({
         email: input.email,
-        amount: Math.round(AI_PREMIUM_USD * 100), // smallest currency unit
+        amount: Math.round(AI_PREMIUM_KES * 100), // smallest currency unit
+        currency: "KES",
         callback_url: input.callbackUrl,
         metadata: { product: AI_PRODUCT, user_id: input.userId },
       }),

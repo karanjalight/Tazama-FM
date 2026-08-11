@@ -19,7 +19,7 @@ import {
   upgradablePlans,
   type SubscriptionPlan,
 } from "@/lib/billing/plans";
-import { AI_PREMIUM_USD } from "@/lib/billing/ai";
+import { AI_PREMIUM_KES } from "@/lib/billing/ai";
 import type { AccountType } from "@/components/auth/account-type-toggle";
 import type { SubscriptionRecord } from "@/lib/billing/subscription";
 
@@ -180,8 +180,8 @@ export function SubscriptionsTab({
               AI Concierge
             </CardTitle>
             <CardDescription>
-              A personal AI that builds playlists and runs your rooms — $
-              {AI_PREMIUM_USD}/mo.
+              A personal AI that builds playlists and runs your rooms — Ksh{" "}
+              {AI_PREMIUM_KES}/mo.
             </CardDescription>
             {aiPremium && (
               <CardAction>
@@ -205,7 +205,7 @@ export function SubscriptionsTab({
                 disabled={busy !== null}
               >
                 {busy === "ai" && <Loader2 className="size-4 animate-spin" />}
-                {busy === "ai" ? "Starting…" : `Enable for $${AI_PREMIUM_USD}/mo`}
+                {busy === "ai" ? "Starting…" : `Enable for Ksh ${AI_PREMIUM_KES}/mo`}
               </Button>
             )}
           </CardContent>

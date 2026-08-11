@@ -22,9 +22,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { AI_PREMIUM_USD } from "@/lib/billing/ai";
+import { AI_PREMIUM_KES } from "@/lib/billing/ai";
 
-const PREMIUM_PRICE = AI_PREMIUM_USD;
+const PREMIUM_PRICE = AI_PREMIUM_KES;
 
 const PERKS = [
   "AI concierge chat for recommendations",
@@ -188,7 +188,7 @@ function UpgradeSheet({
           <div className="px-6">
             <div className="flex items-end gap-1">
               <span className="text-4xl font-semibold tracking-tight text-foreground">
-                ${PREMIUM_PRICE}
+                Ksh {PREMIUM_PRICE}
               </span>
               <span className="pb-1 text-sm text-muted-foreground">/ month</span>
             </div>
@@ -218,7 +218,7 @@ function UpgradeSheet({
             >
               {starting
                 ? "Starting checkout…"
-                : `Upgrade for $${PREMIUM_PRICE}/mo`}
+                : `Upgrade for Ksh ${PREMIUM_PRICE}/mo`}
             </Button>
             <SheetClose
               render={<Button variant="ghost" size="lg" className="w-full" />}

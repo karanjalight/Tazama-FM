@@ -23,12 +23,38 @@ create index if not exists play_history_played_at_idx
   on public.play_history (played_at desc);
 
 alter table public.play_history enable row level security;
+-- No insert/update/delete policy: writes go through the service-role admin
+-- client only, which bypasses RLS entirely.
+-- The select policy (play_history_select) is defined further down, after
+-- profiles.activity_public and blocked_users both exist — its visibility
+-- function reads both, and `language sql` functions are validated against
+-- the catalog at CREATE FUNCTION time, so both must already exist.
 
--- security definer: play_history_select's cross-table check (profiles,
--- blocked_users) would otherwise be re-filtered by those tables' own RLS
--- policies inside the subquery — profiles only allows `auth.uid() = id`, so a
--- plain exists(...) subquery could never see another user's row and the
--- policy would silently collapse to "only see your own play_history".
+-- 2. profiles.activity_public --------------------------------------------------
+alter table public.profiles
+  add column if not exists activity_public boolean not null default true;
+
+-- 3. blocked_users --------------------------------------------------------------
+create table if not exists public.blocked_users (
+  blocker_id uuid not null references auth.users (id) on delete cascade,
+  blocked_id uuid not null references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id)
+);
+
+alter table public.blocked_users enable row level security;
+
+drop policy if exists "blocked_users_select_own" on public.blocked_users;
+create policy "blocked_users_select_own" on public.blocked_users
+  for select using (auth.uid() = blocker_id);
+
+-- play_history_select policy (needs profiles.activity_public + blocked_users,
+-- both defined above) --------------------------------------------------------
+-- security definer: this cross-table check would otherwise be re-filtered by
+-- profiles'/blocked_users' own RLS policies inside the subquery — profiles
+-- only allows `auth.uid() = id`, so a plain exists(...) subquery could never
+-- see another user's row and the policy would silently collapse to "only see
+-- your own play_history".
 create or replace function public.play_history_is_visible(target_user_id uuid, viewer_id uuid)
 returns boolean
 language sql
@@ -53,26 +79,6 @@ create policy "play_history_select" on public.play_history
     auth.uid() = user_id
     or public.play_history_is_visible(play_history.user_id, auth.uid())
   );
--- No insert/update/delete policy: writes go through the service-role admin
--- client only, which bypasses RLS entirely.
-
--- 2. profiles.activity_public --------------------------------------------------
-alter table public.profiles
-  add column if not exists activity_public boolean not null default true;
-
--- 3. blocked_users --------------------------------------------------------------
-create table if not exists public.blocked_users (
-  blocker_id uuid not null references auth.users (id) on delete cascade,
-  blocked_id uuid not null references auth.users (id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (blocker_id, blocked_id)
-);
-
-alter table public.blocked_users enable row level security;
-
-drop policy if exists "blocked_users_select_own" on public.blocked_users;
-create policy "blocked_users_select_own" on public.blocked_users
-  for select using (auth.uid() = blocker_id);
 
 -- 4. conversations + participants + messages (used by Plan 2) -------------------
 create table if not exists public.conversations (

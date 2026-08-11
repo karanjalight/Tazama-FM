@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-
-import { getCurrentProfile } from "@/lib/auth/profile";
-import { listConversationsForUser } from "@/lib/chats/store";
-import { ChatsInboxShell } from "@/components/chats/chats-inbox-shell";
 
 export const metadata: Metadata = { title: "Chats" };
 
-export default async function ChatsPage() {
-  const profile = await getCurrentProfile();
-  if (!profile) redirect("/login");
-
-  const conversations = await listConversationsForUser(profile.id);
-
-  return <ChatsInboxShell conversations={conversations} />;
+export default function ChatsIndexPage() {
+  return (
+    <div className="flex h-full flex-1 items-center justify-center p-8 text-center">
+      <p className="text-sm text-muted-foreground">Select a conversation to start chatting.</p>
+    </div>
+  );
 }

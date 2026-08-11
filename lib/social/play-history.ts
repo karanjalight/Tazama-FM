@@ -3,6 +3,7 @@
  * same pattern as lib/likes/store.ts. One row per track-start.
  */
 import { createAdminClient } from "@/lib/supabase/admin";
+import { formatRelativeTime } from "@/lib/utils";
 
 export type ActivitySource = "dashboard" | "room" | "chat";
 
@@ -155,4 +156,52 @@ export async function listUserActivity(
     source: r.source as ActivitySource,
     playedAt: r.played_at as string,
   }));
+}
+
+const LISTENING_NOW_WINDOW_MS = 5 * 60 * 1000;
+
+/**
+ * A ready-to-render "what are they up to" line for a chat thread header —
+ * "Listening to X" if their last play was within the last 5 minutes, else
+ * "Last played X · 2h ago". A page-load snapshot, not live-updating. Same
+ * privacy/block gate as listUserActivity — if they've turned off activity
+ * sharing, or you're blocked either way, this returns null.
+ */
+export async function getListeningStatus(
+  targetUserId: string,
+  viewerId: string,
+): Promise<string | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+
+  if (targetUserId !== viewerId) {
+    const hidden = await hiddenUserIds(viewerId);
+    if (hidden.has(targetUserId)) return null;
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("activity_public")
+      .eq("id", targetUserId)
+      .maybeSingle();
+    if (!profile?.activity_public) return null;
+  }
+
+  const { data } = await admin
+    .from("play_history")
+    .select("title, artist, played_at")
+    .eq("user_id", targetUserId)
+    .order("played_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return null;
+
+  const title = data.title as string;
+  const artist = data.artist as string | null;
+  const playedAt = data.played_at as string;
+  const track = artist ? `${title} — ${artist}` : title;
+  const isRecent = Date.now() - new Date(playedAt).getTime() < LISTENING_NOW_WINDOW_MS;
+
+  return isRecent
+    ? `Listening to ${track}`
+    : `Last played ${track} · ${formatRelativeTime(playedAt)}`;
 }

@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { MessageBubble } from "@/components/chats/message-bubble";
 import { Composer } from "@/components/chats/composer";
+import { ThreadHeader } from "@/components/chats/thread-header";
 import { useConversationChannel } from "@/lib/chats/use-conversation-channel";
 import { sendMessageAction, markReadAction } from "@/app/dashboard/chats/actions";
 import type { ChatMessage, SharedTrack } from "@/lib/chats/types";
@@ -13,11 +14,19 @@ export function ThreadView({
   viewerId,
   initialMessages,
   blocked,
+  headerTitle,
+  headerSubtitle,
+  headerOtherUserId,
+  headerAvatarKey,
 }: {
   conversationId: string;
   viewerId: string;
   initialMessages: ChatMessage[];
   blocked: boolean;
+  headerTitle: string;
+  headerSubtitle: string | null;
+  headerOtherUserId: string | null;
+  headerAvatarKey: string | null;
 }) {
   const [messages, setMessages] = React.useState(initialMessages);
   const bottomRef = React.useRef<HTMLDivElement | null>(null);
@@ -51,7 +60,13 @@ export function ThreadView({
   }
 
   return (
-    <div className="flex h-[calc(100svh-8rem)] flex-col">
+    <div className="flex h-full flex-col">
+      <ThreadHeader
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        otherUserId={headerOtherUserId}
+        avatarKey={headerAvatarKey}
+      />
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.map((m) => (
           <MessageBubble key={m.id} message={m} isOwn={m.senderId === viewerId} />

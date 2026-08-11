@@ -18,6 +18,8 @@ export function CreateRoomButton({
   currentPlan,
   origin,
   className,
+  iconClassName = "size-4",
+  iconOnly = false,
   children,
   onOpen,
 }: {
@@ -25,6 +27,10 @@ export function CreateRoomButton({
   currentPlan: SubscriptionPlan;
   origin: string;
   className?: string;
+  /** Override the Plus icon's size — e.g. a bigger FAB rendering. */
+  iconClassName?: string;
+  /** Suppress the trailing label entirely (icon-only, circular renderings). */
+  iconOnly?: boolean;
   children?: React.ReactNode;
   onOpen?: () => void;
 }) {
@@ -41,14 +47,15 @@ export function CreateRoomButton({
           setSession((s) => s + 1);
           setOpen(true);
         }}
+        aria-label={iconOnly ? "Create a room" : undefined}
         className={cn(
           buttonVariants({ variant: "brand" }),
           "h-10 w-full justify-start gap-2 rounded-xl px-3 text-[14px]",
           className,
         )}
       >
-        <Plus className="size-4" />
-        {children ?? "Create a room"}
+        <Plus className={iconClassName} />
+        {!iconOnly && (children ?? "Create a room")}
       </button>
 
       <CreateRoomDialog

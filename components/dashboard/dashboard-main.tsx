@@ -14,7 +14,7 @@ export function DashboardMain({ children }: { children: React.ReactNode }) {
   return (
     <main
       className={cn(
-        "px-4 pt-6 pb-32 transition-[padding] duration-300 sm:px-6 lg:px-8",
+        "px-4 pt-6 pb-48 transition-[padding] duration-300 sm:px-6 md:pb-32 lg:px-8",
         isQueueOpen && "xl:pr-93",
       )}
     >

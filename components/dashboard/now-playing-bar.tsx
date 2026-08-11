@@ -54,7 +54,7 @@ export function NowPlayingBar() {
   return (
     <div
       className={cn(
-        "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/85 backdrop-blur-xl md:left-64",
+        "fixed inset-x-0 bottom-16 z-40 border-t border-border bg-background/85 backdrop-blur-xl md:bottom-0 md:left-64",
         isQueueOpen && "xl:right-85",
       )}
     >

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Logo } from "@/components/brand/logo";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { MobileSidebar } from "@/components/dashboard/mobile-sidebar";
+import { MobileBottomNav } from "@/components/dashboard/mobile-bottom-nav";
 import { ProfileMenu } from "@/components/dashboard/profile-menu";
 import { NowPlayingBar } from "@/components/dashboard/now-playing-bar";
 import { DashboardMain } from "@/components/dashboard/dashboard-main";
@@ -87,6 +88,11 @@ export default async function DashboardLayout({
 
         <NowPlayingBar />
         <NowPlayingPanel />
+        <MobileBottomNav
+          accountType={profile.accountType}
+          currentPlan={currentPlan}
+          origin={origin}
+        />
       </div>
     </PlayerProvider>
     </LikesProvider>

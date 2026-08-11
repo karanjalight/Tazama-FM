@@ -59,7 +59,7 @@ create table if not exists public.room_queue (
   id            uuid primary key default gen_random_uuid(),
   room_id       uuid not null references public.rooms (id) on delete cascade,
   track         jsonb not null,                   -- {youtubeId,title,artist,thumbnailUrl}
-  added_by      uuid,                             -- plain actor id (real OR demo)
+  added_by      text,                             -- plain actor id (real, demo, OR branch guest — guest ids are "guest-<uuid>", not real uuids)
   added_by_name text,                             -- denormalised adder name
   played        boolean not null default false,
   created_at    timestamptz not null default now()
@@ -69,7 +69,7 @@ create index if not exists room_queue_room_idx on public.room_queue (room_id, cr
 -- 6. room_track_likes (upvotes that reorder the queue + feed suggestions) -----
 create table if not exists public.room_track_likes (
   queue_id   uuid not null references public.room_queue (id) on delete cascade,
-  user_id    uuid not null,   -- plain actor id (real OR demo), not FK'd
+  user_id    text not null,   -- plain actor id (real, demo, OR branch guest), not FK'd
   room_id    uuid not null references public.rooms (id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (queue_id, user_id)
@@ -97,6 +97,14 @@ alter table public.room_queue       drop constraint if exists room_queue_added_b
 alter table public.room_queue       add  column     if not exists added_by_name text;
 alter table public.room_track_likes drop constraint if exists room_track_likes_user_id_fkey;
 alter table public.subscriptions    drop constraint if exists subscriptions_account_id_fkey;
+
+-- Branch guest ids ("guest-<uuid>", see lib/rooms/guest-session.ts) are opaque
+-- strings, not real uuids — these columns must be text, not uuid, or a guest's
+-- insert fails with "invalid input syntax for type uuid" before it even reaches
+-- the (already-dropped-above) FK check. Must run after the FK drops above: a
+-- uuid column FK'd to profiles(id uuid) can't change type while the FK stands.
+alter table public.room_queue       alter column added_by type text using added_by::text;
+alter table public.room_track_likes alter column user_id  type text using user_id::text;
 
 -- 8. Security-definer helpers (avoid recursive RLS between rooms/members) -----
 create or replace function public.is_room_host(p_room uuid, p_user uuid)
@@ -178,7 +186,7 @@ create policy "queue_select" on public.room_queue for select using (
 );
 drop policy if exists "queue_insert_member" on public.room_queue;
 create policy "queue_insert_member" on public.room_queue for insert with check (
-  added_by = auth.uid() and public.can_view_room(room_id, auth.uid())
+  added_by = auth.uid()::text and public.can_view_room(room_id, auth.uid())
 );
 drop policy if exists "queue_update_host" on public.room_queue;
 create policy "queue_update_host" on public.room_queue for update using (
@@ -186,7 +194,7 @@ create policy "queue_update_host" on public.room_queue for update using (
 ) with check (public.is_room_host(room_id, auth.uid()));
 drop policy if exists "queue_delete" on public.room_queue;
 create policy "queue_delete" on public.room_queue for delete using (
-  added_by = auth.uid() or public.is_room_host(room_id, auth.uid())
+  added_by = auth.uid()::text or public.is_room_host(room_id, auth.uid())
 );
 
 -- room_track_likes
@@ -196,11 +204,11 @@ create policy "likes_select" on public.room_track_likes for select using (
 );
 drop policy if exists "likes_insert_self" on public.room_track_likes;
 create policy "likes_insert_self" on public.room_track_likes for insert with check (
-  user_id = auth.uid()
+  user_id = auth.uid()::text
 );
 drop policy if exists "likes_delete_self" on public.room_track_likes;
 create policy "likes_delete_self" on public.room_track_likes for delete using (
-  user_id = auth.uid()
+  user_id = auth.uid()::text
 );
 
 -- subscriptions (read your own; the webhook writes via the service-role key)

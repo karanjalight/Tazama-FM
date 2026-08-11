@@ -10,6 +10,7 @@ import {
 } from "@/lib/chats/store";
 import { logPlayAction } from "@/lib/social/actions";
 import { searchUsersByName, type UserSummary } from "@/lib/social/discovery";
+import { onTrackShared, onSharedTrackPlayed } from "@/lib/gamification/store";
 import type { ChatMessage, SendMessageInput } from "@/lib/chats/types";
 
 export async function startDmAction(
@@ -38,7 +39,11 @@ export async function sendMessageAction(
   const profile = await getCurrentProfile();
   if (!profile) return { ok: false };
   const message = await sendMessage(conversationId, profile.id, input);
-  return message ? { ok: true, message } : { ok: false };
+  if (!message) return { ok: false };
+  if (message.kind === "track") {
+    await onTrackShared(profile.id, message.id);
+  }
+  return { ok: true, message };
 }
 
 export async function markReadAction(conversationId: string): Promise<void> {
@@ -49,13 +54,17 @@ export async function markReadAction(conversationId: string): Promise<void> {
 
 /**
  * Called when a shared-track card is played from inside a thread. Logs the
- * play for the listener; Plan 3 extends this to also award the original
- * sender points when they aren't the one playing it.
+ * play for the listener, and awards the original sender points when they
+ * aren't the one playing it.
  */
 export async function trackSharePlayedAction(messageId: string): Promise<void> {
+  const profile = await getCurrentProfile();
   const message = await getMessageById(messageId);
   if (!message || message.kind !== "track" || !message.track) return;
   await logPlayAction(message.track, "chat");
+  if (profile && profile.id !== message.senderId) {
+    await onSharedTrackPlayed(message.senderId, messageId);
+  }
 }
 
 export async function searchUsersAction(query: string): Promise<UserSummary[]> {

@@ -151,6 +151,10 @@ create index if not exists point_events_user_idx on public.point_events (user_id
 -- Dedup guard for Plan 3 (gamification): awarding logic upserts with a
 -- deterministic ref_id (e.g. "<youtubeId>:<day>" for a play, a message id for
 -- a shared-track-played event) so a replay/retry can never double-award.
+-- `if not exists` matches by name only, not definition — drop first so a
+-- database that already has the old (broken, partial) version of this index
+-- actually gets the fixed one on re-run, instead of silently keeping it.
+drop index if exists public.point_events_dedup_idx;
 create unique index if not exists point_events_dedup_idx
   on public.point_events (user_id, event_type, ref_id);
 

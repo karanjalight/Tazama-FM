@@ -24,21 +24,34 @@ create index if not exists play_history_played_at_idx
 
 alter table public.play_history enable row level security;
 
+-- security definer: play_history_select's cross-table check (profiles,
+-- blocked_users) would otherwise be re-filtered by those tables' own RLS
+-- policies inside the subquery — profiles only allows `auth.uid() = id`, so a
+-- plain exists(...) subquery could never see another user's row and the
+-- policy would silently collapse to "only see your own play_history".
+create or replace function public.play_history_is_visible(target_user_id uuid, viewer_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = target_user_id and p.activity_public = true
+  )
+  and not exists (
+    select 1 from public.blocked_users b
+    where (b.blocker_id = viewer_id and b.blocked_id = target_user_id)
+       or (b.blocker_id = target_user_id and b.blocked_id = viewer_id)
+  );
+$$;
+
 drop policy if exists "play_history_select" on public.play_history;
 create policy "play_history_select" on public.play_history
   for select using (
     auth.uid() = user_id
-    or (
-      exists (
-        select 1 from public.profiles p
-        where p.id = play_history.user_id and p.activity_public = true
-      )
-      and not exists (
-        select 1 from public.blocked_users b
-        where (b.blocker_id = auth.uid() and b.blocked_id = play_history.user_id)
-           or (b.blocker_id = play_history.user_id and b.blocked_id = auth.uid())
-      )
-    )
+    or public.play_history_is_visible(play_history.user_id, auth.uid())
   );
 -- No insert/update/delete policy: writes go through the service-role admin
 -- client only, which bypasses RLS entirely.
@@ -109,14 +122,9 @@ create policy "conversations_select_participant" on public.conversations
   );
 
 drop policy if exists "participants_select_participant" on public.conversation_participants;
-create policy "participants_select_participant" on public.conversation_participants
-  for select using (
-    exists (
-      select 1 from public.conversation_participants cp
-      where cp.conversation_id = conversation_participants.conversation_id
-        and cp.user_id = auth.uid()
-    )
-  );
+drop policy if exists "participants_select_own" on public.conversation_participants;
+create policy "participants_select_own" on public.conversation_participants
+  for select using (user_id = auth.uid());
 
 drop policy if exists "messages_select_participant" on public.messages;
 create policy "messages_select_participant" on public.messages
@@ -144,8 +152,7 @@ create index if not exists point_events_user_idx on public.point_events (user_id
 -- deterministic ref_id (e.g. "<youtubeId>:<day>" for a play, a message id for
 -- a shared-track-played event) so a replay/retry can never double-award.
 create unique index if not exists point_events_dedup_idx
-  on public.point_events (user_id, event_type, ref_id)
-  where ref_id is not null;
+  on public.point_events (user_id, event_type, ref_id);
 
 create table if not exists public.user_badges (
   user_id    uuid not null references auth.users (id) on delete cascade,

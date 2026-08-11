@@ -6,9 +6,9 @@ import {
   createGroupConversation,
   sendMessage,
   getMessageById,
+  isParticipant,
   markRead,
 } from "@/lib/chats/store";
-import { logPlayAction } from "@/lib/social/actions";
 import { searchUsersByName, type UserSummary } from "@/lib/social/discovery";
 import { onTrackShared, onSharedTrackPlayed } from "@/lib/gamification/store";
 import type { ChatMessage, SendMessageInput } from "@/lib/chats/types";
@@ -53,16 +53,18 @@ export async function markReadAction(conversationId: string): Promise<void> {
 }
 
 /**
- * Called when a shared-track card is played from inside a thread. Logs the
- * play for the listener, and awards the original sender points when they
- * aren't the one playing it.
+ * Called when a shared-track card is played from inside a thread. The play
+ * itself is already logged by the player's own play() callback (source:
+ * "dashboard") — this only awards the original sender points when someone
+ * else played their shared track.
  */
 export async function trackSharePlayedAction(messageId: string): Promise<void> {
   const profile = await getCurrentProfile();
+  if (!profile) return;
   const message = await getMessageById(messageId);
   if (!message || message.kind !== "track" || !message.track) return;
-  await logPlayAction(message.track, "chat");
-  if (profile && profile.id !== message.senderId) {
+  if (!(await isParticipant(message.conversationId, profile.id))) return;
+  if (profile.id !== message.senderId) {
     await onSharedTrackPlayed(message.senderId, messageId);
   }
 }

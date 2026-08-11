@@ -59,7 +59,7 @@ export async function getSuggestedUsers(
     .limit(500);
   const viewerTrackIds = new Set((viewerPlays ?? []).map((r) => r.youtube_id as string));
 
-  let sharedByUser = new Map<string, number>();
+  const sharedByUser = new Map<string, number>();
   if (viewerTrackIds.size > 0) {
     const candidateIds = pool.map((p) => p.id as string);
     const { data: candidatePlays } = await admin

@@ -19,10 +19,11 @@ async function awardPoints(
 ): Promise<void> {
   const admin = createAdminClient();
   if (!admin) return;
-  await admin.from("point_events").upsert(
+  const { error } = await admin.from("point_events").upsert(
     { user_id: userId, event_type: eventType, points: POINT_VALUES[eventType], ref_id: refId },
     { onConflict: "user_id,event_type,ref_id", ignoreDuplicates: true },
   );
+  if (error) console.error("awardPoints failed", eventType, error);
 }
 
 async function buildBadgeStats(userId: string): Promise<BadgeStats> {
@@ -150,14 +151,35 @@ export interface LeaderboardEntry {
   totalPoints: number;
 }
 
-export async function getLeaderboard(limit = 50): Promise<LeaderboardEntry[]> {
+/** Ids the viewer has blocked, or that have blocked the viewer (either direction). */
+async function hiddenUserIds(viewerId: string): Promise<Set<string>> {
+  const admin = createAdminClient();
+  const hidden = new Set<string>();
+  if (!admin) return hidden;
+
+  const { data } = await admin
+    .from("blocked_users")
+    .select("blocker_id, blocked_id")
+    .or(`blocker_id.eq.${viewerId},blocked_id.eq.${viewerId}`);
+  for (const b of data ?? []) {
+    const blockerId = b.blocker_id as string;
+    const blockedId = b.blocked_id as string;
+    hidden.add(blockerId === viewerId ? blockedId : blockerId);
+  }
+  return hidden;
+}
+
+export async function getLeaderboard(viewerId: string, limit = 50): Promise<LeaderboardEntry[]> {
   const admin = createAdminClient();
   if (!admin) return [];
+
+  const hidden = await hiddenUserIds(viewerId);
 
   const { data: events } = await admin.from("point_events").select("user_id, points").limit(20_000);
   const totals = new Map<string, number>();
   for (const e of events ?? []) {
     const uid = e.user_id as string;
+    if (hidden.has(uid)) continue;
     totals.set(uid, (totals.get(uid) ?? 0) + (e.points as number));
   }
 

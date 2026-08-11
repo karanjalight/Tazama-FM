@@ -29,7 +29,7 @@ export default async function PeoplePage({
   const [suggestions, activity, leaderboard] = await Promise.all([
     getSuggestedUsers(profile.id, profile.genrePreferences),
     listGlobalActivity(profile.id),
-    getLeaderboard(),
+    getLeaderboard(profile.id),
   ]);
 
   return (

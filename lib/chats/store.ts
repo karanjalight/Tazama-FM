@@ -120,7 +120,14 @@ export async function createGroupConversation(
 ): Promise<string | null> {
   const admin = createAdminClient();
   if (!admin) return null;
-  const uniqueIds = [...new Set([creatorId, ...participantIds])];
+  const candidateIds = [...new Set([creatorId, ...participantIds])];
+  const unblocked = await Promise.all(
+    candidateIds.map(async (userId) => {
+      if (userId === creatorId) return userId;
+      return (await isBlockedEitherWay(creatorId, userId)) ? null : userId;
+    }),
+  );
+  const uniqueIds = unblocked.filter((id): id is string => id !== null);
   if (uniqueIds.length < 3) return null;
 
   const { data: conv, error } = await admin

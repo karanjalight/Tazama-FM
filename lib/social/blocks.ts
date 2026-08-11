@@ -31,14 +31,11 @@ export async function isBlockedEitherWay(userA: string, userB: string): Promise<
   const admin = createAdminClient();
   if (!admin) return false;
 
-  const { data } = await admin
-    .from("blocked_users")
-    .select("blocker_id")
-    .or(
-      `and(blocker_id.eq.${userA},blocked_id.eq.${userB}),and(blocker_id.eq.${userB},blocked_id.eq.${userA})`,
-    )
-    .limit(1);
-  return (data?.length ?? 0) > 0;
+  const [oneWay, otherWay] = await Promise.all([
+    admin.from("blocked_users").select("blocker_id").eq("blocker_id", userA).eq("blocked_id", userB).limit(1),
+    admin.from("blocked_users").select("blocker_id").eq("blocker_id", userB).eq("blocked_id", userA).limit(1),
+  ]);
+  return (oneWay.data?.length ?? 0) > 0 || (otherWay.data?.length ?? 0) > 0;
 }
 
 /** Ids the given user has blocked (for a "manage blocks" view; not needed yet, but cheap). */

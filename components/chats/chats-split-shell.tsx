@@ -28,7 +28,7 @@ export function ChatsSplitShell({
   const onThread = pathname !== "/dashboard/chats";
 
   return (
-    <div className="mx-auto flex h-[calc(100svh-8rem)] max-w-5xl">
+    <div className="flex h-[calc(100svh-8rem)]">
       <div
         className={cn(
           "w-full flex-col overflow-y-auto border-r border-border px-4 py-6 md:flex md:w-80 md:shrink-0",

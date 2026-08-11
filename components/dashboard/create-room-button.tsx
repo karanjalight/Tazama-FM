@@ -48,11 +48,18 @@ export function CreateRoomButton({
           setOpen(true);
         }}
         aria-label={iconOnly ? "Create a room" : undefined}
-        className={cn(
-          buttonVariants({ variant: "brand" }),
-          "h-10 w-full justify-start gap-2 rounded-xl px-3 text-[14px]",
-          className,
-        )}
+        className={
+          iconOnly
+            ? cn(
+                "inline-flex items-center justify-center rounded-full bg-brand-strong text-white shadow-lift transition-colors hover:bg-[#a82420]",
+                className,
+              )
+            : cn(
+                buttonVariants({ variant: "brand" }),
+                "h-10 w-full justify-start gap-2 rounded-xl px-3 text-[14px]",
+                className,
+              )
+        }
       >
         <Plus className={iconClassName} />
         {!iconOnly && (children ?? "Create a room")}

@@ -84,8 +84,8 @@ export function MobileBottomNav({
           currentPlan={currentPlan}
           origin={origin}
           iconOnly
-          iconClassName="size-6"
-          className="h-14 w-14 -translate-y-3 justify-center rounded-full p-0 shadow-lift"
+          iconClassName="size-7"
+          className="size-16 -translate-y-4"
         />
       </div>
 

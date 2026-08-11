@@ -24,10 +24,16 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   let viewCount: number | null = null;
 
-  const cached = admin
-    ? (await admin.from("video_stats").select("view_count, fetched_at").eq("youtube_id", youtubeId).maybeSingle())
-        .data
-    : null;
+  let cached: { view_count: number | null; fetched_at: string } | null = null;
+  if (admin) {
+    const { data, error } = await admin
+      .from("video_stats")
+      .select("view_count, fetched_at")
+      .eq("youtube_id", youtubeId)
+      .maybeSingle();
+    if (error) console.error("video_stats read failed", youtubeId, error);
+    else cached = data;
+  }
   const isFresh =
     cached && Date.now() - new Date(cached.fetched_at as string).getTime() < STALE_AFTER_MS;
 

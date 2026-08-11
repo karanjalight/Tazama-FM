@@ -81,9 +81,13 @@ export async function countLikes(videoId: string): Promise<number> {
   const admin = createAdminClient();
   if (!admin || !videoId) return 0;
 
-  const { count } = await admin
+  const { count, error } = await admin
     .from("liked_tracks")
     .select("*", { count: "exact", head: true })
     .eq("video_id", videoId);
+  if (error) {
+    console.error("countLikes failed", videoId, error);
+    return 0;
+  }
   return count ?? 0;
 }

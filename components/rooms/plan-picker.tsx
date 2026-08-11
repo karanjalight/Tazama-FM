@@ -76,7 +76,7 @@ export function PlanPicker({
 
             <div className="shrink-0 text-right">
               <p className="text-lg font-semibold tracking-tight text-foreground">
-                {plan.price === 0 ? "Free" : `$${plan.price}`}
+                {plan.price === 0 ? "Free" : `Ksh ${plan.price}`}
               </p>
               {plan.price > 0 && (
                 <p className="text-[11px] text-muted-foreground">/ month</p>

@@ -267,7 +267,7 @@ export default async function ForBusinessPage() {
 
                 <p className="mt-6 flex items-baseline gap-1.5">
                   <span className="text-5xl font-bold tracking-tight text-foreground">
-                    ${business.price}
+                    Ksh {business.price}
                   </span>
                   <span className="text-muted-foreground">/ month</span>
                 </p>
@@ -300,7 +300,7 @@ export default async function ForBusinessPage() {
                   Get started
                 </a>
                 <p className="mt-3 text-center text-xs text-muted-foreground">
-                  Prefer to listen solo? Individual plans start at $
+                  Prefer to listen solo? Individual plans start at Ksh{" "}
                   {PLANS.individual.price}/mo.
                 </p>
               </div>

@@ -26,6 +26,15 @@ export function planCode(plan: SubscriptionPlan): string | null {
 /**
  * Start a checkout for an account-level subscription. Returns an authorization
  * URL to redirect the browser to, or an error string.
+ *
+ * `currency` is explicit for the same reason as initAiPremiumCheckout: without
+ * it, `amount` is interpreted against the Paystack account's default currency,
+ * not whatever this code assumed. When `code` is set (PAYSTACK_PLAN_* is
+ * configured), Paystack bills the recurring plan's own configured amount —
+ * `amount`/`currency` here are only the fallback for a plan-less one-off charge,
+ * so converting plans.ts's prices to Ksh does NOT by itself change what a
+ * configured recurring plan actually bills. That plan has to be updated (or
+ * recreated) on Paystack's own dashboard to match.
  */
 export async function initSubscriptionCheckout(input: {
   email: string;
@@ -39,7 +48,8 @@ export async function initSubscriptionCheckout(input: {
   const code = planCode(input.plan);
   const body: Record<string, unknown> = {
     email: input.email,
-    amount: Math.round(getPlan(input.plan).price * 100), // cents; plan overrides
+    amount: Math.round(getPlan(input.plan).price * 100), // Ksh subunits; plan overrides
+    currency: "KES",
     callback_url: input.callbackUrl,
     metadata: { account_id: input.accountId, plan: input.plan },
   };

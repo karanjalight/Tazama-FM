@@ -3,14 +3,15 @@
  * every room the account hosts. Pure data, safe on client + server.
  *
  * Paystack plan codes are read from env (server-side, when creating a checkout).
- * Prices are display-only here; the real amount comes from the Paystack plan.
+ * Prices are display-only here; the real amount comes from the Paystack plan
+ * (when PAYSTACK_PLAN_* is configured — see paystack.ts's initSubscriptionCheckout).
  */
 export type SubscriptionPlan = "free" | "individual" | "business";
 
 export interface Plan {
   id: SubscriptionPlan;
   name: string;
-  /** Display price, USD/month. */
+  /** Display price, Ksh/month. */
   price: number;
   /** Max concurrent listeners a room hosted on this plan allows. */
   listenerCap: number;
@@ -40,7 +41,7 @@ export const PLANS: Record<SubscriptionPlan, Plan> = {
   individual: {
     id: "individual",
     name: "Individual",
-    price: 4,
+    price: 60,
     listenerCap: 100,
     minutesCapPerRoom: null,
     tagline: "For hosts who keep the vibe going",
@@ -51,7 +52,7 @@ export const PLANS: Record<SubscriptionPlan, Plan> = {
   business: {
     id: "business",
     name: "Business",
-    price: 10,
+    price: 140,
     listenerCap: 200,
     minutesCapPerRoom: null,
     tagline: "For venues and spaces",

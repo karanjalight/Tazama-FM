@@ -108,7 +108,7 @@ export function SubscriptionsTab({
         <CardHeader>
           <CardTitle>Current plan</CardTitle>
           <CardDescription>
-            {plan.name} — {plan.price > 0 ? `$${plan.price}/mo` : "Free"} ·{" "}
+            {plan.name} — {plan.price > 0 ? `Ksh ${plan.price}/mo` : "Free"} ·{" "}
             {plan.tagline}
           </CardDescription>
           <CardAction>
@@ -145,7 +145,7 @@ export function SubscriptionsTab({
               <CardHeader>
                 <CardTitle>{p.name}</CardTitle>
                 <CardDescription>
-                  ${p.price}/mo · {p.tagline}
+                  Ksh {p.price}/mo · {p.tagline}
                 </CardDescription>
                 <CardAction>
                   <Button

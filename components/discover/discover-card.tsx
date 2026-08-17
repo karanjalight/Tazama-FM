@@ -32,12 +32,15 @@ export function DiscoverCard({
 
   return (
     <section className="relative h-dvh w-full snap-start snap-always">
-      {lead && !isActive && (
+      {lead && (
         <Cover
           title={playlist.title}
           src={lead.thumbnailUrl ?? undefined}
           sizes="100vw"
-          className="absolute inset-0 h-full w-full rounded-none"
+          className={cn(
+            "absolute inset-0 h-full w-full rounded-none transition-opacity duration-300",
+            isActive && "opacity-0",
+          )}
         />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/40" />

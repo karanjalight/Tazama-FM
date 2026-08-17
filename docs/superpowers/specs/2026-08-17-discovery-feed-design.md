@@ -50,12 +50,17 @@ tracks) server-side from `PLAYLIST_TEMPLATES`, shuffled per call, filtered to
 mixes with >=3 tracks. The feed's initial batch is exactly `getDiscovery().playlists`
 (currently capped at 12).
 
-**Infinite scroll**: a new `GET /api/discover/more` route re-runs `getDiscovery()`
-server-side (fresh shuffle) and returns `playlists`. Client calls it once the user
-is within 3 cards of the end of the current batch, appends any mix `id`s not
-already seen this session (a `Set<string>` in the feed's client state), and loops
-back to the top of the newest batch if a call returns nothing new (finite catalog
-— avoids an infinite-fetch loop when everything's been seen).
+**"Infinite" scroll, revised during planning**: `PLAYLIST_TEMPLATES` is a fixed
+list of ~15 templates — there is no way to fetch a genuinely fresh batch the
+server hasn't already shown; a re-shuffled `getDiscovery()` call returns the
+same template `id`s every time, so deduping by `id` against a re-fetch would
+always yield zero new items. Rather than build fetch machinery that can never
+actually produce fresh content, v1 loops the existing SSR-provided batch:
+scrolling past the last card wraps back to the first (client-side, no
+refetch). Each fresh page load of `/dashboard/discover` still gets a newly
+shuffled order/track-selection from `getDiscovery()`, so repetition is only
+visible within one continuous scroll session that runs the full loop. No new
+API route.
 
 ## Playback integration
 
@@ -64,20 +69,34 @@ There is exactly one persistent `YT.Player` iframe app-wide
 The feed cannot spin up per-card video elements — it has to drive that same
 iframe through a new **preview mode** on `PlayerProvider`:
 
-- `enterPreview()` — called once on mounting `/dashboard/discover`. Snapshots
-  `{ track, positionMs, isPlaying }` of whatever's currently loaded (or `null` if
-  nothing was playing).
-- `previewTrack(track)` — called when a card "settles" (see below). Loads the
-  track **muted** (`volume = 0`, restored on commit/exit) via the existing
-  `loadVideoById` plumbing; `PlayerStage` is switched to its visible video mode,
-  filling the card's background.
+- `enterPreview()` — called on mounting `/dashboard/discover`, and again
+  immediately after every `commitPreview()` (so continued swiping after
+  committing stays in preview mode, now snapshotted on the just-committed
+  track). Snapshots `{ track, queue, order, orderPos, positionMs, isPlaying,
+  isMuted }` of whatever's currently loaded (`null` if nothing was playing),
+  and force-mutes.
+- `previewTrack(tracks)` — called when a card "settles" (see below), passed
+  that mix's full track list. Muted-loads `tracks[0]` via the existing
+  `loadVideoById` plumbing; on a fatal per-video error it tries the next track
+  in the same list rather than touching the real queue.
 - `commitPreview(tracks)` — called on tap. Unmutes and calls the existing
   `play(tracks[0], tracks)` (identical semantics to `PlaylistCard`'s onClick
-  elsewhere in the app) — this mix becomes the real queue and now-playing state,
-  persists after the user navigates away from `/dashboard/discover`.
-- `exitPreview()` — called on close (if the user never committed). Unmutes,
-  restores the snapshot from `enterPreview` (or returns to idle/collapsed if
-  there was nothing to restore).
+  elsewhere in the app) — this mix becomes the real queue and now-playing
+  state, persists after the user navigates away from `/dashboard/discover`.
+- `exitPreview()` — called on close (if the user never committed again after
+  a prior commit). Restores the snapshot from `enterPreview` (video, position,
+  play state, mute state), or returns to idle/silent if there was nothing to
+  restore.
+
+**Why this needs a new flag, not the existing `isExpanded`/`videoMode`
+fullscreen mode**: `isExpanded` already means "show the real now-playing
+fullscreen view," which renders `FullscreenPlayer`'s own transport chrome
+(scrubber, skip, etc.) — that would visually fight the feed's own card UI.
+`PlayerStage` gets a new `isPreviewing` flag on the context: the video layer
+becomes visible when `isExpanded || isPreviewing`, but `FullscreenPlayer`
+chrome stays gated on `isExpanded` alone. The feed's own card content renders
+in its own component at a higher z-index than the (z-50) stage, directly
+above the never-reparented iframe — not by moving it.
 
 **Settling / debounce**: cards trigger `previewTrack` only after the scroll-snap
 container fires `scrollend` (or an equivalent debounced ~350ms settle if
@@ -98,8 +117,8 @@ the mix's next track rather than the whole card being skipped.
   the existing `app/dashboard/layout.tsx`, so `PlayerStage` is never remounted.
 - `components/discover/discover-feed.tsx` (client): owns the
   `overflow-y-scroll snap-y snap-mandatory` container (one `h-dvh` section per
-  card), tracks the active index, debounced settle → `previewTrack`, and the
-  infinite-scroll fetch-more trigger.
+  card), tracks the active index, debounced settle → `previewTrack`, and wraps
+  scroll position back to the first card once the user scrolls past the last.
 - `components/discover/discover-card.tsx`: single card — video/cover
   background, title/subtitle, like button (existing `LikesProvider`, same heart
   used dashboard-wide), tap target to commit.

@@ -24,6 +24,16 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const settledRef = React.useRef(-1);
   const timerRef = React.useRef<number | null>(null);
+  // Mirrors currentTrack for previewAt to read live, instead of closing over
+  // it — a setTimeout callback (handleScroll's debounce) captures whichever
+  // previewAt/currentTrack bindings existed at the render where the timer was
+  // armed, permanently. If a commit changes currentTrack before that stale
+  // timer fires, the closure can never see it no matter how long it waits;
+  // only a ref read at call time is guaranteed current.
+  const currentTrackRef = React.useRef(currentTrack);
+  React.useEffect(() => {
+    currentTrackRef.current = currentTrack;
+  });
 
   React.useEffect(() => {
     enterPreview();
@@ -39,7 +49,11 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
       // A commit can land while this card's own settle debounce is still in
       // flight (swipe, then tap commit within SETTLE_MS) — don't let that
       // late timer re-preview (and re-mute) the card the user just committed.
-      if (currentTrack && playlist.tracks.some((t) => t.id === currentTrack.id)) return;
+      // Reads the live ref (see currentTrackRef above), not a closed-over
+      // value, so this stays correct no matter how stale this particular
+      // previewAt closure is by the time it actually runs.
+      const committedTrack = currentTrackRef.current;
+      if (committedTrack && playlist.tracks.some((t) => t.id === committedTrack.id)) return;
       // Re-arm preview mode before loading. enterPreview() is a no-op once
       // already previewing, so this only actually does anything right after a
       // commit — and by the time the user has scrolled to a new settled card
@@ -53,7 +67,7 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
       enterPreview();
       previewTrack(playlist.tracks);
     },
-    [playlists, previewTrack, enterPreview, currentTrack],
+    [playlists, previewTrack, enterPreview],
   );
 
   React.useEffect(() => {
@@ -77,6 +91,15 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
   }
 
   function handleCommit(playlist: DiscoveryPlaylist) {
+    // Cancel any settle timer still in flight for the card being committed —
+    // otherwise it can fire ~SETTLE_MS after this tap and re-preview (mute,
+    // reload to position 0) the track just committed. Always safe: the user
+    // can only commit the card they're currently on, which is exactly the
+    // card any pending timer is resolving toward; the next scroll re-arms it.
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     // Deliberately doesn't re-enter preview mode here (see previewAt's
     // comment) — the committed track just plays, unmuted, until the user
     // actually swipes to browse something else.

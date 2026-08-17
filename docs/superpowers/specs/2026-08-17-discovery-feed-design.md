@@ -54,13 +54,14 @@ mixes with >=3 tracks. The feed's initial batch is exactly `getDiscovery().playl
 list of ~15 templates — there is no way to fetch a genuinely fresh batch the
 server hasn't already shown; a re-shuffled `getDiscovery()` call returns the
 same template `id`s every time, so deduping by `id` against a re-fetch would
-always yield zero new items. Rather than build fetch machinery that can never
-actually produce fresh content, v1 loops the existing SSR-provided batch:
-scrolling past the last card wraps back to the first (client-side, no
-refetch). Each fresh page load of `/dashboard/discover` still gets a newly
-shuffled order/track-selection from `getDiscovery()`, so repetition is only
-visible within one continuous scroll session that runs the full loop. No new
-API route.
+always yield zero new items. A seamless modulo wraparound (scroll position N
+silently maps back to card N-mod-count) needs CSS-scroll-snap content
+duplication tricks to avoid a visible jump — disproportionate for a ~12-15
+item pool. v1 instead appends one synthetic **end-of-feed card** after the
+real mixes: "You've hit today's mixes — tap to start over," which calls
+`scrollTo({ top: 0, behavior: "smooth" })` on tap. Each fresh page load of
+`/dashboard/discover` still gets a newly shuffled order/track-selection from
+`getDiscovery()`. No new API route.
 
 ## Playback integration
 
@@ -72,9 +73,11 @@ iframe through a new **preview mode** on `PlayerProvider`:
 - `enterPreview()` — called on mounting `/dashboard/discover`, and again
   immediately after every `commitPreview()` (so continued swiping after
   committing stays in preview mode, now snapshotted on the just-committed
-  track). Snapshots `{ track, queue, order, orderPos, positionMs, isPlaying,
-  isMuted }` of whatever's currently loaded (`null` if nothing was playing),
-  and force-mutes.
+  track). Snapshots `{ track, positionMs, isPlaying, isMuted }` of whatever's
+  currently loaded (`null` if nothing was playing), and force-mutes. Note
+  `currentTrack`/`queue`/`order`/`orderPos` are never touched by preview
+  mode at all — only the raw iframe (video/position/mute) moves — so there's
+  nothing else to snapshot or restore.
 - `previewTrack(tracks)` — called when a card "settles" (see below), passed
   that mix's full track list. Muted-loads `tracks[0]` via the existing
   `loadVideoById` plumbing; on a fatal per-video error it tries the next track
@@ -117,8 +120,8 @@ the mix's next track rather than the whole card being skipped.
   the existing `app/dashboard/layout.tsx`, so `PlayerStage` is never remounted.
 - `components/discover/discover-feed.tsx` (client): owns the
   `overflow-y-scroll snap-y snap-mandatory` container (one `h-dvh` section per
-  card), tracks the active index, debounced settle → `previewTrack`, and wraps
-  scroll position back to the first card once the user scrolls past the last.
+  card, plus the trailing end-of-feed card), tracks the active index, and
+  debounces settle → `previewTrack`.
 - `components/discover/discover-card.tsx`: single card — video/cover
   background, title/subtitle, like button (existing `LikesProvider`, same heart
   used dashboard-wide), tap target to commit.

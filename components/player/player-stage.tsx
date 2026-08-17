@@ -26,25 +26,27 @@ export function PlayerStage({
   hostRef: React.RefObject<HTMLDivElement | null>;
   stageRootRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { isExpanded } = usePlayer();
+  const { isExpanded, isPreviewing } = usePlayer();
   const reduced = usePrefersReducedMotion();
+  const videoVisible = isExpanded || isPreviewing;
 
-  // Lock background scroll while the fullscreen view is open.
+  // Lock background scroll while the fullscreen view (or a discovery-feed
+  // preview) is open.
   React.useEffect(() => {
-    if (!isExpanded) return;
+    if (!videoVisible) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prev;
     };
-  }, [isExpanded]);
+  }, [videoVisible]);
 
   return (
     <motion.div
       ref={stageRootRef}
-      aria-hidden={!isExpanded}
+      aria-hidden={!videoVisible}
       initial={false}
-      animate={{ opacity: isExpanded ? 1 : 0 }}
+      animate={{ opacity: videoVisible ? 1 : 0 }}
       transition={{ duration: reduced ? 0 : 0.3, ease: EASE }}
       className={cn(
         "fixed inset-0 z-50 bg-black",

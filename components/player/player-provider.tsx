@@ -58,6 +58,10 @@ export interface PlayerContextValue {
   /** Within fullscreen: showing the actual YouTube video (vs. album artwork). */
   videoMode: boolean;
 
+  // ── discovery-feed preview mode ──────────────────────────────────────────
+  /** True while a discovery-feed preview session is active. */
+  isPreviewing: boolean;
+
   // ── endless radio + side queue panel ─────────────────────────────────────
   /** When on, the queue auto-tops-up from the viewer's genres (never stops). */
   autoRadio: boolean;
@@ -83,6 +87,14 @@ export interface PlayerContextValue {
   expand: (opts?: { video?: boolean }) => void;
   collapse: () => void;
   toggleVideo: () => void;
+  /** Snapshot whatever's playing and switch into muted preview mode. */
+  enterPreview: () => void;
+  /** Muted-load a mix's lead track (falls through the list on a fatal error). */
+  previewTrack: (tracks: PlayerTrack[]) => void;
+  /** Unmute and make this mix the real now-playing queue. */
+  commitPreview: (tracks: PlayerTrack[]) => void;
+  /** Leave preview mode, restoring whatever was playing before enterPreview. */
+  exitPreview: () => void;
 }
 
 const PlayerContext = React.createContext<PlayerContextValue | null>(null);
@@ -163,6 +175,20 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   /** Consecutive load errors — guards against looping a fully-dead queue. */
   const errorStreakRef = React.useRef(0);
 
+  // ── discovery-feed preview mode ────────────────────────────────────────
+  // While previewing, the raw iframe is driven directly (muted-loaded per
+  // settled card) WITHOUT touching currentTrack/queue/order/orderPos — so
+  // exiting preview has nothing to restore beyond the iframe itself.
+  const previewingRef = React.useRef(false);
+  const previewTracksRef = React.useRef<PlayerTrack[] | null>(null);
+  const previewTrackIdxRef = React.useRef(0);
+  const previewSnapshotRef = React.useRef<{
+    track: PlayerTrack;
+    positionMs: number;
+    isPlaying: boolean;
+    isMuted: boolean;
+  } | null>(null);
+
   // now playing
   const [currentTrack, setCurrentTrack] = React.useState<PlayerTrack | null>(
     null,
@@ -189,6 +215,9 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // fullscreen / video view
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [videoMode, setVideoMode] = React.useState(false);
+
+  // discovery-feed preview mode (mirrors previewingRef for consumers)
+  const [isPreviewing, setIsPreviewingState] = React.useState(false);
 
   // endless radio + side queue panel
   const [autoRadio, setAutoRadio] = React.useState(true);
@@ -440,6 +469,83 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [playOrderPos],
   );
 
+  // ── discovery-feed preview mode ────────────────────────────────────────
+  const setPreviewing = React.useCallback((v: boolean) => {
+    previewingRef.current = v;
+    setIsPreviewingState(v);
+  }, []);
+
+  /** Snapshot whatever's playing and switch into muted preview mode. */
+  const enterPreview = React.useCallback(() => {
+    if (previewingRef.current) return;
+    const { currentTrack, isPlaying, isMuted } = latest.current;
+    previewSnapshotRef.current = currentTrack
+      ? {
+          track: currentTrack,
+          positionMs: playerRef.current?.getCurrentTime()
+            ? playerRef.current.getCurrentTime() * 1000
+            : 0,
+          isPlaying,
+          isMuted,
+        }
+      : null;
+    setPreviewing(true);
+    if (!latest.current.isMuted) {
+      setIsMuted(true);
+      playerRef.current?.mute();
+    }
+  }, [setPreviewing]);
+
+  /** Muted-load a mix's lead track. Falls through the list on a fatal error. */
+  const previewTrack = React.useCallback(
+    (tracks: PlayerTrack[]) => {
+      if (!previewingRef.current || tracks.length === 0) return;
+      previewTracksRef.current = tracks;
+      previewTrackIdxRef.current = 0;
+      commandLoad(tracks[0].youtubeId);
+    },
+    [commandLoad],
+  );
+
+  /** Unmute and make this mix the real now-playing queue. */
+  const commitPreview = React.useCallback(
+    (tracks: PlayerTrack[]) => {
+      if (tracks.length === 0) return;
+      setPreviewing(false);
+      previewTracksRef.current = null;
+      previewSnapshotRef.current = null;
+      setIsMuted(false);
+      playerRef.current?.unMute();
+      play(tracks[0], tracks);
+    },
+    [play, setPreviewing],
+  );
+
+  /** Leave preview mode, restoring whatever was playing before enterPreview. */
+  const exitPreview = React.useCallback(() => {
+    if (!previewingRef.current) return;
+    setPreviewing(false);
+    previewTracksRef.current = null;
+    const snap = previewSnapshotRef.current;
+    previewSnapshotRef.current = null;
+    const p = playerRef.current;
+
+    if (!snap) {
+      setIsMuted(false);
+      p?.pauseVideo();
+      p?.unMute();
+      return;
+    }
+
+    commandLoad(snap.track.youtubeId);
+    p?.seekTo(snap.positionMs / 1000, true);
+    if (!snap.isPlaying) p?.pauseVideo();
+    setIsMuted(snap.isMuted);
+    if (snap.isMuted) p?.mute();
+    else p?.unMute();
+    setPositionMs(snap.positionMs);
+  }, [commandLoad, setPreviewing]);
+
   // ── create the single, persistent player once the API is available ────────
   React.useEffect(() => {
     let cancelled = false;
@@ -494,6 +600,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
               setIsPlaying(false);
               setIsBuffering(false);
             } else if (s === YT_STATE.ENDED) {
+              if (previewingRef.current) {
+                // Loop the muted preview in place — never touch the real queue.
+                e.target.seekTo(0, true);
+                e.target.playVideo();
+                return;
+              }
               setIsPlaying(false);
               setIsBuffering(false);
               const { repeat, order, orderPos } = latest.current;
@@ -509,8 +621,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (d > 0) setDurationMs(d * 1000);
           },
           onError: (e) => {
+            if (!YT_FATAL_ERRORS.has(e.data)) return;
+
+            if (previewingRef.current) {
+              const tracks = previewTracksRef.current;
+              const idx = previewTrackIdxRef.current;
+              const failed = tracks?.[idx];
+              if (failed) reportUnplayable(failed.youtubeId);
+              const nextIdx = idx + 1;
+              if (tracks && nextIdx < tracks.length) {
+                previewTrackIdxRef.current = nextIdx;
+                commandLoad(tracks[nextIdx].youtubeId);
+              }
+              return;
+            }
+
             const track = latest.current.currentTrack;
-            if (!YT_FATAL_ERRORS.has(e.data) || !track) return;
+            if (!track) return;
 
             reportUnplayable(track.youtubeId); // silent
             errorStreakRef.current += 1;
@@ -532,7 +659,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
     // Stable callbacks only — the player is created exactly once.
-  }, [advanceTo]);
+  }, [advanceTo, commandLoad]);
 
   // ── hydrate persisted prefs after mount (avoids SSR hydration mismatch) ────
   React.useEffect(() => {
@@ -652,6 +779,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       expand,
       collapse,
       toggleVideo,
+      isPreviewing,
+      enterPreview,
+      previewTrack,
+      commitPreview,
+      exitPreview,
     }),
     [
       currentTrack,
@@ -686,6 +818,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       expand,
       collapse,
       toggleVideo,
+      isPreviewing,
+      enterPreview,
+      previewTrack,
+      commitPreview,
+      exitPreview,
     ],
   );
 

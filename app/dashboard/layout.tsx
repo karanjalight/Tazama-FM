@@ -90,11 +90,7 @@ export default async function DashboardLayout({
 
         <NowPlayingBar />
         <NowPlayingPanel />
-        <MobileBottomNav
-          accountType={profile.accountType}
-          currentPlan={currentPlan}
-          origin={origin}
-        />
+        <MobileBottomNav />
       </div>
       </NotificationProvider>
     </PlayerProvider>

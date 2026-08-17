@@ -11,14 +11,18 @@ import type { DiscoveryPlaylist } from "@/lib/discovery";
 /**
  * One full-screen card in the discovery feed. The actual muted/committed
  * video comes from the app's single shared YouTube iframe (rendered by
- * PlayerStage, fixed above everything) — this card only renders the poster
- * fallback plus its own text/like/tap chrome on top of it.
+ * PlayerStage, fixed one z-index below this feed) — this card only renders
+ * text/like/tap chrome on top of it, plus a poster fallback that's hidden
+ * while this card is the active (previewing or committed) one, so the real
+ * video shows through instead of being permanently covered.
  */
 export function DiscoverCard({
   playlist,
+  isActive,
   onCommit,
 }: {
   playlist: DiscoveryPlaylist;
+  isActive: boolean;
   onCommit: () => void;
 }) {
   const { currentTrack, isPlaying } = usePlayer();
@@ -28,7 +32,7 @@ export function DiscoverCard({
 
   return (
     <section className="relative h-dvh w-full snap-start snap-always">
-      {lead && (
+      {lead && !isActive && (
         <Cover
           title={playlist.title}
           src={lead.thumbnailUrl ?? undefined}

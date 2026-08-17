@@ -490,10 +490,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         }
       : null;
     setPreviewing(true);
-    if (!latest.current.isMuted) {
-      setIsMuted(true);
-      playerRef.current?.mute();
-    }
+    // Mute the raw player directly — NOT the persisted `isMuted` preference.
+    // Preview is forced-muted by design regardless of the user's real mute
+    // setting, and that forcing must never leak into `tz.player.prefs`: if
+    // the tab is killed/crashes mid-preview (skipping exitPreview/
+    // commitPreview below), a persisted `isMuted: true` would silently mute
+    // the whole app on next launch with no visible cause. `mute()` is
+    // idempotent, so calling it even when already muted is harmless.
+    playerRef.current?.mute();
   }, [setPreviewing]);
 
   /** Muted-load a mix's lead track. Falls through the list on a fatal error. */
@@ -531,16 +535,40 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const p = playerRef.current;
 
     if (!snap) {
-      setIsMuted(false);
+      // Nothing to restore — leave the raw player paused and synced back to
+      // whatever the real (untouched-by-preview) `isMuted` preference already
+      // is, rather than forcing it to a hardcoded value.
       p?.pauseVideo();
-      p?.unMute();
+      if (latest.current.isMuted) p?.mute();
+      else p?.unMute();
       return;
     }
 
-    commandLoad(snap.track.youtubeId);
-    p?.seekTo(snap.positionMs / 1000, true);
-    if (!snap.isPlaying) p?.pauseVideo();
-    setIsMuted(snap.isMuted);
+    if (snap.isPlaying) {
+      commandLoad(snap.track.youtubeId); // loadVideoById autoplays — matches the restored state
+      p?.seekTo(snap.positionMs / 1000, true);
+    } else {
+      // cueVideoById loads without autoplaying. Going through commandLoad
+      // (loadVideoById, which DOES autoplay) and then immediately calling
+      // pauseVideo() is a known YouTube IFrame API race — the pause commonly
+      // gets swallowed while the video is still cueing, so a paused-before-
+      // preview track would resume playing after this restore. Cueing
+      // instead sidesteps that race entirely: a cued video is never playing,
+      // so there's no redundant pauseVideo() call needed here either.
+      //
+      // The start position is passed straight into cueVideoById rather than
+      // a follow-up seekTo() call — cueVideoById is itself async (it fetches
+      // video info before the player is actually seekable), so a separate
+      // seekTo() issued right after it hits the exact same kind of race:
+      // the seek silently gets dropped and the restored track ends up back
+      // at position 0. Passing startSeconds as part of the same command is
+      // the API's built-in, race-free way to cue at a position.
+      p?.cueVideoById(snap.track.youtubeId, snap.positionMs / 1000);
+    }
+    // Restore the raw player's mute state directly — the real `isMuted`
+    // preference was never touched by preview (see enterPreview), so it's
+    // already correct; only the iframe itself needs to be brought back in
+    // sync with it.
     if (snap.isMuted) p?.mute();
     else p?.unMute();
     setPositionMs(snap.positionMs);
@@ -736,6 +764,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!isPlaying) return;
     const id = window.setInterval(() => {
+      // onStateChange sets `isPlaying` true for preview loads too, so this
+      // effect keeps running while previewing. Skip the writes in that case —
+      // `positionMs` feeds the context's useMemo deps, so every tick would
+      // otherwise produce a new context value and re-render every
+      // usePlayer() consumer (every mounted DiscoverCard included) during the
+      // exact swipe interaction the discovery feed exists for.
+      if (previewingRef.current) return;
       const p = playerRef.current;
       if (!p) return;
       setPositionMs(p.getCurrentTime() * 1000);

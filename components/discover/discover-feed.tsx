@@ -19,19 +19,15 @@ const SETTLE_MS = 350;
  */
 export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) {
   const router = useRouter();
-  const { enterPreview, exitPreview, previewTrack, commitPreview } = usePlayer();
+  const { enterPreview, exitPreview, previewTrack, commitPreview, currentTrack } = usePlayer();
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const settledRef = React.useRef(-1);
   const timerRef = React.useRef<number | null>(null);
-  const mountedRef = React.useRef(true);
 
   React.useEffect(() => {
     enterPreview();
-    return () => {
-      mountedRef.current = false;
-      exitPreview();
-    };
+    return () => exitPreview();
   }, [enterPreview, exitPreview]);
 
   const previewAt = React.useCallback(
@@ -40,9 +36,24 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
       settledRef.current = index;
       const playlist = playlists[index];
       if (!playlist) return; // the trailing end-of-feed card has nothing to preview
+      // A commit can land while this card's own settle debounce is still in
+      // flight (swipe, then tap commit within SETTLE_MS) — don't let that
+      // late timer re-preview (and re-mute) the card the user just committed.
+      if (currentTrack && playlist.tracks.some((t) => t.id === currentTrack.id)) return;
+      // Re-arm preview mode before loading. enterPreview() is a no-op once
+      // already previewing, so this only actually does anything right after a
+      // commit — and by the time the user has scrolled to a new settled card
+      // (hundreds of ms later, never in the same tick as commitPreview), the
+      // snapshot it takes is genuinely fresh: the committed track's real
+      // position/isPlaying/isMuted, not a stale pre-commit read. Until the
+      // user swipes again, the committed track is left untouched and keeps
+      // playing unmuted — closing the feed without swiping never re-enters
+      // preview mode at all, so exitPreview() correctly no-ops instead of
+      // pausing something that was never handed off to it.
+      enterPreview();
       previewTrack(playlist.tracks);
     },
-    [playlists, previewTrack],
+    [playlists, previewTrack, enterPreview, currentTrack],
   );
 
   React.useEffect(() => {
@@ -66,15 +77,10 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
   }
 
   function handleCommit(playlist: DiscoveryPlaylist) {
+    // Deliberately doesn't re-enter preview mode here (see previewAt's
+    // comment) — the committed track just plays, unmuted, until the user
+    // actually swipes to browse something else.
     commitPreview(playlist.tracks);
-    // PlayerProvider's `latest` ref mirror (which enterPreview snapshots from)
-    // only catches up with commitPreview's state updates after this render
-    // commits — calling enterPreview synchronously here would re-snapshot the
-    // stale pre-commit track and mute state. Deferring a tick lets it settle
-    // so the just-committed track is what gets restored on exitPreview.
-    window.setTimeout(() => {
-      if (mountedRef.current) enterPreview();
-    }, 0);
   }
 
   function restart() {

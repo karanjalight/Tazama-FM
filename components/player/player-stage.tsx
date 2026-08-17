@@ -26,9 +26,14 @@ export function PlayerStage({
   hostRef: React.RefObject<HTMLDivElement | null>;
   stageRootRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { isExpanded, isPreviewing } = usePlayer();
+  const { isExpanded, isDiscoverSession } = usePlayer();
   const reduced = usePrefersReducedMotion();
-  const videoVisible = isExpanded || isPreviewing;
+  // isDiscoverSession stays true for the whole time a discover session is
+  // open — muted-previewing or committed alike — unlike isPreviewing, which
+  // flips false the instant a card is committed. Using isPreviewing here
+  // would fade the stage to invisible the moment the user taps to commit,
+  // even though the card they're looking at is still meant to show video.
+  const videoVisible = isExpanded || isDiscoverSession;
 
   // Lock background scroll while the fullscreen view (or a discovery-feed
   // preview) is open.

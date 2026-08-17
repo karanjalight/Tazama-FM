@@ -89,18 +89,29 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
     }, SETTLE_MS);
   }
 
-  function handleCommit(playlist: DiscoveryPlaylist) {
-    // Cancel any settle timer still in flight for the card being committed —
-    // otherwise it can fire ~SETTLE_MS after this tap and re-preview (mute,
-    // reload to position 0) the track just committed. This synchronous
-    // cancellation is the whole fix: it runs in the same tick as the tap,
-    // strictly before the timer could ever fire, so there's no remaining
-    // window for a stale settle to land after a commit — previewAt no longer
-    // needs (or has) a separate committed-track guard for this.
+  function handleCommit(playlist: DiscoveryPlaylist, index: number) {
+    // Cancel any settle timer already in flight for the card being
+    // committed — otherwise it can fire ~SETTLE_MS after this tap and
+    // re-preview (mute, reload to position 0) the track just committed.
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
       timerRef.current = null;
     }
+    // Also directly mark this index as settled — cancelling the CURRENT
+    // timer only covers a timer that's already armed at the moment of the
+    // tap. Flicking onto a card and tapping commit within SETTLE_MS, before
+    // that card's own scroll-snap settle has ever fired once, means no
+    // timer exists yet to cancel; scroll-snap's settling animation can
+    // still dispatch scroll events after this tap, arming a NEW timer via
+    // handleScroll that this clearTimeout above never sees. ~350ms later
+    // that new timer would resolve to this same index with settledRef
+    // still pointing at the PREVIOUS card, and previewAt would proceed to
+    // re-mute/reload the track just committed. Setting settledRef (and the
+    // matching activeIndex, so the poster doesn't lag) here means any timer
+    // that later resolves to this index — no matter when it fires — hits
+    // previewAt's existing `settledRef.current === index` early return.
+    settledRef.current = index;
+    setActiveIndex(index);
     // Deliberately doesn't re-enter preview mode here (see previewAt's
     // comment) — the committed track just plays, unmuted, until the user
     // actually swipes to browse something else.
@@ -151,7 +162,7 @@ export function DiscoverFeed({ playlists }: { playlists: DiscoveryPlaylist[] }) 
             key={playlist.id}
             playlist={playlist}
             isActive={index === activeIndex}
-            onCommit={() => handleCommit(playlist)}
+            onCommit={() => handleCommit(playlist, index)}
           />
         ))}
 

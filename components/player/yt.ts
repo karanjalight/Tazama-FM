@@ -7,8 +7,24 @@
  */
 
 export type YTPlayer = {
-  loadVideoById: (id: string) => void;
-  cueVideoById: (id: string) => void;
+  /**
+   * `startSeconds` should be passed here rather than via a follow-up
+   * `seekTo()` call — loadVideoById is itself async, so a separate seekTo()
+   * issued right after it can race the load and get silently dropped,
+   * leaving a restored "was playing" track back at position 0. Passing the
+   * start position as part of the same load command is race-free.
+   */
+  loadVideoById: (id: string, startSeconds?: number) => void;
+  /**
+   * `startSeconds` should be passed here rather than via a follow-up
+   * `seekTo()` call — cueVideoById is async (it fetches video info before
+   * the player is actually seekable), so a separate seekTo() issued right
+   * after it races the cueing exactly like pauseVideo() races
+   * loadVideoById(), and the seek silently gets dropped. Passing the start
+   * position as part of the same cue command is the API's built-in,
+   * race-free way to cue-at-a-position.
+   */
+  cueVideoById: (id: string, startSeconds?: number) => void;
   playVideo: () => void;
   pauseVideo: () => void;
   stopVideo: () => void;

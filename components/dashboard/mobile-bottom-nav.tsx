@@ -2,13 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { House, MessageCircle, Search, Sparkles, type LucideIcon } from "lucide-react";
+import { Compass, House, Library, MessageCircle, Search, type LucideIcon } from "lucide-react";
 
-import { CreateRoomButton } from "@/components/dashboard/create-room-button";
 import { useChatsUnreadCount } from "@/components/notifications/notification-provider";
 import { cn } from "@/lib/utils";
-import type { AccountType } from "@/components/auth/account-type-toggle";
-import type { SubscriptionPlan } from "@/lib/billing/plans";
 
 interface Item {
   label: string;
@@ -22,7 +19,7 @@ const BEFORE: Item[] = [
   { label: "Search", href: "/dashboard/search", icon: Search },
 ];
 const AFTER: Item[] = [
-  { label: "AI Chat", href: "/dashboard/chat", icon: Sparkles },
+  { label: "Library", href: "/dashboard/library", icon: Library },
   { label: "Chats", href: "/dashboard/chats", icon: MessageCircle },
 ];
 
@@ -65,21 +62,17 @@ function NavLink({ item, active, badge }: { item: Item; active: boolean; badge?:
 /**
  * 5-item quick-access bar for mobile, complementing (not replacing) the
  * hamburger drawer's full nav. The middle slot is the app's one sanctioned
- * brand-red action — "Create a room" — rendered as an elevated circular FAB
- * that pops above the bar, matching the tab-bar-with-center-action pattern
- * (TikTok's "+", Instagram's post button).
+ * brand-red action — into the TikTok-style discovery feed — rendered as an
+ * elevated circular FAB that pops above the bar, matching the
+ * tab-bar-with-center-action pattern (TikTok's "+", Instagram's post button).
+ * Hidden entirely on /dashboard/discover, which is its own full-screen
+ * takeover with its own close control.
  */
-export function MobileBottomNav({
-  accountType,
-  currentPlan,
-  origin,
-}: {
-  accountType: AccountType | null;
-  currentPlan: SubscriptionPlan;
-  origin: string;
-}) {
+export function MobileBottomNav() {
   const pathname = usePathname() ?? "";
   const unreadChats = useChatsUnreadCount();
+
+  if (pathname.startsWith("/dashboard/discover")) return null;
 
   return (
     <nav
@@ -91,14 +84,13 @@ export function MobileBottomNav({
       ))}
 
       <div className="flex flex-1 justify-center">
-        <CreateRoomButton
-          accountType={accountType}
-          currentPlan={currentPlan}
-          origin={origin}
-          iconOnly
-          iconClassName="size-7"
-          className="size-16 -translate-y-4"
-        />
+        <Link
+          href="/dashboard/discover"
+          aria-label="Discover playlists"
+          className="inline-flex size-16 -translate-y-4 items-center justify-center rounded-full bg-brand-strong text-white shadow-lift transition-colors hover:bg-[#a82420]"
+        >
+          <Compass className="size-7" />
+        </Link>
       </div>
 
       {AFTER.map((item) => (

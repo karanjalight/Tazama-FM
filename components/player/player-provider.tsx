@@ -58,6 +58,18 @@ export interface PlayerContextValue {
   /** Within fullscreen: showing the actual YouTube video (vs. album artwork). */
   videoMode: boolean;
 
+  // ── discovery-feed preview mode ──────────────────────────────────────────
+  /** True while a discovery-feed preview session is active. */
+  isPreviewing: boolean;
+  /**
+   * True for the whole time a discover session is open — from enterPreview
+   * until exitPreview — regardless of whether the currently-active card is
+   * muted-previewing or has been committed (isPreviewing goes false on
+   * commit; this does not). Drives PlayerStage's video visibility so the
+   * shared iframe doesn't fade away the instant a card is committed.
+   */
+  isDiscoverSession: boolean;
+
   // ── endless radio + side queue panel ─────────────────────────────────────
   /** When on, the queue auto-tops-up from the viewer's genres (never stops). */
   autoRadio: boolean;
@@ -83,6 +95,14 @@ export interface PlayerContextValue {
   expand: (opts?: { video?: boolean }) => void;
   collapse: () => void;
   toggleVideo: () => void;
+  /** Snapshot whatever's playing and switch into muted preview mode. */
+  enterPreview: () => void;
+  /** Muted-load a mix's lead track (falls through the list on a fatal error). */
+  previewTrack: (tracks: PlayerTrack[]) => void;
+  /** Unmute and make this mix the real now-playing queue. */
+  commitPreview: (tracks: PlayerTrack[]) => void;
+  /** Leave preview mode, restoring whatever was playing before enterPreview. */
+  exitPreview: () => void;
 }
 
 const PlayerContext = React.createContext<PlayerContextValue | null>(null);
@@ -159,9 +179,37 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const stageRootRef = React.useRef<HTMLDivElement | null>(null);
   const playerRef = React.useRef<YTPlayer | null>(null);
   const readyRef = React.useRef(false);
-  const pendingRef = React.useRef<string | null>(null);
+  const pendingRef = React.useRef<{
+    youtubeId: string;
+    startSeconds?: number;
+  } | null>(null);
   /** Consecutive load errors — guards against looping a fully-dead queue. */
   const errorStreakRef = React.useRef(0);
+
+  // ── discovery-feed preview mode ────────────────────────────────────────
+  // While previewing, the raw iframe is driven directly (muted-loaded per
+  // settled card) WITHOUT touching currentTrack/queue/order/orderPos — so
+  // exiting preview has nothing to restore beyond the iframe itself.
+  const previewingRef = React.useRef(false);
+  const previewTracksRef = React.useRef<PlayerTrack[] | null>(null);
+  const previewTrackIdxRef = React.useRef(0);
+  const previewSnapshotRef = React.useRef<{
+    track: PlayerTrack;
+    positionMs: number;
+    isPlaying: boolean;
+    isMuted: boolean;
+  } | null>(null);
+  // Distinct from previewingRef above: previewingRef legitimately flips to
+  // false the instant a card is committed (so the YT event callbacks — the
+  // ENDED/onError guards below — correctly treat a committed track like
+  // normal playback, e.g. advancing the real queue when it ends, rather
+  // than looping it like a muted preview). But the discover feed itself is
+  // still mounted and its full-screen surface still needs the shared
+  // iframe visible for as long as ANY card — previewing OR committed — is
+  // the thing occupying that surface. discoverSessionRef tracks that
+  // broader span instead: set by enterPreview, cleared only by exitPreview
+  // (never by commitPreview) — see PlayerStage, the only consumer.
+  const discoverSessionRef = React.useRef(false);
 
   // now playing
   const [currentTrack, setCurrentTrack] = React.useState<PlayerTrack | null>(
@@ -189,6 +237,11 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   // fullscreen / video view
   const [isExpanded, setIsExpanded] = React.useState(false);
   const [videoMode, setVideoMode] = React.useState(false);
+
+  // discovery-feed preview mode (mirrors previewingRef for consumers)
+  const [isPreviewing, setIsPreviewingState] = React.useState(false);
+  // mirrors discoverSessionRef for consumers (see its declaration above)
+  const [isDiscoverSession, setIsDiscoverSession] = React.useState(false);
 
   // endless radio + side queue panel
   const [autoRadio, setAutoRadio] = React.useState(true);
@@ -238,14 +291,24 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [order, orderPos, queue]);
 
   // ── low-level: hand a videoId to the player (or queue it until ready) ──────
-  const commandLoad = React.useCallback((youtubeId: string) => {
-    const p = playerRef.current;
-    if (readyRef.current && p) {
-      p.loadVideoById(youtubeId); // autoplays
-    } else {
-      pendingRef.current = youtubeId; // play as soon as onReady fires
-    }
-  }, []);
+  /**
+   * `startSeconds` goes straight into `loadVideoById`, same reasoning as
+   * `cueVideoById` below: loadVideoById is itself async, so a follow-up
+   * seekTo() issued right after it races the load and can get silently
+   * dropped, leaving a restored "was playing" track back at position 0.
+   * Passing the position as part of the same load command is race-free.
+   */
+  const commandLoad = React.useCallback(
+    (youtubeId: string, startSeconds?: number) => {
+      const p = playerRef.current;
+      if (readyRef.current && p) {
+        p.loadVideoById(youtubeId, startSeconds); // autoplays
+      } else {
+        pendingRef.current = { youtubeId, startSeconds }; // apply as soon as onReady fires
+      }
+    },
+    [],
+  );
 
   // ── play the track at a given play-order position ─────────────────────────
   const playOrderPos = React.useCallback(
@@ -440,6 +503,134 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     [playOrderPos],
   );
 
+  // ── discovery-feed preview mode ────────────────────────────────────────
+  const setPreviewing = React.useCallback((v: boolean) => {
+    previewingRef.current = v;
+    setIsPreviewingState(v);
+  }, []);
+
+  /** Snapshot whatever's playing and switch into muted preview mode. */
+  const enterPreview = React.useCallback(() => {
+    if (previewingRef.current) return;
+    const { currentTrack, isPlaying, isMuted } = latest.current;
+    previewSnapshotRef.current = currentTrack
+      ? {
+          track: currentTrack,
+          positionMs: playerRef.current?.getCurrentTime()
+            ? playerRef.current.getCurrentTime() * 1000
+            : 0,
+          isPlaying,
+          isMuted,
+        }
+      : null;
+    setPreviewing(true);
+    // Marks the start of a discover session (see discoverSessionRef's
+    // declaration) — deliberately NOT paired with setPreviewing/previewingRef:
+    // this flag stays true through a commit and is only cleared by
+    // exitPreview, so PlayerStage keeps the video surface visible for the
+    // whole time a discover card — previewing or committed — is on screen.
+    discoverSessionRef.current = true;
+    setIsDiscoverSession(true);
+    // Mute the raw player directly — NOT the persisted `isMuted` preference.
+    // Preview is forced-muted by design regardless of the user's real mute
+    // setting, and that forcing must never leak into `tz.player.prefs`: if
+    // the tab is killed/crashes mid-preview (skipping exitPreview/
+    // commitPreview below), a persisted `isMuted: true` would silently mute
+    // the whole app on next launch with no visible cause. `mute()` is
+    // idempotent, so calling it even when already muted is harmless.
+    playerRef.current?.mute();
+  }, [setPreviewing]);
+
+  /** Muted-load a mix's lead track. Falls through the list on a fatal error. */
+  const previewTrack = React.useCallback(
+    (tracks: PlayerTrack[]) => {
+      if (!previewingRef.current || tracks.length === 0) return;
+      previewTracksRef.current = tracks;
+      previewTrackIdxRef.current = 0;
+      commandLoad(tracks[0].youtubeId);
+    },
+    [commandLoad],
+  );
+
+  /** Unmute and make this mix the real now-playing queue. */
+  const commitPreview = React.useCallback(
+    (tracks: PlayerTrack[]) => {
+      if (tracks.length === 0) return;
+      setPreviewing(false);
+      previewTracksRef.current = null;
+      previewSnapshotRef.current = null;
+      setIsMuted(false);
+      playerRef.current?.unMute();
+      play(tracks[0], tracks);
+    },
+    [play, setPreviewing],
+  );
+
+  /** Leave preview mode, restoring whatever was playing before enterPreview. */
+  const exitPreview = React.useCallback(() => {
+    // Always clear the discover-session flag when exitPreview is called —
+    // its only caller is the discover feed's own unmount cleanup, so this
+    // unconditionally marks "the discover session has ended" regardless of
+    // whether previewingRef also happens to be true at this exact moment.
+    // A commit made just before closing (without swiping again afterward)
+    // already flips previewingRef false on its own — see the early return
+    // right below — but the discover session, and therefore the stage's
+    // visibility, must still end here either way.
+    discoverSessionRef.current = false;
+    setIsDiscoverSession(false);
+
+    if (!previewingRef.current) return;
+    setPreviewing(false);
+    previewTracksRef.current = null;
+    const snap = previewSnapshotRef.current;
+    previewSnapshotRef.current = null;
+    const p = playerRef.current;
+
+    if (!snap) {
+      // Nothing to restore — leave the raw player paused and synced back to
+      // whatever the real (untouched-by-preview) `isMuted` preference already
+      // is, rather than forcing it to a hardcoded value.
+      p?.pauseVideo();
+      if (latest.current.isMuted) p?.mute();
+      else p?.unMute();
+      return;
+    }
+
+    if (snap.isPlaying) {
+      // The start position goes straight into commandLoad/loadVideoById —
+      // not a follow-up seekTo() — for the same reason as the cueVideoById
+      // branch below: loadVideoById is itself async, so a separate seekTo()
+      // issued right after it races the load and can get silently dropped,
+      // restoring a "was playing" track back at position 0 instead of where
+      // it actually was.
+      commandLoad(snap.track.youtubeId, snap.positionMs / 1000); // autoplays — matches the restored state
+    } else {
+      // cueVideoById loads without autoplaying. Going through commandLoad
+      // (loadVideoById, which DOES autoplay) and then immediately calling
+      // pauseVideo() is a known YouTube IFrame API race — the pause commonly
+      // gets swallowed while the video is still cueing, so a paused-before-
+      // preview track would resume playing after this restore. Cueing
+      // instead sidesteps that race entirely: a cued video is never playing,
+      // so there's no redundant pauseVideo() call needed here either.
+      //
+      // The start position is passed straight into cueVideoById rather than
+      // a follow-up seekTo() call — cueVideoById is itself async (it fetches
+      // video info before the player is actually seekable), so a separate
+      // seekTo() issued right after it hits the exact same kind of race:
+      // the seek silently gets dropped and the restored track ends up back
+      // at position 0. Passing startSeconds as part of the same command is
+      // the API's built-in, race-free way to cue at a position.
+      p?.cueVideoById(snap.track.youtubeId, snap.positionMs / 1000);
+    }
+    // Restore the raw player's mute state directly — the real `isMuted`
+    // preference was never touched by preview (see enterPreview), so it's
+    // already correct; only the iframe itself needs to be brought back in
+    // sync with it.
+    if (snap.isMuted) p?.mute();
+    else p?.unMute();
+    setPositionMs(snap.positionMs);
+  }, [commandLoad, setPreviewing]);
+
   // ── create the single, persistent player once the API is available ────────
   React.useEffect(() => {
     let cancelled = false;
@@ -475,10 +666,19 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             }
             // Apply hydrated audio prefs to the fresh player.
             e.target.setVolume(latest.current.volume);
-            if (latest.current.isMuted) e.target.mute();
+            // Mute for the user's real preference OR because a preview is
+            // already mid-flight and just hasn't had a live player to mute
+            // yet: enterPreview()'s mute() call is a no-op/dropped call
+            // when playerRef.current was still null (YT script still
+            // loading) — without also checking previewingRef here, a
+            // preview triggered before the player finished booting would
+            // load and autoplay unmuted, at full volume.
+            if (latest.current.isMuted || previewingRef.current) {
+              e.target.mute();
+            }
             const queued = pendingRef.current;
             if (queued) {
-              e.target.loadVideoById(queued);
+              e.target.loadVideoById(queued.youtubeId, queued.startSeconds);
               pendingRef.current = null;
             }
           },
@@ -493,7 +693,22 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             } else if (s === YT_STATE.PAUSED) {
               setIsPlaying(false);
               setIsBuffering(false);
+            } else if (s === YT_STATE.CUED) {
+              // cueVideoById (used to restore a paused-before-preview track
+              // without racing the cue, see exitPreview) fires CUED/
+              // UNSTARTED, never PAUSED — without this branch, `isPlaying`
+              // would stay stuck at whatever it was during the preview that
+              // was just torn down, showing a "pause" control for a track
+              // that isn't actually playing.
+              setIsPlaying(false);
+              setIsBuffering(false);
             } else if (s === YT_STATE.ENDED) {
+              if (previewingRef.current) {
+                // Loop the muted preview in place — never touch the real queue.
+                e.target.seekTo(0, true);
+                e.target.playVideo();
+                return;
+              }
               setIsPlaying(false);
               setIsBuffering(false);
               const { repeat, order, orderPos } = latest.current;
@@ -509,8 +724,23 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
             if (d > 0) setDurationMs(d * 1000);
           },
           onError: (e) => {
+            if (!YT_FATAL_ERRORS.has(e.data)) return;
+
+            if (previewingRef.current) {
+              const tracks = previewTracksRef.current;
+              const idx = previewTrackIdxRef.current;
+              const failed = tracks?.[idx];
+              if (failed) reportUnplayable(failed.youtubeId);
+              const nextIdx = idx + 1;
+              if (tracks && nextIdx < tracks.length) {
+                previewTrackIdxRef.current = nextIdx;
+                commandLoad(tracks[nextIdx].youtubeId);
+              }
+              return;
+            }
+
             const track = latest.current.currentTrack;
-            if (!YT_FATAL_ERRORS.has(e.data) || !track) return;
+            if (!track) return;
 
             reportUnplayable(track.youtubeId); // silent
             errorStreakRef.current += 1;
@@ -532,7 +762,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       cancelled = true;
     };
     // Stable callbacks only — the player is created exactly once.
-  }, [advanceTo]);
+  }, [advanceTo, commandLoad]);
 
   // ── hydrate persisted prefs after mount (avoids SSR hydration mismatch) ────
   React.useEffect(() => {
@@ -609,6 +839,13 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!isPlaying) return;
     const id = window.setInterval(() => {
+      // onStateChange sets `isPlaying` true for preview loads too, so this
+      // effect keeps running while previewing. Skip the writes in that case —
+      // `positionMs` feeds the context's useMemo deps, so every tick would
+      // otherwise produce a new context value and re-render every
+      // usePlayer() consumer (every mounted DiscoverCard included) during the
+      // exact swipe interaction the discovery feed exists for.
+      if (previewingRef.current) return;
       const p = playerRef.current;
       if (!p) return;
       setPositionMs(p.getCurrentTime() * 1000);
@@ -652,6 +889,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       expand,
       collapse,
       toggleVideo,
+      isPreviewing,
+      isDiscoverSession,
+      enterPreview,
+      previewTrack,
+      commitPreview,
+      exitPreview,
     }),
     [
       currentTrack,
@@ -686,6 +929,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       expand,
       collapse,
       toggleVideo,
+      isPreviewing,
+      isDiscoverSession,
+      enterPreview,
+      previewTrack,
+      commitPreview,
+      exitPreview,
     ],
   );
 

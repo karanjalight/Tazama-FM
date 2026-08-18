@@ -29,12 +29,27 @@ listener count, genre chips — and tapping one navigates to `/rooms/[slug]`,
 landing on the existing Lobby exactly as it does today from anywhere else
 in the app.
 
-## Mode switch
+## Mode switch, revised during planning
 
 A small segmented toggle ("Mixes" / "Live"), centered at the top of the
-discover feed at the same safe-area-inset-top row as the existing close
-button (which stays top-right). Switching modes is pure client state — the
-route stays `/dashboard/discover`, so the bottom-nav FAB doesn't change.
+discover feed at the same safe-area-inset-top row as the close button
+(top-right). Switching modes is pure client state — the route stays
+`/dashboard/discover`, so the bottom-nav FAB doesn't change.
+
+**The toggle and close button are always present, regardless of whether
+either mode's data is currently empty.** A user must be able to reach Live
+mode even if the mix catalog happens to be empty today, and vice versa —
+those are independent conditions. This means the outer full-screen shell
+(`fixed inset-0`, the close button, the toggle) is owned by one new
+top-level client component, `DiscoverShell`, not by whichever mode happens
+to be showing. `DiscoverFeed` and the new `DiscoverLiveFeed` become plain
+content mounted *inside* that shell — each renders its own empty-state
+copy internally when its own list is empty, but neither renders its own
+close button or full-screen wrapper anymore. This both fixes the "can't
+reach Live because Mixes was empty" trap and is a cleaner fix for the
+close-button duplication than extracting a shared button component (see
+"Shared cleanup," revised below) — there's now exactly one render site for
+it, in the shell, rather than one per mode/empty-state combination.
 
 Switching to Live **unmounts** the mix feed. This is deliberate, not an
 oversight: `DiscoverFeed`'s mount/unmount effect is what calls
@@ -81,20 +96,23 @@ mix feed's `DiscoverFeed`.
 
 ## Empty state
 
-Zero live rooms currently: a distinct empty state (not the mix feed's "no
-mixes yet" copy) — "No one's live right now" with a CTA into room creation
-(`CreateRoomButton`/`CreateRoomCard`, "be the first"), mirroring
-`/dashboard/live`'s existing empty state.
+Zero live rooms currently: `DiscoverLiveFeed` renders its own empty content
+in place of the scroll-snap list (not the mix feed's "no mixes yet" copy)
+— "No one's live right now" with a CTA into room creation
+(`CreateRoomButton`, "be the first"), mirroring `/dashboard/live`'s
+existing empty state. Since `DiscoverShell` always renders the toggle, the
+user can still switch to Mixes from here.
 
-## Shared cleanup while touching this area
+## Shared cleanup, revised during planning
 
 The close button (top-right X, safe-area-aware, `router.back()` with the
-`history.length > 2` PWA-deep-link fallback) is currently duplicated
+`history.length > 2` PWA-deep-link fallback) was previously duplicated
 between `DiscoverFeed` and `DiscoverEmptyState` (flagged as a Minor finding
-during the mix feed's final review, not fixed then). Adding a live feed and
-a live empty state would make this four near-identical copies. In scope
-here: extract a shared `DiscoverCloseButton` component and use it in all
-four places.
+during the mix feed's final review, not fixed then). `DiscoverShell` owning
+it once (see "Mode switch" above) resolves this more directly than
+extracting a shared button component would have — `DiscoverEmptyState` as
+a standalone component is retired entirely, folded into `DiscoverFeed`'s
+own empty-list branch.
 
 ## Non-goals (v1)
 

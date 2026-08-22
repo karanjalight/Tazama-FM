@@ -83,9 +83,13 @@ export function BranchDetail({
 
   async function handleForget(deviceId: string) {
     if (!confirm("Forget this device? It will need a new pairing code.")) return;
+    const removed = devices.find((d) => d.id === deviceId);
     setDevices((d) => d.filter((x) => x.id !== deviceId));
     const result = await forgetDevice({ branchId: branch.id, deviceId });
-    if (!result.ok) toast.error(result.error);
+    if (!result.ok) {
+      toast.error(result.error);
+      if (removed) setDevices((d) => [...d, removed]);
+    }
   }
 
   async function handleCreateManager(e: React.FormEvent) {

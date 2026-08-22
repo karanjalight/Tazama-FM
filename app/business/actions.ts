@@ -627,6 +627,11 @@ export async function createBranchManager(input: {
     .from("business_staff_branches")
     .insert({ staff_id: staffRow.id, branch_id: branch.id });
   if (branchLinkError) {
+    try {
+      await admin.from("business_staff").delete().eq("id", staffRow.id);
+    } catch {
+      // best-effort cleanup
+    }
     await admin.auth.admin.deleteUser(created.user.id).catch(() => {});
     return { ok: false, error: "Account created, but could not assign the branch." };
   }

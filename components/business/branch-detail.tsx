@@ -13,6 +13,7 @@ import {
 } from "@/app/business/actions";
 import { Button } from "@/components/ui/button";
 import { GenrePicker } from "@/components/rooms/genre-picker";
+import { AiVibeSetup } from "@/components/business/ai-vibe-setup";
 import type { Branch } from "@/lib/business/types";
 
 export function BranchDetail({
@@ -106,6 +107,8 @@ export function BranchDetail({
           </Button>
         )}
       </form>
+
+      <AiVibeSetup branchId={branch.id} onGenres={setGenres} />
 
       <section className="rounded-2xl border border-border bg-card p-5">
         <h2 className="text-sm font-semibold text-foreground">

@@ -19,6 +19,8 @@ export interface VibeMatch {
 
 const DEFAULT_MAX = 3;
 const MAX_NOTE_LENGTH = 200;
+/** Shared with the client panel (components/business/ai-vibe-setup.tsx) and the route's own body-size check. */
+export const MAX_DESCRIPTION_LENGTH = 300;
 
 export function buildVibeSystemPrompt(
   catalog: VibeGenre[],

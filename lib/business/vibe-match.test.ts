@@ -51,6 +51,13 @@ test("sanitizeGenres skips non-string items without throwing", () => {
   );
 });
 
+test("sanitizeGenres trims surrounding whitespace before matching", () => {
+  assert.deepEqual(
+    sanitizeGenres([" afrobeats ", "amapiano\n"], CATALOG),
+    ["afrobeats", "amapiano"],
+  );
+});
+
 test("buildVibeSystemPrompt lists every catalog entry and states the cap", () => {
   const prompt = buildVibeSystemPrompt(CATALOG, 2);
   assert.ok(prompt.includes("afrobeats: Afrobeats"));
@@ -92,6 +99,10 @@ test("parseVibeCompletion defaults note to empty string when missing", () => {
     CATALOG,
   );
   assert.deepEqual(result, { genres: ["afrobeats"], note: "" });
+});
+
+test("parseVibeCompletion returns null when the JSON top level is an array, not an object", () => {
+  assert.equal(parseVibeCompletion("[1,2]", CATALOG), null);
 });
 
 test("parseVibeCompletion truncates an overlong note to 200 chars", () => {

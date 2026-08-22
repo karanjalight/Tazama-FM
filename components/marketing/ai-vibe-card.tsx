@@ -18,7 +18,7 @@ export function AiVibeCard() {
       </span>
 
       <p className="mt-5 rounded-2xl bg-muted p-4 text-sm leading-relaxed text-foreground">
-        &quot;{EXAMPLE_DESCRIPTION}&quot;
+        “{EXAMPLE_DESCRIPTION}”
       </p>
 
       <p className="mt-5 text-xs font-semibold tracking-wider text-muted-foreground uppercase">

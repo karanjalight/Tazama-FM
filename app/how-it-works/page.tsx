@@ -245,7 +245,7 @@ export default async function HowItWorksPage() {
               href="/for-business#ai-vibe-setup"
               className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-brand-strong"
             >
-              See how Tazama for Business uses AI too
+              See how Tazama for Business uses AI
               <ArrowRight className="size-4" aria-hidden="true" />
             </a>
           </Reveal>

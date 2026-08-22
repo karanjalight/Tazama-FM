@@ -5,8 +5,7 @@ import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-
-const MAX_DESCRIPTION_LENGTH = 300;
+import { MAX_DESCRIPTION_LENGTH } from "@/lib/business/vibe-match";
 
 /**
  * "Describe your space, get matching genres" — feeds its result straight into
@@ -46,6 +45,10 @@ export function AiVibeSetup({
         toast.error("Couldn't match that to a genre — try describing it differently.");
         return;
       }
+      if (res.status === 401) {
+        toast.error("Your session expired — sign in again to use AI vibe setup.");
+        return;
+      }
       if (!res.ok || data.error || !data.genres?.length) {
         toast.error("Couldn't reach the AI right now — try again.");
         return;
@@ -67,21 +70,30 @@ export function AiVibeSetup({
         <Sparkles className="size-4 text-brand" />
         AI vibe setup
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p id="ai-vibe-description-hint" className="text-sm text-muted-foreground">
         Describe your space in a sentence — Tazama matches it to genres below.
       </p>
       <textarea
         value={description}
-        onChange={(e) => setDescription(e.target.value)}
+        onChange={(e) => {
+          setDescription(e.target.value);
+          setNote(null);
+        }}
         maxLength={MAX_DESCRIPTION_LENGTH}
         rows={3}
         placeholder="Busy Nairobi café, upbeat afrobeats and amapiano through the day"
+        aria-label="Describe your space"
+        aria-describedby="ai-vibe-description-hint"
         className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30"
       />
       <Button onClick={handleGenerate} disabled={pending || !description.trim()} size="sm">
         {pending ? "Matching…" : "Suggest genres"}
       </Button>
-      {note && <p className="text-sm text-muted-foreground italic">&quot;{note}&quot;</p>}
+      {note && (
+        <p aria-live="polite" className="text-sm text-muted-foreground italic">
+          “{note}”
+        </p>
+      )}
     </section>
   );
 }

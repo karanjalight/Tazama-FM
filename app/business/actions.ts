@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch, listBranches } from "@/lib/business/queries";
+import { computeFrozenPosition } from "@/lib/business/playback-freeze";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
 import { ROOM_GENRES, MAX_ROOM_GENRES } from "@/lib/room-genres";
@@ -464,10 +465,28 @@ export async function setBranchPlayback(input: {
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
 
+  const { data: current } = await admin
+    .from("room_playback")
+    .select("position_ms, is_playing, updated_at")
+    .eq("room_id", branch.roomId)
+    .maybeSingle();
+  const positionMs = computeFrozenPosition(
+    current
+      ? {
+          positionMs: current.position_ms,
+          isPlaying: current.is_playing,
+          updatedAt: current.updated_at,
+        }
+      : null,
+    input.isPlaying,
+    Date.now(),
+  );
+
   const { error } = await admin
     .from("room_playback")
     .update({
       is_playing: input.isPlaying,
+      position_ms: positionMs,
       updated_at: new Date().toISOString(),
     })
     .eq("room_id", branch.roomId);

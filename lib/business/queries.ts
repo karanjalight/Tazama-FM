@@ -137,7 +137,7 @@ export async function getBranchCardSummaries(
   const roomIds = branches.map((b) => b.roomId);
   const branchIds = branches.map((b) => b.id);
 
-  const [{ data: playbackRows }, { data: deviceRows }, presenceCounts] =
+  const [{ data: playbackRows }, { data: deviceRows }, { data: presenceRows }] =
     await Promise.all([
       admin
         .from("room_playback")
@@ -147,7 +147,14 @@ export async function getBranchCardSummaries(
         .from("branch_devices")
         .select("id, branch_id, name, paired_at, last_seen_at")
         .in("branch_id", branchIds),
-      Promise.all(roomIds.map((id) => countLivePresence(id))),
+      admin
+        .from("room_presence")
+        .select("room_id")
+        .in("room_id", roomIds)
+        .gte(
+          "last_seen_at",
+          new Date(Date.now() - PRESENCE_THRESHOLD_MS).toISOString(),
+        ),
     ]);
 
   const playbackByRoom = new Map(
@@ -167,8 +174,15 @@ export async function getBranchCardSummaries(
     list.push(rowToBranchDevice(row));
     devicesByBranch.set(row.branch_id, list);
   }
+  const presenceCountByRoom = new Map<string, number>();
+  for (const row of (presenceRows ?? []) as { room_id: string }[]) {
+    presenceCountByRoom.set(
+      row.room_id,
+      (presenceCountByRoom.get(row.room_id) ?? 0) + 1,
+    );
+  }
 
-  return branches.map((branch, i) => {
+  return branches.map((branch) => {
     const playback = playbackByRoom.get(branch.roomId);
     const devices = devicesByBranch.get(branch.id) ?? [];
     const lastSeenAt = devices.reduce<string | null>((latest, d) => {
@@ -180,7 +194,7 @@ export async function getBranchCardSummaries(
       branch,
       devices,
       onlineDeviceCount: devices.filter((d) => d.online).length,
-      liveVisitorCount: presenceCounts[i] ?? 0,
+      liveVisitorCount: presenceCountByRoom.get(branch.roomId) ?? 0,
       nowPlaying: (playback?.track as RoomTrack | null) ?? null,
       isPlaying: playback?.is_playing ?? false,
       lastSeenAt,

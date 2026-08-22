@@ -241,6 +241,13 @@ export default async function HowItWorksPage() {
               road trip, a slow Sunday, the gym — and Tazama assembles a fitting
               room and starting playlist for you to take from there.
             </p>
+            <a
+              href="/for-business#ai-vibe-setup"
+              className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-brand-strong"
+            >
+              See how Tazama for Business uses AI too
+              <ArrowRight className="size-4" aria-hidden="true" />
+            </a>
           </Reveal>
 
           <Reveal delay={0.1} className="mt-10">

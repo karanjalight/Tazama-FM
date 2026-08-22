@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
-import { getBranch, listBranchDevices } from "@/lib/business/queries";
-import { getRoomBySlug, getRoomQueue } from "@/lib/rooms/queries";
+import { getBranch, isOnline, getBranchVolume, listBranchDevices } from "@/lib/business/queries";
+import { getRoomBySlug, getRoomQueue, getRoomPlayback } from "@/lib/rooms/queries";
+import { getOrigin } from "@/lib/origin";
+import { roomUrl } from "@/lib/rooms/slug";
 import { BranchDetail } from "@/components/business/branch-detail";
 import { BranchQueuePanel } from "@/components/business/branch-queue-panel";
+import { BranchShareCard } from "@/components/business/branch-share-card";
 
 export const metadata: Metadata = { title: "Branch — Business Dashboard" };
 
@@ -23,8 +26,11 @@ export default async function BranchDetailPage({
   if (!branch) notFound();
 
   const room = await getRoomBySlug(branch.slug);
-  const [queue, devices] = await Promise.all([
+  const [queue, playback, volume, origin, devices] = await Promise.all([
     room ? getRoomQueue(room.id, null) : Promise.resolve([]),
+    room ? getRoomPlayback(room.id) : Promise.resolve(null),
+    room ? getBranchVolume(room.id) : Promise.resolve(80),
+    getOrigin(),
     listBranchDevices(branch.id),
   ]);
 
@@ -41,9 +47,19 @@ export default async function BranchDetailPage({
         devices={devices}
         canManage={viewer.role === "owner" || viewer.role === "admin"}
       />
-      {branch.devicePairedAt && (
-        <BranchQueuePanel branchId={branch.id} roomId={branch.roomId} initialQueue={queue} />
+      {branch.devicePairedAt && room && (
+        <BranchQueuePanel
+          branchId={branch.id}
+          branchSlug={branch.slug}
+          roomId={room.id}
+          initialTrack={playback?.track ?? null}
+          initialIsPlaying={playback?.isPlaying ?? false}
+          initialVolume={volume}
+          initialOnline={isOnline(branch.deviceLastSeenAt)}
+          initialQueue={queue}
+        />
       )}
+      <BranchShareCard roomUrl={roomUrl(origin, branch.slug)} />
     </div>
   );
 }

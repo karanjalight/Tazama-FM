@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
-import { getBranch } from "@/lib/business/queries";
+import { getBranch, listBranchDevices } from "@/lib/business/queries";
 import { getRoomBySlug, getRoomQueue } from "@/lib/rooms/queries";
 import { BranchDetail } from "@/components/business/branch-detail";
 import { BranchQueuePanel } from "@/components/business/branch-queue-panel";
@@ -23,7 +23,10 @@ export default async function BranchDetailPage({
   if (!branch) notFound();
 
   const room = await getRoomBySlug(branch.slug);
-  const queue = room ? await getRoomQueue(room.id, null) : [];
+  const [queue, devices] = await Promise.all([
+    room ? getRoomQueue(room.id, null) : Promise.resolve([]),
+    listBranchDevices(branch.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -35,6 +38,7 @@ export default async function BranchDetailPage({
       <BranchDetail
         branch={branch}
         genres={room?.genres ?? []}
+        devices={devices}
         canManage={viewer.role === "owner" || viewer.role === "admin"}
       />
       {branch.devicePairedAt && (

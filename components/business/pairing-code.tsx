@@ -45,6 +45,7 @@ export function PairingCode() {
         const data = await res.json();
         if (data.status === "claimed" && data.slug) {
           if (pollId) clearInterval(pollId);
+          if (token) window.localStorage.setItem("tz_device_token", token);
           window.location.assign(`/player/${data.slug}`);
         } else if (data.status === "expired") {
           if (pollId) clearInterval(pollId);

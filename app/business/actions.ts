@@ -235,6 +235,24 @@ export async function claimDevice(input: {
     return { ok: false, error: "That code is invalid or has expired." };
   }
 
+  // Insert the device row FIRST, before burning the pairing code. If this
+  // fails (e.g. the branch_devices schema hasn't been applied to this
+  // Supabase project yet), the code is left unclaimed so the same physical
+  // device can retry with the same code instead of being stuck with a
+  // burned code and no paired device.
+  const { data: insertedDevice, error: deviceError } = await admin
+    .from("branch_devices")
+    .insert({
+      branch_id: branch.id,
+      name: parsed.data.name,
+      device_token: pairing.device_token,
+    })
+    .select("id")
+    .single();
+  if (deviceError || !insertedDevice) {
+    return { ok: false, error: "Could not finish pairing this device." };
+  }
+
   const claimedAt = new Date().toISOString();
   const { data: claimedRows, error: claimError } = await admin
     .from("device_pairings")
@@ -243,19 +261,11 @@ export async function claimDevice(input: {
     .is("claimed_branch_id", null)
     .select("id");
   if (claimError || !claimedRows || claimedRows.length === 0) {
+    // Someone else claimed this code in the race between our read and our
+    // insert above — undo the device row so it doesn't linger paired to a
+    // branch the code was never actually confirmed for.
+    await admin.from("branch_devices").delete().eq("id", insertedDevice.id);
     return { ok: false, error: "That code was just claimed by someone else." };
-  }
-
-  // branch_devices is now the source of truth for pairing — the branch-level
-  // columns are left untouched (unused going forward, not worth a destructive
-  // column drop).
-  const { error: deviceError } = await admin.from("branch_devices").insert({
-    branch_id: branch.id,
-    name: parsed.data.name,
-    device_token: pairing.device_token,
-  });
-  if (deviceError) {
-    return { ok: false, error: "Could not finish pairing this device." };
   }
 
   await admin

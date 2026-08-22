@@ -1,11 +1,19 @@
 import {
+  Cast,
   Clock,
+  Globe,
   LayoutGrid,
   Link2,
+  Megaphone,
+  Monitor,
+  Music,
   Play,
   QrCode,
   Radio,
   ShieldCheck,
+  Sparkles,
+  Target,
+  Tv,
 } from "lucide-react";
 import type { IconKey } from "@/lib/data";
 
@@ -17,6 +25,14 @@ const MAP: Record<IconKey, React.ComponentType<{ className?: string }>> = {
   "qr-code": QrCode,
   clock: Clock,
   "layout-grid": LayoutGrid,
+  sparkles: Sparkles,
+  music: Music,
+  monitor: Monitor,
+  tv: Tv,
+  megaphone: Megaphone,
+  target: Target,
+  cast: Cast,
+  globe: Globe,
 };
 
 export function SectionIcon({

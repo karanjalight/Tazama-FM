@@ -13,12 +13,13 @@ import {
 
 import { SiteHeader } from "@/components/nav/site-header";
 import { SiteFooter } from "@/components/sections/site-footer";
-import { MarketingHero } from "@/components/marketing/marketing-hero";
+import { BusinessHero } from "@/components/marketing/business-hero";
 import { BusinessQRCard } from "@/components/marketing/business-qr-card";
+import { AiVibeCard } from "@/components/marketing/ai-vibe-card";
 import { SectionIcon } from "@/components/section-icon";
 import { Reveal } from "@/components/motion/reveal";
 import { buttonVariants } from "@/components/ui/button";
-import { businessFeatures } from "@/lib/data";
+import { businessFeatures, salesEmail } from "@/lib/data";
 import { PLANS } from "@/lib/billing/plans";
 import { getHeaderAuth } from "@/lib/auth/profile";
 import { cn } from "@/lib/utils";
@@ -28,8 +29,6 @@ export const metadata: Metadata = {
   description:
     "Tazama for Business: licensed background music for cafés, gyms, restaurants and venues — with QR-code song requests, scheduling and multi-zone control.",
 };
-
-const SALES_EMAIL = "mailto:business@tazama.fm";
 
 const SPACES = [
   { icon: Coffee, label: "Cafés" },
@@ -66,17 +65,7 @@ export default async function ForBusinessPage() {
     <>
       <SiteHeader auth={auth} />
       <main id="content" className="flex-1">
-        <MarketingHero
-          eyebrow="Tazama for Business"
-          title={
-            <>
-              Set the mood.
-              <br />
-              Stay legal
-              <span className="text-brand">.</span>
-            </>
-          }
-          subtitle="Licensed background music for cafés, gyms, restaurants and venues — with QR-code song requests your customers actually love."
+        <BusinessHero
           actions={
             <>
               <a
@@ -86,7 +75,7 @@ export default async function ForBusinessPage() {
                 Start free
               </a>
               <a
-                href={SALES_EMAIL}
+                href={salesEmail}
                 className={cn(buttonVariants({ variant: "onDark", size: "xl" }))}
               >
                 Talk to sales
@@ -153,6 +142,38 @@ export default async function ForBusinessPage() {
             </Reveal>
             <Reveal delay={0.1} className="flex justify-center lg:justify-end">
               <BusinessQRCard />
+            </Reveal>
+          </div>
+        </Section>
+
+        {/* AI vibe setup */}
+        <Section id="ai-vibe-setup">
+          <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16">
+            <Reveal>
+              <div className="max-w-xl">
+                <p className="text-sm font-semibold tracking-wider text-muted-foreground uppercase">
+                  AI vibe setup
+                </p>
+                <h2 className="text-display mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+                  Tell it the vibe. It picks the genres.
+                </h2>
+                <div className="mt-5 space-y-4 text-lg leading-relaxed text-muted-foreground">
+                  <p>
+                    No manual genre picking. Describe your space in a
+                    sentence — a busy café, a late-night lounge, a gym
+                    mid-workout — and Tazama&rsquo;s AI matches it to the
+                    right sound instantly.
+                  </p>
+                  <p>
+                    Every suggestion is yours to review before it goes live —
+                    add, remove, or swap genres, then save. Included free
+                    with every branch on the Business plan.
+                  </p>
+                </div>
+              </div>
+            </Reveal>
+            <Reveal delay={0.1} className="flex justify-center lg:justify-end">
+              <AiVibeCard />
             </Reveal>
           </div>
         </Section>
@@ -238,7 +259,7 @@ export default async function ForBusinessPage() {
                     Start free
                   </a>
                   <a
-                    href={SALES_EMAIL}
+                    href={salesEmail}
                     className="inline-flex items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-brand-strong"
                   >
                     Talk to sales
@@ -328,7 +349,7 @@ export default async function ForBusinessPage() {
                   Start free
                 </a>
                 <a
-                  href={SALES_EMAIL}
+                  href={salesEmail}
                   className={cn(buttonVariants({ variant: "onDark", size: "xl" }))}
                 >
                   Talk to sales
@@ -348,12 +369,15 @@ export default async function ForBusinessPage() {
 function Section({
   children,
   alt = false,
+  id,
 }: {
   children: React.ReactNode;
   alt?: boolean;
+  id?: string;
 }) {
   return (
     <section
+      id={id}
       className={cn(
         "py-20 sm:py-28 lg:py-32",
         alt ? "bg-section-alt" : "bg-background",

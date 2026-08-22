@@ -299,6 +299,21 @@ export async function forgetDevice(input: {
     .eq("branch_id", branch.id);
   if (error) return { ok: false, error: "Could not forget this device." };
 
+  // If that was the last device, clear the branch-level paired/seen columns
+  // too — otherwise every place that gates on branch.devicePairedAt (the
+  // queue panel, the test-play button) keeps showing this branch as paired
+  // even though its device list is now empty.
+  const { count } = await admin
+    .from("branch_devices")
+    .select("id", { count: "exact", head: true })
+    .eq("branch_id", branch.id);
+  if (!count) {
+    await admin
+      .from("branches")
+      .update({ device_paired_at: null, device_last_seen_at: null })
+      .eq("id", branch.id);
+  }
+
   revalidatePath(`/business/branches/${input.branchId}`);
   return { ok: true };
 }

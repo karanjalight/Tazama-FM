@@ -37,11 +37,20 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!branch) return NextResponse.json({ ok: false }, { status: 404 });
 
+  const seenAt = new Date().toISOString();
+
   await admin
     .from("branch_devices")
-    .update({ last_seen_at: new Date().toISOString() })
+    .update({ last_seen_at: seenAt })
     .eq("branch_id", branch.id)
     .eq("device_token", deviceToken);
+
+  // "some device for this branch was just seen" — the signal that
+  // getBusinessOverview and the branch detail page's online badge read.
+  await admin
+    .from("branches")
+    .update({ device_last_seen_at: seenAt })
+    .eq("id", branch.id);
 
   return NextResponse.json({ ok: true });
 }

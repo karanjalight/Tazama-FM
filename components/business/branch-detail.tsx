@@ -34,11 +34,23 @@ export function BranchDetail({
   const [genres, setGenres] = React.useState(initialGenres);
   const [code, setCode] = React.useState("");
   const [devices, setDevices] = React.useState(initialDevices);
+  const [prevInitialDevices, setPrevInitialDevices] = React.useState(initialDevices);
   const [deviceName, setDeviceName] = React.useState("");
   const [managerEmail, setManagerEmail] = React.useState("");
   const [managerPhone, setManagerPhone] = React.useState("");
   const [managerPassword, setManagerPassword] = React.useState("");
   const [pending, setPending] = React.useState(false);
+
+  // useState's initializer only runs once — when router.refresh() re-fetches
+  // server data and passes a new `initialDevices` prop, this keeps local
+  // state in sync instead of silently going stale. Adjusted during render
+  // (rather than in an effect) per React's guidance for syncing state to a
+  // changed prop, so this doesn't cost an extra effect-driven render pass
+  // and doesn't fight the optimistic update in handleForget.
+  if (initialDevices !== prevInitialDevices) {
+    setPrevInitialDevices(initialDevices);
+    setDevices(initialDevices);
+  }
 
   async function handleRename(e: React.FormEvent) {
     e.preventDefault();

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getRoomViewer } from "@/lib/rooms/viewer";
+import { getOrCreateGuestViewer } from "@/lib/rooms/guest-session";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
 
 /**
@@ -9,9 +10,13 @@ import { buildSuggestions } from "@/lib/rooms/suggestions";
  * by who's currently present (sent by the client from presence). `roomGenres` is
  * the universe; `participantGenres` is the flat member-taste list (with repeats).
  * Accepts the legacy `curatedGenres` field as a fallback for participantGenres.
+ *
+ * A branch's room page lets anonymous guests browse suggestions too (see the
+ * room page's guest-fallback viewer resolution) — this isn't room-specific or
+ * sensitive data, so a guest identity is enough.
  */
 export async function POST(request: Request) {
-  const viewer = await getRoomViewer();
+  const viewer = (await getRoomViewer()) ?? (await getOrCreateGuestViewer());
   if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

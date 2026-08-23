@@ -10,7 +10,6 @@ import {
   claimDevice,
   forgetDevice,
   createBranchManager,
-  playToBranches,
   updateBranchGenres,
 } from "@/app/business/actions";
 import { Button } from "@/components/ui/button";
@@ -134,22 +133,6 @@ export function BranchDetail({
     else router.push("/business/branches");
   }
 
-  async function handleTestPlay() {
-    setPending(true);
-    const result = await playToBranches({
-      branchIds: [branch.id],
-      track: {
-        youtubeId: "dQw4w9WgXcQ",
-        title: "Test track",
-        artist: null,
-        thumbnailUrl: null,
-      },
-    });
-    setPending(false);
-    if (!result.ok) toast.error(result.error);
-    else toast.success("Sent to this branch.");
-  }
-
   return (
     <div className="space-y-8">
       <form onSubmit={handleRename} className="flex gap-2">
@@ -271,12 +254,6 @@ export function BranchDetail({
             </Button>
           </form>
         </section>
-      )}
-
-      {branch.devicePairedAt && (
-        <Button onClick={handleTestPlay} disabled={pending} variant="outline">
-          Send a test track to this branch
-        </Button>
       )}
 
       {canManage && (

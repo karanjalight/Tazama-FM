@@ -108,6 +108,8 @@ export function BranchQueuePanel({
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
+        {/* Hero — mirrors the room stage's video frame, minus the video
+            itself (the kiosk, not this page, is what plays audio/video). */}
         <div className="relative flex aspect-video w-full items-center justify-center bg-ink">
           {track ? (
             <Cover
@@ -163,6 +165,7 @@ export function BranchQueuePanel({
             </div>
           </div>
 
+          {/* transport */}
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"

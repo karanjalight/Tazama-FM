@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 
 import { getRoomViewer } from "@/lib/rooms/viewer";
+import { getOrCreateGuestViewer } from "@/lib/rooms/guest-session";
 import { searchTracks } from "@/lib/youtube/search";
 import type { RoomTrack } from "@/lib/rooms/types";
 
-/** POST { q } → { tracks } — free-text YouTube search to add a track to a room. */
+/** POST { q } → { tracks } — free-text YouTube search to add a track to a room.
+ * A branch's room page lets anonymous guests add songs (see the room page's
+ * guest-fallback viewer resolution), so this must accept them too — search
+ * results aren't room-specific or sensitive, so a guest identity is enough. */
 export async function POST(request: Request) {
-  const viewer = await getRoomViewer();
+  const viewer = (await getRoomViewer()) ?? (await getOrCreateGuestViewer());
   if (!viewer) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

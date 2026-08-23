@@ -307,7 +307,9 @@ export async function forgetDevice(input: {
     .from("branch_devices")
     .select("id", { count: "exact", head: true })
     .eq("branch_id", branch.id);
-  if (!count) {
+  // `count` is `number | null` — a failed count query comes back as `null`,
+  // which must NOT be treated the same as "confirmed zero devices remain".
+  if (count === 0) {
     await admin
       .from("branches")
       .update({ device_paired_at: null, device_last_seen_at: null })

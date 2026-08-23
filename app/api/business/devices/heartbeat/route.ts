@@ -39,18 +39,26 @@ export async function POST(request: Request) {
 
   const seenAt = new Date().toISOString();
 
-  await admin
+  const { data: matchedDevice } = await admin
     .from("branch_devices")
     .update({ last_seen_at: seenAt })
     .eq("branch_id", branch.id)
-    .eq("device_token", deviceToken);
+    .eq("device_token", deviceToken)
+    .select("id")
+    .maybeSingle();
 
-  // "some device for this branch was just seen" — the signal that
-  // getBusinessOverview and the branch detail page's online badge read.
-  await admin
-    .from("branches")
-    .update({ device_last_seen_at: seenAt })
-    .eq("id", branch.id);
+  // Only bump the branch-level signal if the token actually matched a real
+  // device row for this branch — otherwise a forgotten/stale token would
+  // repopulate device_last_seen_at and make the dashboard show the branch as
+  // online again with zero actual devices.
+  if (matchedDevice) {
+    // "some device for this branch was just seen" — the signal that
+    // getBusinessOverview and the branch detail page's online badge read.
+    await admin
+      .from("branches")
+      .update({ device_last_seen_at: seenAt })
+      .eq("id", branch.id);
+  }
 
   return NextResponse.json({ ok: true });
 }

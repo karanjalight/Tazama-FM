@@ -317,6 +317,7 @@ export async function forgetDevice(input: {
   }
 
   revalidatePath(`/business/branches/${input.branchId}`);
+  revalidatePath("/business/dashboard");
   return { ok: true };
 }
 

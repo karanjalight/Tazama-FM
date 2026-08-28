@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { genericErrorMessage } from "@/lib/auth/messages";
-import { navigateAfterAuth } from "@/lib/auth/navigate";
+import { navigateAfterAuth, resolvePostAuthPath } from "@/lib/auth/navigate";
 import {
   businessDetailsSchema,
   validate,
@@ -117,7 +117,7 @@ export function OnboardingForm({ initialName }: { initialName: string }) {
     }
 
     toast.success("You're all set 🎉");
-    navigateAfterAuth("/dashboard");
+    navigateAfterAuth(resolvePostAuthPath(accountType));
   }
 
   const slide = (dir: 1 | -1) =>

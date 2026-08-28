@@ -44,6 +44,7 @@ function Select({
         )}
       >
         <SelectPrimitive.Value
+          className="truncate"
           placeholder={
             <span className="text-muted-foreground/70">{placeholder}</span>
           }

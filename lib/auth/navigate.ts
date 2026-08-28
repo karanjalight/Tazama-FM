@@ -1,3 +1,5 @@
+import type { AccountType } from "@/components/auth/account-type-toggle";
+
 /**
  * Navigate to `path` after an auth state change (sign-in / sign-up / sign-out).
  *
@@ -23,4 +25,13 @@
 export function navigateAfterAuth(path: string): void {
   if (typeof window === "undefined") return;
   window.location.assign(path);
+}
+
+/**
+ * Business accounts land on the business control panel; everyone else
+ * (including the unset "" state, which shouldn't reach here post-validation)
+ * lands on the general dashboard.
+ */
+export function resolvePostAuthPath(accountType: AccountType | ""): string {
+  return accountType === "business" ? "/business/dashboard" : "/dashboard";
 }

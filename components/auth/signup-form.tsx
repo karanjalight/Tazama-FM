@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { DEMO_AUTH, makeDemoUser, saveDemoUser } from "@/lib/demo/demo-session";
 import { authErrorMessage, genericErrorMessage } from "@/lib/auth/messages";
-import { navigateAfterAuth } from "@/lib/auth/navigate";
+import { navigateAfterAuth, resolvePostAuthPath } from "@/lib/auth/navigate";
 import {
   accountDetailsSchema,
   businessDetailsSchema,
@@ -139,7 +139,7 @@ export function SignupForm() {
         }),
       );
       toast.success("Welcome to Tazama 🎉");
-      navigateAfterAuth("/dashboard");
+      navigateAfterAuth(resolvePostAuthPath(accountType));
       return;
     }
 
@@ -207,7 +207,7 @@ export function SignupForm() {
     }
 
     toast.success("Welcome to Tazama 🎉");
-    navigateAfterAuth("/dashboard");
+    navigateAfterAuth(resolvePostAuthPath(accountType));
   }
 
   const motionProps = reduce

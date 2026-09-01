@@ -45,11 +45,14 @@ export async function POST(
     return NextResponse.json({ error: "Not configured." }, { status: 503 });
   }
 
-  const { data: current } = await admin
+  const { data: current, error: currentError } = await admin
     .from("audio_zone_playback")
     .select("track, version")
     .eq("zone_id", zoneId)
     .maybeSingle();
+  if (currentError) {
+    return NextResponse.json({ error: "Could not read audio zone playback state." }, { status: 500 });
+  }
   if (!current) {
     return NextResponse.json({ error: "Audio zone not found." }, { status: 404 });
   }
@@ -84,7 +87,7 @@ export async function POST(
     }
   }
 
-  const { data: updated } = await admin
+  const { data: updated, error: updateError } = await admin
     .from("audio_zone_playback")
     .update({
       track: next,
@@ -99,17 +102,21 @@ export async function POST(
     .select("track, version")
     .maybeSingle();
 
+  if (updateError) {
+    return NextResponse.json({ error: "Could not advance audio zone playback." }, { status: 500 });
+  }
+
   if (!updated) {
     // Someone else won between our read and this write — read back the truth.
-    const { data: latest } = await admin
+    const { data: latest, error: latestError } = await admin
       .from("audio_zone_playback")
       .select("track, version")
       .eq("zone_id", zoneId)
       .maybeSingle();
-    return NextResponse.json({
-      track: latest?.track ?? null,
-      version: latest?.version ?? reportedVersion,
-    });
+    if (latestError || !latest) {
+      return NextResponse.json({ error: "Could not read audio zone playback state." }, { status: 500 });
+    }
+    return NextResponse.json({ track: latest.track, version: latest.version });
   }
 
   return NextResponse.json({ track: updated.track, version: updated.version });

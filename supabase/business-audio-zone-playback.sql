@@ -17,15 +17,25 @@
 -- 1. rooms.volume — per-room volume, replacing branches.volume going forward.
 --    branches.volume is left in place, unused after this migration, same
 --    "don't drop old columns" convention this schema already follows.
-alter table public.rooms
-  add column if not exists volume integer not null default 80;
-
--- Backfill: give every branch's default room the branch's current volume,
--- so an existing branch's kiosk sees no change in starting volume.
-update public.rooms r
-set volume = b.volume
-from public.branches b
-where b.room_id = r.id;
+--
+--    Guard: only add and backfill on the very first run. On re-runs of this
+--    migration (or the combined apply-all file), the column stays untouched,
+--    preserving any manual volume changes admins may have made.
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'rooms' and column_name = 'volume'
+  ) then
+    alter table public.rooms add column volume integer not null default 80;
+    -- Backfill: give every branch's default room the branch's current volume,
+    -- so an existing branch's kiosk sees no change in starting volume.
+    update public.rooms r
+    set volume = b.volume
+    from public.branches b
+    where b.room_id = r.id;
+  end if;
+end $$;
 
 -- 2. rooms: let an anonymous/unauthenticated kiosk read + subscribe to its
 --    own branch room's volume — the same fix branch-realtime-fix.sql already

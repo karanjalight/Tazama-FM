@@ -430,6 +430,7 @@ export async function claimDevice(input: {
     .from("branch_devices")
     .insert({
       branch_id: branch.id,
+      room_id: branch.roomId,
       name: parsed.data.name,
       device_token: pairing.device_token,
     })

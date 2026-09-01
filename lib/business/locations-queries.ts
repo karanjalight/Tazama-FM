@@ -148,3 +148,116 @@ export async function getRoom(
     .maybeSingle();
   return data ? rowToRoom(data as RoomRow) : null;
 }
+
+/** Everything the Locations list/detail page needs, per branch, in one shape. */
+export interface LocationSummary {
+  id: string;
+  name: string;
+  slug: string;
+  address: string | null;
+  timezone: string;
+  status: "active" | "offline";
+  rooms: number;
+  screens: number;
+  screensOnline: number;
+  audioZones: number;
+  contentSchedules: number;
+  schedulesActive: boolean;
+  lastSeenAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * One bulk read for the whole Locations list — reuses `getBranchCardSummaries`
+ * (branch + devices + online counts, already real) and adds room/audio-zone/
+ * schedule counts the same way: one batched query per table across every
+ * branch, grouped client-side, instead of N+1 per-branch queries.
+ *
+ * `contentSchedules`/`schedulesActive` only count schedules that target the
+ * branch DIRECTLY (`schedule_target_locations`) — a schedule that only
+ * targets one of the branch's zones/rooms isn't counted here. Schedules
+ * itself isn't wired to a CRUD UI yet, so this undercount has no visible
+ * inconsistency today; revisit once schedule creation is real.
+ */
+export async function listLocationSummaries(businessId: string): Promise<LocationSummary[]> {
+  const summaries = await getBranchCardSummaries(businessId);
+  if (!summaries.length) return [];
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return summaries.map((s) => toLocationSummary(s, 0, 0, 0, false));
+  }
+
+  const branchIds = summaries.map((s) => s.branch.id);
+
+  const [{ data: roomRows }, { data: audioZoneRows }, { data: scheduleTargetRows }] =
+    await Promise.all([
+      admin.from("rooms").select("branch_id").in("branch_id", branchIds),
+      admin.from("audio_zones").select("branch_id").in("branch_id", branchIds),
+      admin
+        .from("schedule_target_locations")
+        .select("branch_id, schedules(status)")
+        .in("branch_id", branchIds),
+    ]);
+
+  const roomCountByBranch = countByBranch(roomRows);
+  const audioZoneCountByBranch = countByBranch(audioZoneRows);
+
+  const scheduleCountByBranch = new Map<string, number>();
+  const activeScheduleByBranch = new Set<string>();
+  for (const row of (scheduleTargetRows ?? []) as {
+    branch_id: string;
+    schedules: { status: string } | { status: string }[] | null;
+  }[]) {
+    scheduleCountByBranch.set(row.branch_id, (scheduleCountByBranch.get(row.branch_id) ?? 0) + 1);
+    const schedule = Array.isArray(row.schedules) ? row.schedules[0] : row.schedules;
+    if (schedule?.status === "active") activeScheduleByBranch.add(row.branch_id);
+  }
+
+  return summaries.map((s) =>
+    toLocationSummary(
+      s,
+      roomCountByBranch.get(s.branch.id) ?? 0,
+      audioZoneCountByBranch.get(s.branch.id) ?? 0,
+      scheduleCountByBranch.get(s.branch.id) ?? 0,
+      activeScheduleByBranch.has(s.branch.id),
+    ),
+  );
+}
+
+function countByBranch(rows: { branch_id: string }[] | null): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows ?? []) {
+    counts.set(row.branch_id, (counts.get(row.branch_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function toLocationSummary(
+  summary: Awaited<ReturnType<typeof getBranchCardSummaries>>[number],
+  rooms: number,
+  audioZones: number,
+  contentSchedules: number,
+  schedulesActive: boolean,
+): LocationSummary {
+  const { branch, devices, onlineDeviceCount, lastSeenAt } = summary;
+  // BranchDevice doesn't expose device_kind (listBranchDevices/getBranchCardSummaries
+  // only select id/name/paired_at/last_seen_at), and no real flow can create an
+  // 'audio' kind device yet — every paired device today genuinely is a screen.
+  return {
+    id: branch.id,
+    name: branch.name,
+    slug: branch.slug,
+    address: [branch.address, branch.city, branch.country].filter(Boolean).join(", ") || null,
+    timezone: branch.timezone,
+    status: onlineDeviceCount > 0 ? "active" : "offline",
+    rooms,
+    screens: devices.length,
+    screensOnline: onlineDeviceCount,
+    audioZones,
+    contentSchedules,
+    schedulesActive,
+    lastSeenAt,
+    createdAt: branch.createdAt,
+  };
+}

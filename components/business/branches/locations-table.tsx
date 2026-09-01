@@ -2,15 +2,14 @@
 
 import { ChevronLeft, ChevronRight, MoreHorizontal, SlidersHorizontal, Store } from "lucide-react";
 
-import type { MockLocation } from "./mock-data";
-import { cn } from "@/lib/utils";
+import type { LocationSummary } from "@/lib/business/locations-queries";
+import { formatRelativeTime, cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 
 const STATUS_ITEMS = ["All Status", "Active", "Offline"] as const;
-const BUSINESS_ITEMS = ["All Business", "XYZ Restaurant Group"] as const;
 
-function StatusPill({ status }: { status: MockLocation["status"] }) {
+function StatusPill({ status }: { status: LocationSummary["status"] }) {
   const active = status === "active";
   return (
     <span
@@ -32,19 +31,15 @@ export function LocationsTable({
   onQueryChange,
   status,
   onStatusChange,
-  business,
-  onBusinessChange,
   selectedId,
   onSelect,
 }: {
-  locations: MockLocation[];
+  locations: LocationSummary[];
   total: number;
   query: string;
   onQueryChange: (v: string) => void;
   status: string;
   onStatusChange: (v: string) => void;
-  business: string;
-  onBusinessChange: (v: string) => void;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
@@ -67,12 +62,6 @@ export function LocationsTable({
             items={STATUS_ITEMS}
             className="h-9 w-32 rounded-lg text-sm"
           />
-          <Select
-            value={business}
-            onValueChange={onBusinessChange}
-            items={BUSINESS_ITEMS}
-            className="h-9 w-40 rounded-lg text-sm"
-          />
           <button
             type="button"
             aria-label="Table settings"
@@ -88,7 +77,6 @@ export function LocationsTable({
           <thead>
             <tr className="text-left text-xs text-muted-foreground">
               <th className="px-4 py-3 font-medium">Location</th>
-              <th className="px-4 py-3 font-medium">Business</th>
               <th className="px-4 py-3 font-medium">Rooms</th>
               <th className="px-4 py-3 font-medium">Screens</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -115,19 +103,11 @@ export function LocationsTable({
                         <Store className="size-4.5" />
                       </span>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="truncate font-medium text-foreground">{loc.name}</p>
-                          {loc.badge && (
-                            <span className="shrink-0 rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-400">
-                              {loc.badge}
-                            </span>
-                          )}
-                        </div>
-                        <p className="truncate text-xs text-muted-foreground">{loc.address}</p>
+                        <p className="truncate font-medium text-foreground">{loc.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{loc.address ?? "No address set"}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{loc.business}</td>
                   <td className="px-4 py-3 text-foreground">{loc.rooms}</td>
                   <td className="px-4 py-3">
                     <p className="text-foreground">{loc.screens}</p>
@@ -136,7 +116,9 @@ export function LocationsTable({
                   <td className="px-4 py-3">
                     <StatusPill status={loc.status} />
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{loc.lastActive}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {loc.lastSeenAt ? formatRelativeTime(loc.lastSeenAt) : "Never"}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       type="button"
@@ -152,7 +134,7 @@ export function LocationsTable({
             })}
             {locations.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
                   No locations match your filters.
                 </td>
               </tr>

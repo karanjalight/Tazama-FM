@@ -38,8 +38,9 @@ export interface LocationDetailsForm {
   country: string;
   timezone: string;
   description: string;
-  imageUrl: string | null;
-  isActive: boolean;
+  imagePath: string | null;
+  latitude: number | null;
+  longitude: number | null;
   allowAds: boolean;
   allowAnnouncements: boolean;
   collectEngagementData: boolean;
@@ -54,8 +55,9 @@ export const DEFAULT_LOCATION_DETAILS: LocationDetailsForm = {
   country: "Kenya",
   timezone: "East Africa Time (EAT)",
   description: "Our flagship restaurant located in the heart of Nairobi CBD.",
-  imageUrl: null,
-  isActive: true,
+  imagePath: null,
+  latitude: null,
+  longitude: null,
   allowAds: true,
   allowAnnouncements: true,
   collectEngagementData: true,
@@ -115,101 +117,18 @@ export function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${randomSegment(4)}`;
 }
 
-export const DEFAULT_ZONES: WizardZone[] = [
-  { id: "main-floor", name: "Main Floor" },
-  { id: "rooftop", name: "Rooftop" },
-];
+// Wizard drafts start genuinely empty — a location's zones/rooms/screens are
+// real Supabase rows the moment "Create Location" is submitted
+// (createLocationFromDraft cascades all of it for real), so pre-seeding
+// demo content here meant a user who clicked through without editing
+// anything would get 2 real zones, 6 real rooms, and 4 real screen-pairing
+// codes created under their actual business. Kept as empty arrays, not
+// deleted, so `use-wizard-draft.ts`'s DEFAULT_DRAFT and every step
+// component's props keep their existing shape.
+export const DEFAULT_ZONES: WizardZone[] = [];
 
-export const DEFAULT_ROOMS: WizardRoom[] = [
-  {
-    id: "main-hall",
-    zoneId: "main-floor",
-    name: "Main Hall",
-    tag: "Main",
-    type: "Dining Area",
-    capacity: 120,
-    description: "Primary dining area",
-  },
-  {
-    id: "bar-area",
-    zoneId: "main-floor",
-    name: "Bar Area",
-    type: "Bar / Lounge",
-    capacity: 40,
-    description: "Cocktail and bar area",
-  },
-  {
-    id: "vip-lounge",
-    zoneId: "main-floor",
-    name: "VIP Lounge",
-    type: "Lounge",
-    capacity: 20,
-    description: "Private VIP seating",
-  },
-  {
-    id: "private-dining-1",
-    zoneId: "main-floor",
-    name: "Private Dining 1",
-    type: "Private Room",
-    capacity: 10,
-    description: "Private dining room",
-  },
-  {
-    id: "rooftop-bar",
-    zoneId: "rooftop",
-    name: "Rooftop Bar",
-    type: "Bar / Lounge",
-    capacity: 30,
-    description: "Open-air rooftop bar",
-  },
-  {
-    id: "rooftop-lounge",
-    zoneId: "rooftop",
-    name: "Rooftop Lounge",
-    type: "Lounge",
-    capacity: 25,
-    description: "Rooftop lounge seating",
-  },
-];
+export const DEFAULT_ROOMS: WizardRoom[] = [];
 
 export const DEFAULT_AUDIO_ZONES: AudioZone[] = [];
 
-export const DEFAULT_SCREENS: WizardScreen[] = [
-  {
-    id: "scr-1",
-    roomId: "main-hall",
-    name: "Main Hall TV 01",
-    deviceModel: '65" Samsung Smart TV',
-    deviceId: "SCR-7F3B-01A2",
-    type: "TV",
-    status: "online",
-    isPrimary: true,
-  },
-  {
-    id: "scr-2",
-    roomId: "main-hall",
-    name: "Main Hall TV 02",
-    deviceModel: '55" LG Smart TV',
-    deviceId: "SCR-3C8D-91E4",
-    type: "TV",
-    status: "online",
-  },
-  {
-    id: "scr-3",
-    roomId: "bar-area",
-    name: "Bar Area TV 01",
-    deviceModel: '50" Samsung Smart TV',
-    deviceId: "SCR-9A1B-44C2",
-    type: "TV",
-    status: "online",
-  },
-  {
-    id: "scr-4",
-    roomId: "vip-lounge",
-    name: "VIP Lounge TV 01",
-    deviceModel: '43" LG Smart TV',
-    deviceId: "SCR-5D2E-77F1",
-    type: "TV",
-    status: "offline",
-  },
-];
+export const DEFAULT_SCREENS: WizardScreen[] = [];

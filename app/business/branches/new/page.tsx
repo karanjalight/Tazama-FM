@@ -7,14 +7,14 @@ import { CreateLocationWizard } from "@/components/business/branches/new/create-
 export const metadata: Metadata = { title: "Add Location — Business Dashboard" };
 
 /**
- * Static preview of the "Add Location" wizard — every step below the auth
- * guard runs on client state seeded from wizard-data.ts, not live Supabase
- * data. The real "Add branch" pairing-code flow (create-branch-dialog.tsx,
- * pairing-code.tsx) is untouched on disk, just not linked from here yet.
+ * Steps 1-4 build a local draft (localStorage-backed, see use-wizard-draft.ts);
+ * "Create Location" on step 5 cascades the whole thing into real Supabase
+ * writes via `createLocationFromDraft` (branch, zones, rooms, screens with
+ * real pairing codes, audio zones).
  */
 export default async function NewLocationPage() {
   const viewer = await getBusinessViewer();
   if (!viewer) redirect("/login");
 
-  return <CreateLocationWizard />;
+  return <CreateLocationWizard businessName={viewer.businessName} />;
 }

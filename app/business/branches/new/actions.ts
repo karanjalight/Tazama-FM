@@ -3,6 +3,8 @@
 import { createBranch } from "@/app/business/actions";
 import { createZone, createRoom, registerDevice } from "@/app/business/locations/actions";
 import { createAudioZone } from "@/app/business/audio-zones/actions";
+import { getBusinessViewer } from "@/lib/business/viewer";
+import { uploadLocationPhoto } from "@/lib/business/location-photo-storage";
 import { ROOM_GENRES } from "@/lib/room-genres";
 import type {
   AudioZone as WizardAudioZone,
@@ -49,6 +51,32 @@ const TIMEZONE_TO_IANA: Record<string, string> = {
   "South Africa Standard Time (SAST)": "Africa/Johannesburg",
 };
 
+/**
+ * Upload a location photo picked in the wizard's Step 1, before any branch
+ * exists yet — so this is gated only by "is an authenticated business user"
+ * (any role), not `canActOnBranch`/`requireAdminLevel` like the rest of this
+ * file, which all check against a real branch id. Matches the real upload
+ * pattern in app/business/content/actions.ts's uploadContentItem.
+ */
+export async function uploadLocationImage(
+  formData: FormData,
+): Promise<{ ok: true; path: string; publicUrl: string } | { ok: false; error: string }> {
+  const viewer = await getBusinessViewer();
+  if (!viewer) return { ok: false, error: "Please sign in." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return { ok: false, error: "No file provided." };
+  }
+
+  const uploaded = await uploadLocationPhoto(viewer.businessId, file);
+  if (!uploaded) {
+    return { ok: false, error: "Could not upload the image — check its size and format." };
+  }
+
+  return { ok: true, path: uploaded.path, publicUrl: uploaded.publicUrl };
+}
+
 export async function createLocationFromDraft(draft: LocationDraftInput): Promise<CreateLocationResult> {
   const branchResult = await createBranch({
     name: draft.details.name,
@@ -58,6 +86,9 @@ export async function createLocationFromDraft(draft: LocationDraftInput): Promis
     country: draft.details.country,
     timezone: TIMEZONE_TO_IANA[draft.details.timezone],
     description: draft.details.description,
+    latitude: draft.details.latitude ?? undefined,
+    longitude: draft.details.longitude ?? undefined,
+    imagePath: draft.details.imagePath ?? undefined,
     allowAds: draft.details.allowAds,
     allowAnnouncements: draft.details.allowAnnouncements,
     collectEngagementData: draft.details.collectEngagementData,

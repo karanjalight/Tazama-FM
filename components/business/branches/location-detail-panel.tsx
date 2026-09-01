@@ -1,23 +1,35 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   BarChart3,
   CalendarClock,
   DoorOpen,
   MonitorPlay,
-  Pencil,
   Store,
   Volume2,
   X,
 } from "lucide-react";
 
-import type { MockLocation } from "./mock-data";
-import { cn } from "@/lib/utils";
+import type { LocationSummary } from "@/lib/business/locations-queries";
+import { archiveBranch } from "@/app/business/actions";
+import { cn, formatRelativeTime } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
 const TABS = ["Overview", "Rooms", "Screens", "Settings"] as const;
 type Tab = (typeof TABS)[number];
+
+function formatCreatedAt(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 function MiniStat({
   icon: Icon,
@@ -57,10 +69,26 @@ export function LocationDetailPanel({
   location,
   onClose,
 }: {
-  location: MockLocation;
+  location: LocationSummary;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const [tab, setTab] = React.useState<Tab>("Overview");
+  const [deactivating, setDeactivating] = React.useState(false);
+
+  async function handleDeactivate() {
+    if (!confirm(`Deactivate "${location.name}"? Its screens will stop receiving content.`)) return;
+    setDeactivating(true);
+    const res = await archiveBranch({ branchId: location.id });
+    setDeactivating(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Location deactivated.");
+    onClose();
+    router.refresh();
+  }
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border bg-card">
@@ -80,11 +108,6 @@ export function LocationDetailPanel({
       <div className="p-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-lg font-semibold text-foreground">{location.name}</h2>
-          {location.badge && (
-            <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-400">
-              {location.badge}
-            </span>
-          )}
           <span
             className={cn(
               "inline-flex items-center gap-1 text-xs",
@@ -100,7 +123,7 @@ export function LocationDetailPanel({
             {location.status === "active" ? "Active" : "Offline"}
           </span>
         </div>
-        <p className="mt-0.5 text-sm text-muted-foreground">{location.address}</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">{location.address ?? "No address set"}</p>
 
         <div className="mt-3 flex gap-1 border-b border-border">
           {TABS.map((t) => (
@@ -145,19 +168,9 @@ export function LocationDetailPanel({
             </div>
 
             <div>
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground">Location Details</h3>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <Pencil className="size-3" />
-                  Edit
-                </button>
-              </div>
-              <div className="mt-2 space-y-2.5">
-                <DetailRow label="Business">{location.business}</DetailRow>
-                <DetailRow label="Address">{location.address}</DetailRow>
+              <h3 className="text-sm font-semibold text-foreground">Location Details</h3>
+              <div className="mt-2.5 space-y-3">
+                <DetailRow label="Address">{location.address ?? "Not set"}</DetailRow>
                 <DetailRow label="Timezone">{location.timezone}</DetailRow>
                 <DetailRow label="Status">
                   <span
@@ -175,27 +188,31 @@ export function LocationDetailPanel({
                     {location.status === "active" ? "Active" : "Offline"}
                   </span>
                 </DetailRow>
-                <DetailRow label="Created">{location.createdAt}</DetailRow>
-                <DetailRow label="Last Active">{location.lastActive}</DetailRow>
+                <DetailRow label="Created">{formatCreatedAt(location.createdAt)}</DetailRow>
+                <DetailRow label="Last Active">
+                  {location.lastSeenAt ? formatRelativeTime(location.lastSeenAt) : "Never"}
+                </DetailRow>
               </div>
             </div>
 
             <div className="flex gap-2 border-t border-border pt-3">
-              <button
-                type="button"
+              <a
+                href="/business/analytics"
                 className={cn(buttonVariants({ variant: "outline" }), "flex-1 gap-1.5")}
               >
                 <BarChart3 className="size-4" />
                 View Analytics
-              </button>
+              </a>
               <button
                 type="button"
+                onClick={handleDeactivate}
+                disabled={deactivating}
                 className={cn(
                   buttonVariants({ variant: "default" }),
-                  "flex-1 gap-1.5 bg-rose-600 text-white hover:bg-rose-600/85",
+                  "flex-1 gap-1.5 bg-rose-600 text-white hover:bg-rose-600/85 disabled:opacity-50",
                 )}
               >
-                Deactivate Location
+                {deactivating ? "Deactivating…" : "Deactivate Location"}
               </button>
             </div>
           </div>

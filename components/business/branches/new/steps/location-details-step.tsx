@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { Building2, ChevronDown, MapPin, Minus, Plus, UploadCloud, X, Locate } from "lucide-react";
+import dynamic from "next/dynamic";
+import { toast } from "sonner";
+import { Building2, Loader2, MapPin, UploadCloud } from "lucide-react";
 
 import type { LocationDetailsForm } from "../wizard-data";
 import { Input } from "@/components/ui/input";
@@ -10,6 +12,20 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { uploadLocationImage } from "@/app/business/branches/new/actions";
+
+// Leaflet touches `window`/`document` at import time (through react-leaflet),
+// which breaks Next's server render — load the whole map as a client-only
+// chunk. `ssr: false` is allowed here because this file itself is already a
+// Client Component (top of file).
+const LocationMap = dynamic(() => import("./location-map").then((m) => m.LocationMap), {
+  ssr: false,
+  loading: () => (
+    <div className="mt-3 flex h-56 items-center justify-center rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground">
+      Loading map…
+    </div>
+  ),
+});
 
 const TIMEZONES = [
   "East Africa Time (EAT)",
@@ -20,15 +36,7 @@ const TIMEZONES = [
 
 const COUNTRIES = ["Kenya", "Uganda", "Tanzania", "Rwanda", "Nigeria", "South Africa"] as const;
 
-const MAP_LABELS = [
-  { text: "Jamia Mosque", top: "22%", left: "68%" },
-  { text: "Kencom House", top: "35%", left: "18%" },
-  { text: "City Hall Way", top: "40%", left: "72%" },
-  { text: "Tom Mboya Way", top: "58%", left: "62%" },
-  { text: "Kimathi Street", top: "72%", left: "30%" },
-  { text: "Moi Avenue", top: "82%", left: "76%" },
-  { text: "Central Park", top: "70%", left: "8%" },
-];
+const LOCATION_PHOTOS_BUCKET = "location-photos";
 
 function Field({
   id,
@@ -63,11 +71,41 @@ export function LocationDetailsStep({
   onChange: (patch: Partial<LocationDetailsForm>) => void;
 }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Instant local preview (blob URL) shown the moment a file is picked, well
+  // before the Storage upload round-trip resolves — never itself written to
+  // the draft (blob URLs don't survive a reload). Once the upload finishes,
+  // `details.imagePath` (the real Storage path) is what actually persists.
+  const [preview, setPreview] = React.useState<string | null>(null);
+  const [uploading, setUploading] = React.useState(false);
 
-  function handleFile(file: File | undefined) {
+  // If this step is being resumed from a saved draft (no in-memory blob
+  // preview to fall back on, since blob URLs don't survive a reload),
+  // rebuild a viewable URL from the persisted Storage path — the bucket is
+  // public, so this is a plain, predictable public-object URL, no signing
+  // needed.
+  const persistedImageUrl =
+    details.imagePath && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/${LOCATION_PHOTOS_BUCKET}/${details.imagePath}`
+      : null;
+  const previewSrc = preview ?? persistedImageUrl;
+
+  async function handleFile(file: File | undefined) {
     if (!file) return;
-    const url = URL.createObjectURL(file);
-    onChange({ imageUrl: url });
+    setPreview(URL.createObjectURL(file));
+    setUploading(true);
+    const formData = new FormData();
+    formData.set("file", file);
+    const res = await uploadLocationImage(formData);
+    setUploading(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    onChange({ imagePath: res.path });
+  }
+
+  function handleMarkerMove(lat: number, lng: number) {
+    onChange({ latitude: lat, longitude: lng });
   }
 
   return (
@@ -89,26 +127,16 @@ export function LocationDetailsStep({
             This will be the primary name for this location
           </p>
 
-          <Field id="loc-business" label="Business" required>
-            <div
-              id="loc-business"
-              className="flex h-11 items-center justify-between gap-2 rounded-xl border border-input bg-background px-3.5 text-[15px] text-foreground"
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="grid size-6 shrink-0 place-items-center rounded-full bg-violet-500/20 text-violet-400">
-                  <Building2 className="size-3.5" />
-                </span>
-                <span className="truncate">{details.business}</span>
+          <div className="space-y-1.5">
+            <Label>Business</Label>
+            <div className="flex h-11 items-center gap-2 rounded-xl border border-input bg-muted/40 px-3.5 text-[15px] text-foreground">
+              <span className="grid size-6 shrink-0 place-items-center rounded-full bg-violet-500/20 text-violet-400">
+                <Building2 className="size-3.5" />
               </span>
-              <span className="flex shrink-0 items-center gap-2 text-muted-foreground">
-                <X className="size-4" />
-                <ChevronDown className="size-4" />
-              </span>
+              <span className="truncate">{details.business}</span>
             </div>
-          </Field>
-          <p className="-mt-3 text-xs text-muted-foreground">
-            Select the business this location belongs to
-          </p>
+          </div>
+          <p className="-mt-3 text-xs text-muted-foreground">This location belongs to {details.business}</p>
 
           <Field id="loc-address" label="Address" required>
             <div className="relative">
@@ -167,103 +195,64 @@ export function LocationDetailsStep({
           <div className="space-y-1.5">
             <Label>Location Image (Optional)</Label>
             <div className="flex gap-3">
-              {details.imageUrl && (
-                <Image
-                  src={details.imageUrl}
-                  alt=""
-                  width={96}
-                  height={96}
-                  unoptimized
-                  className="size-24 shrink-0 rounded-xl border border-border object-cover"
-                />
+              {previewSrc && (
+                <div className="relative size-24 shrink-0">
+                  <Image
+                    src={previewSrc}
+                    alt=""
+                    width={96}
+                    height={96}
+                    unoptimized
+                    className="size-24 rounded-xl border border-border object-cover"
+                  />
+                  {uploading && (
+                    <div className="absolute inset-0 grid place-items-center rounded-xl bg-black/50">
+                      <Loader2 className="size-5 animate-spin text-white" />
+                    </div>
+                  )}
+                </div>
               )}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-input py-5 text-center text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+                disabled={uploading}
+                className="flex flex-1 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-input py-5 text-center text-muted-foreground transition-colors hover:border-ring hover:text-foreground disabled:opacity-60"
               >
-                <UploadCloud className="size-5" />
-                <span className="text-xs font-medium">Upload Image</span>
-                <span className="text-[11px]">PNG, JPG up to 5MB</span>
+                {uploading ? (
+                  <Loader2 className="size-5 animate-spin" />
+                ) : (
+                  <UploadCloud className="size-5" />
+                )}
+                <span className="text-xs font-medium">{uploading ? "Uploading…" : "Upload Image"}</span>
+                <span className="text-[11px]">PNG, JPG, WEBP up to 10MB</span>
               </button>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={(e) => handleFile(e.target.files?.[0])}
               />
             </div>
           </div>
-
-          <label className="flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={details.isActive}
-              onChange={(e) => onChange({ isActive: e.target.checked })}
-              className="mt-0.5 size-4 shrink-0 rounded border-input accent-brand"
-            />
-            <span>
-              <span className="block text-sm text-foreground">This location is active</span>
-              <span className="block text-xs text-muted-foreground">
-                Inactive locations can be activated later
-              </span>
-            </span>
-          </label>
         </div>
       </div>
 
       <div className="space-y-4">
         <div className="rounded-2xl border border-border bg-card p-5">
           <h2 className="text-base font-semibold text-foreground">Location on Map</h2>
-          <p className="text-sm text-muted-foreground">Drag the pin to adjust the exact location</p>
+          <p className="text-sm text-muted-foreground">
+            Drag the pin, or use Locate to find it by address
+          </p>
 
-          <div className="relative mt-3 h-56 overflow-hidden rounded-xl border border-border bg-[#0d1117]">
-            <div
-              className="absolute inset-0 opacity-40"
-              style={{
-                backgroundImage:
-                  "linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)",
-                backgroundSize: "28px 28px",
-              }}
-            />
-            {MAP_LABELS.map((l) => (
-              <span
-                key={l.text}
-                className="absolute text-[10px] whitespace-nowrap text-white/35"
-                style={{ top: l.top, left: l.left }}
-              >
-                {l.text}
-              </span>
-            ))}
-            <MapPin
-              className="absolute top-1/2 left-1/2 size-8 -translate-x-1/2 -translate-y-full fill-violet-500 text-violet-500 drop-shadow-lg"
-              strokeWidth={1.5}
-            />
-            <div className="absolute top-3 right-3 flex flex-col gap-1.5">
-              <button
-                type="button"
-                aria-label="Zoom in"
-                className="grid size-8 place-items-center rounded-lg border border-white/10 bg-black/50 text-white transition-colors hover:bg-black/70"
-              >
-                <Plus className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label="Zoom out"
-                className="grid size-8 place-items-center rounded-lg border border-white/10 bg-black/50 text-white transition-colors hover:bg-black/70"
-              >
-                <Minus className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                aria-label="Locate"
-                className="grid size-8 place-items-center rounded-lg border border-white/10 bg-black/50 text-white transition-colors hover:bg-black/70"
-              >
-                <Locate className="size-3.5" />
-              </button>
-            </div>
-          </div>
+          <LocationMap
+            latitude={details.latitude}
+            longitude={details.longitude}
+            address={details.address}
+            city={details.city}
+            country={details.country}
+            onMarkerMove={handleMarkerMove}
+          />
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-5">

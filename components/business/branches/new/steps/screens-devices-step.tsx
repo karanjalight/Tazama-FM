@@ -23,7 +23,7 @@ export function ScreensDevicesStep({
   zones: WizardZone[];
   rooms: WizardRoom[];
   screens: WizardScreen[];
-  selectedRoomId: string;
+  selectedRoomId: string | null;
   onSelectRoom: (id: string) => void;
   onCreateRoom: (input: NewRoomInput) => void;
   onCreateScreen: (input: NewScreenInput) => void;

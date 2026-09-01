@@ -53,12 +53,6 @@ export function LocationSummaryPanel({
           <p className="truncate text-base font-semibold text-foreground">
             {details.name || "Untitled location"}
           </p>
-          {details.isActive && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs text-emerald-400">
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              Active
-            </span>
-          )}
         </div>
         <div className="mt-1.5 space-y-1 text-xs text-muted-foreground">
           <p className="truncate">{details.business}</p>

@@ -50,6 +50,9 @@ const citySchema = z.string().trim().max(80);
 const countrySchema = z.string().trim().max(80);
 const timezoneSchema = z.string().trim().max(80);
 const descriptionSchema = z.string().trim().max(1000);
+const latitudeSchema = z.number().min(-90).max(90);
+const longitudeSchema = z.number().min(-180).max(180);
+const imagePathSchema = z.string().trim().min(1).max(300);
 
 export type CreateBranchResult =
   | { ok: true; branchId: string }
@@ -60,11 +63,11 @@ export type CreateBranchResult =
  * Branch" dialog (components/business/create-branch-dialog.tsx) only ever
  * sends those two, and must keep working unchanged. Everything else is
  * optional location-detail data from the "Add Location" wizard's first step
- * (real columns on `branches` since business-locations.sql, just never
- * written until now). `isActive`/`business`/`imageUrl` from that step have
- * no backing column (status is derived from device activity, not stored;
- * there's no real business-switcher; location photos have no Storage
- * upload path yet) and are intentionally not accepted here.
+ * (real columns on `branches` since business-locations.sql/
+ * business-location-geo.sql, just never written until now). `isActive`/
+ * `business` from that step have no backing column (status is derived from
+ * device activity, not stored; there's no real business-switcher) and are
+ * intentionally not accepted here.
  */
 export async function createBranch(input: {
   name: string;
@@ -74,6 +77,9 @@ export async function createBranch(input: {
   country?: string;
   timezone?: string;
   description?: string;
+  latitude?: number;
+  longitude?: number;
+  imagePath?: string;
   allowAds?: boolean;
   allowAnnouncements?: boolean;
   collectEngagementData?: boolean;
@@ -141,6 +147,18 @@ export async function createBranch(input: {
   if (timezone) branchRow.timezone = timezone;
   const description = descriptionSchema.safeParse(input.description ?? "").data;
   if (description) branchRow.description = description;
+  if (input.latitude !== undefined) {
+    const latitude = latitudeSchema.safeParse(input.latitude).data;
+    if (latitude !== undefined) branchRow.latitude = latitude;
+  }
+  if (input.longitude !== undefined) {
+    const longitude = longitudeSchema.safeParse(input.longitude).data;
+    if (longitude !== undefined) branchRow.longitude = longitude;
+  }
+  if (input.imagePath !== undefined) {
+    const imagePath = imagePathSchema.safeParse(input.imagePath).data;
+    if (imagePath) branchRow.image_path = imagePath;
+  }
   if (input.allowAds !== undefined) branchRow.allow_ads = input.allowAds;
   if (input.allowAnnouncements !== undefined) branchRow.allow_announcements = input.allowAnnouncements;
   if (input.collectEngagementData !== undefined) branchRow.collect_engagement_data = input.collectEngagementData;

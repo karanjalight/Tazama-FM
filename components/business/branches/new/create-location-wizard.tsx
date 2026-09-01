@@ -6,8 +6,6 @@ import { toast } from "sonner";
 import { ChevronRight, Save } from "lucide-react";
 
 import {
-  DEFAULT_ROOMS,
-  DEFAULT_ZONES,
   newId,
   type AudioZone,
   type LocationDetailsForm,
@@ -26,6 +24,8 @@ import { ReviewCreateStep } from "./steps/review-create-step";
 import { LocationCreatedSuccess } from "./location-created-success";
 import { VioletButton } from "./violet-button";
 import type { NewRoomInput } from "./modals/add-room-dialog";
+import type { UpdateZoneInput } from "./modals/edit-zone-dialog";
+import type { UpdateRoomInput } from "./modals/edit-room-dialog";
 import type { NewScreenInput } from "./modals/add-screen-dialog";
 import type { NewAudioZoneInput } from "./modals/add-audio-zone-dialog";
 import { createLocationFromDraft, type CreateLocationResult } from "@/app/business/branches/new/actions";
@@ -43,12 +43,18 @@ const HEADINGS: Record<number, { title: string; subtitle: (name: string) => stri
   5: { title: "Add Location", subtitle: (name) => `Review everything before creating ${name}` },
 };
 
-export function CreateLocationWizard() {
+export function CreateLocationWizard({ businessName }: { businessName: string }) {
   const { draft, setDraft, hydrated, resumed, clearDraft } = useWizardDraft();
-  const { step, details, zones, rooms, screens, audioZones } = draft;
+  const { step, details: rawDetails, zones, rooms, screens, audioZones } = draft;
+  // `details.business` is a display-only field (createBranch never reads
+  // it) with no way to know the real business name at module-load time
+  // (wizard-data.ts's DEFAULT_LOCATION_DETAILS is a static constant) — fall
+  // back to the real value here at render time instead, without mutating
+  // the draft.
+  const details = rawDetails.business ? rawDetails : { ...rawDetails, business: businessName };
 
-  const [selectedZoneId, setSelectedZoneId] = React.useState(DEFAULT_ZONES[0].id);
-  const [selectedRoomId, setSelectedRoomId] = React.useState(DEFAULT_ROOMS[0].id);
+  const [selectedZoneId, setSelectedZoneId] = React.useState<string | null>(zones[0]?.id ?? null);
+  const [selectedRoomId, setSelectedRoomId] = React.useState<string | null>(rooms[0]?.id ?? null);
 
   React.useEffect(() => {
     if (hydrated && resumed) {
@@ -90,6 +96,67 @@ export function CreateLocationWizard() {
     setSelectedZoneId(input.zoneId);
     setSelectedRoomId(room.id);
     toast.success(`Room "${room.name}" added`);
+  }
+
+  function handleUpdateZone(input: UpdateZoneInput) {
+    setDraft((d) => ({
+      ...d,
+      zones: d.zones.map((z) => (z.id === input.id ? { ...z, name: input.name } : z)),
+    }));
+    toast.success(`Zone "${input.name}" updated`);
+  }
+
+  function handleDeleteZone(zoneId: string) {
+    const zone = zones.find((z) => z.id === zoneId);
+    if (!zone) return;
+    if (rooms.some((r) => r.zoneId === zoneId)) {
+      toast.error("Remove this zone's rooms first.");
+      return;
+    }
+    if (!confirm(`Delete zone "${zone.name}"? This can't be undone.`)) return;
+    setDraft((d) => ({ ...d, zones: d.zones.filter((z) => z.id !== zoneId) }));
+    setSelectedZoneId((current) => {
+      if (current !== zoneId) return current;
+      const remaining = zones.filter((z) => z.id !== zoneId);
+      return remaining[0]?.id ?? null;
+    });
+    toast.success(`Zone "${zone.name}" removed`);
+  }
+
+  function handleUpdateRoom(input: UpdateRoomInput) {
+    setDraft((d) => ({
+      ...d,
+      rooms: d.rooms.map((r) =>
+        r.id === input.id
+          ? {
+              ...r,
+              name: input.name,
+              zoneId: input.zoneId,
+              type: input.type,
+              capacity: input.capacity,
+              description: input.description,
+            }
+          : r,
+      ),
+    }));
+    toast.success(`Room "${input.name}" updated`);
+  }
+
+  function handleDeleteRoom(roomId: string) {
+    const room = rooms.find((r) => r.id === roomId);
+    if (!room) return;
+    if (screens.some((s) => s.roomId === roomId)) {
+      toast.error("Remove this room's screens first.");
+      return;
+    }
+    if (!confirm(`Delete room "${room.name}"? This can't be undone.`)) return;
+    setDraft((d) => ({ ...d, rooms: d.rooms.filter((r) => r.id !== roomId) }));
+    setSelectedRoomId((current) => {
+      if (current !== roomId) return current;
+      const remaining = rooms.filter((r) => r.id !== roomId);
+      return remaining[0]?.id ?? null;
+    });
+    toast.success(`Room "${room.name}" removed`);
   }
 
   function handleCreateScreen(input: NewScreenInput) {
@@ -200,6 +267,10 @@ export function CreateLocationWizard() {
               onSelectZone={setSelectedZoneId}
               onCreateZone={handleCreateZone}
               onCreateRoom={handleCreateRoom}
+              onUpdateZone={handleUpdateZone}
+              onDeleteZone={handleDeleteZone}
+              onUpdateRoom={handleUpdateRoom}
+              onDeleteRoom={handleDeleteRoom}
             />
           )}
           {step === 3 && (

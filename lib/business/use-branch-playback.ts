@@ -101,9 +101,8 @@ interface BranchVolumeRow {
   volume: number;
 }
 
-/** Subscribes to a branch's own `volume` column so a remote admin change
- * (Task 6/7) reaches an already-loaded kiosk immediately. Filters by
- * `room_id` (not `branches.id`) since the kiosk only knows its room's id. */
+/** Subscribes to a room's own `volume` column so a remote admin change
+ * reaches an already-loaded kiosk immediately. */
 export function useBranchVolume(
   roomId: string,
   enabled: boolean,
@@ -124,8 +123,8 @@ export function useBranchVolume(
         {
           event: "UPDATE",
           schema: "public",
-          table: "branches",
-          filter: `room_id=eq.${roomId}`,
+          table: "rooms",
+          filter: `id=eq.${roomId}`,
         },
         (payload) => {
           const row = payload.new as BranchVolumeRow | undefined;

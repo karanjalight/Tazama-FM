@@ -4,7 +4,7 @@ import { KioskPlayer } from "@/components/player/kiosk-player";
 import { KioskRoomPlayer } from "@/components/player/kiosk-room-player";
 import { resolveKioskPlaylist, kioskTitle } from "@/lib/player/kiosk-playlist";
 import { getRoomBySlug, getRoomPlayback } from "@/lib/rooms/queries";
-import { getBranchVolume } from "@/lib/business/queries";
+import { getRoomVolume } from "@/lib/business/queries";
 
 /**
  * Lightweight kiosk player for Android TV boxes (restaurants/clubs/hotels).
@@ -54,7 +54,7 @@ export default async function PlayerPage({
   if (room && (room.access === "public" || room.ownerBusinessId)) {
     const [initialPlayback, initialVolume] = await Promise.all([
       getRoomPlayback(room.id),
-      room.ownerBusinessId ? getBranchVolume(room.id) : Promise.resolve(80),
+      room.ownerBusinessId ? getRoomVolume(room.id) : Promise.resolve(80),
     ]);
     return (
       <KioskRoomPlayer

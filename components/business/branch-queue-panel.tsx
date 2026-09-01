@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   removeBranchQueueItem,
   setBranchPlayback,
-  setBranchVolume,
+  setRoomVolume,
   playToBranches,
 } from "@/app/business/actions";
 import { requestAdvance } from "@/lib/business/use-branch-playback";
@@ -61,7 +61,7 @@ export function BranchQueuePanel({
 
   async function handleRemove(item: QueueItem) {
     setQueue((q) => q.filter((i) => i.id !== item.id));
-    const result = await removeBranchQueueItem({ branchId, queueId: item.id });
+    const result = await removeBranchQueueItem({ branchId, roomId, queueId: item.id });
     if (!result.ok) toast.error(result.error);
   }
 
@@ -69,6 +69,7 @@ export function BranchQueuePanel({
     setPending(true);
     const result = await playToBranches({
       branchIds: [branchId],
+      roomId,
       track: item.track,
     });
     setPending(false);
@@ -79,7 +80,7 @@ export function BranchQueuePanel({
     const next = !isPlaying;
     setIsPlaying(next); // optimistic — reconciled by the subscription above
     setPending(true);
-    const result = await setBranchPlayback({ branchId, isPlaying: next });
+    const result = await setBranchPlayback({ branchId, roomId, isPlaying: next });
     setPending(false);
     if (!result.ok) {
       setIsPlaying(!next); // revert on failure
@@ -101,7 +102,7 @@ export function BranchQueuePanel({
 
   async function handleVolumeChange(v: number) {
     setVolume(v);
-    const result = await setBranchVolume({ branchId, volume: v });
+    const result = await setRoomVolume({ branchId, roomId, volume: v });
     if (!result.ok) toast.error(result.error);
   }
 

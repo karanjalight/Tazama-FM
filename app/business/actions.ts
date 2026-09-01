@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch, listBranches } from "@/lib/business/queries";
+import { getRoom } from "@/lib/business/locations-queries";
 import { computeFrozenPosition } from "@/lib/business/playback-freeze";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { slugify, randomSuffix } from "@/lib/rooms/slug";
@@ -515,6 +516,7 @@ const trackSchema = z.object({
 
 export async function playToBranches(input: {
   branchIds: string[] | "all";
+  roomId?: string;
   track: RoomTrack;
 }): Promise<
   | { ok: true; results: { branchId: string; ok: boolean }[] }
@@ -541,13 +543,26 @@ export async function playToBranches(input: {
     return { ok: false, error: "No branches to play to." };
   }
 
+  // A specific room only makes sense targeting exactly one branch — a bulk
+  // push ("all" or several branches) always goes to each branch's own
+  // default room, same as before this change.
+  let targetRoomId: string | null = null;
+  if (input.roomId) {
+    if (permitted.length !== 1) {
+      return { ok: false, error: "Pick a single branch to target a specific room." };
+    }
+    const room = await getRoom(permitted[0].id, input.roomId);
+    if (!room) return { ok: false, error: "Room not found." };
+    targetRoomId = room.id;
+  }
+
   const results = await Promise.all(
     permitted.map(async (branch) => {
       const { error } = await admin
         .from("room_playback")
         .upsert(
           {
-            room_id: branch.roomId,
+            room_id: targetRoomId ?? branch.roomId,
             track: parsedTrack.data,
             position_ms: 0,
             is_playing: true,
@@ -680,6 +695,7 @@ export async function revokeStaff(input: {
 
 export async function removeBranchQueueItem(input: {
   branchId: string;
+  roomId?: string;
   queueId: string;
 }): Promise<ActionResult> {
   const viewer = await getBusinessViewer();
@@ -689,6 +705,13 @@ export async function removeBranchQueueItem(input: {
   const branch = await getBranch(viewer.businessId, input.branchId);
   if (!branch) return { ok: false, error: "Branch not found." };
 
+  let roomId = branch.roomId;
+  if (input.roomId) {
+    const room = await getRoom(branch.id, input.roomId);
+    if (!room) return { ok: false, error: "Room not found." };
+    roomId = room.id;
+  }
+
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
 
@@ -696,7 +719,7 @@ export async function removeBranchQueueItem(input: {
     .from("room_queue")
     .delete()
     .eq("id", input.queueId)
-    .eq("room_id", branch.roomId);
+    .eq("room_id", roomId);
   if (error) return { ok: false, error: "Could not remove track." };
 
   revalidatePath(`/business/branches/${input.branchId}`);
@@ -705,6 +728,7 @@ export async function removeBranchQueueItem(input: {
 
 export async function setBranchPlayback(input: {
   branchId: string;
+  roomId?: string;
   isPlaying: boolean;
 }): Promise<ActionResult> {
   const viewer = await getBusinessViewer();
@@ -714,13 +738,20 @@ export async function setBranchPlayback(input: {
   const branch = await getBranch(viewer.businessId, input.branchId);
   if (!branch) return { ok: false, error: "Branch not found." };
 
+  let roomId = branch.roomId;
+  if (input.roomId) {
+    const room = await getRoom(branch.id, input.roomId);
+    if (!room) return { ok: false, error: "Room not found." };
+    roomId = room.id;
+  }
+
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
 
   const { data: current } = await admin
     .from("room_playback")
     .select("position_ms, is_playing, updated_at")
-    .eq("room_id", branch.roomId)
+    .eq("room_id", roomId)
     .maybeSingle();
   const positionMs = computeFrozenPosition(
     current
@@ -741,15 +772,16 @@ export async function setBranchPlayback(input: {
       position_ms: positionMs,
       updated_at: new Date().toISOString(),
     })
-    .eq("room_id", branch.roomId);
+    .eq("room_id", roomId);
   if (error) return { ok: false, error: "Could not update playback." };
 
   revalidatePath(`/business/branches/${input.branchId}`);
   return { ok: true };
 }
 
-export async function setBranchVolume(input: {
+export async function setRoomVolume(input: {
   branchId: string;
+  roomId?: string;
   volume: number;
 }): Promise<ActionResult> {
   const viewer = await getBusinessViewer();
@@ -759,15 +791,22 @@ export async function setBranchVolume(input: {
   const branch = await getBranch(viewer.businessId, input.branchId);
   if (!branch) return { ok: false, error: "Branch not found." };
 
+  let roomId = branch.roomId;
+  if (input.roomId) {
+    const room = await getRoom(branch.id, input.roomId);
+    if (!room) return { ok: false, error: "Room not found." };
+    roomId = room.id;
+  }
+
   const clamped = Math.min(100, Math.max(0, Math.round(input.volume)));
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
 
   const { error } = await admin
-    .from("branches")
+    .from("rooms")
     .update({ volume: clamped })
-    .eq("id", branch.id);
+    .eq("id", roomId);
   if (error) return { ok: false, error: "Could not update volume." };
 
   revalidatePath(`/business/branches/${input.branchId}`);

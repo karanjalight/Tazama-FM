@@ -9,16 +9,18 @@
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch } from "@/lib/business/queries";
+import type { Branch } from "@/lib/business/types";
 import { listZones, listRooms, type Zone, type Room } from "@/lib/business/locations-queries";
 import { listBranchDevicesDetailed, type ManagedDevice } from "@/lib/business/device-queries";
 import { listAudioZonesForBranch } from "@/lib/business/audio-zone-queries";
 import type { AudioZone } from "@/lib/business/audio-zone-types";
 
-async function assertAccess(branchId: string) {
+/** Returns the branch itself (not just a boolean) so callers that need its
+ * fields don't have to look it up a second time. */
+async function assertAccess(branchId: string): Promise<Branch | null> {
   const viewer = await getBusinessViewer();
   if (!viewer || !canActOnBranch(viewer, branchId)) return null;
-  const branch = await getBranch(viewer.businessId, branchId);
-  return branch ? viewer : null;
+  return getBranch(viewer.businessId, branchId);
 }
 
 export async function getLocationRoomsSummary(
@@ -37,4 +39,42 @@ export async function getLocationDevicesSummary(branchId: string): Promise<Manag
 export async function getLocationAudioZonesSummary(branchId: string): Promise<AudioZone[] | null> {
   if (!(await assertAccess(branchId))) return null;
   return listAudioZonesForBranch(branchId);
+}
+
+/**
+ * `LocationSummary` (the list view's row shape) only carries a pre-combined
+ * `address` display string — the edit form needs the raw separate fields,
+ * fetched lazily only once "Edit" is actually clicked rather than bloating
+ * every row of the list query.
+ */
+export interface LocationEditableDetails {
+  name: string;
+  address: string;
+  city: string;
+  country: string;
+  timezone: string;
+  description: string;
+  allowAds: boolean;
+  allowAnnouncements: boolean;
+  collectEngagementData: boolean;
+  restrictContentRating: boolean;
+}
+
+export async function getLocationEditableDetails(
+  branchId: string,
+): Promise<LocationEditableDetails | null> {
+  const branch = await assertAccess(branchId);
+  if (!branch) return null;
+  return {
+    name: branch.name,
+    address: branch.address ?? "",
+    city: branch.city ?? "",
+    country: branch.country ?? "",
+    timezone: branch.timezone,
+    description: branch.description ?? "",
+    allowAds: branch.allowAds,
+    allowAnnouncements: branch.allowAnnouncements,
+    collectEngagementData: branch.collectEngagementData,
+    restrictContentRating: branch.restrictContentRating,
+  };
 }

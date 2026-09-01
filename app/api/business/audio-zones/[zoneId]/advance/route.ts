@@ -63,11 +63,14 @@ export async function POST(
     return NextResponse.json({ track: current.track, version: current.version });
   }
 
-  const { data: zone } = await admin
+  const { data: zone, error: zoneError } = await admin
     .from("audio_zones")
     .select("default_playlist_id")
     .eq("id", zoneId)
     .maybeSingle();
+  if (zoneError) {
+    return NextResponse.json({ error: "Could not read audio zone." }, { status: 500 });
+  }
 
   const currentYoutubeId = (current.track as RoomTrack | null)?.youtubeId ?? null;
   let next: RoomTrack | null = zone?.default_playlist_id

@@ -9,12 +9,20 @@ import type { RoomTrack } from "@/lib/rooms/types";
 /** The zone's earliest-covered room's genres — deterministic tie-break
  * (audio_zone_rooms joined to rooms.created_at, ascending) so a
  * synchronized zone with no playlist assigned still has a genre fallback
- * instead of leaving every screen silent. */
-async function earliestZoneRoomGenres(admin: SupabaseClient, zoneId: string): Promise<string[]> {
-  const { data } = await admin
+ * instead of leaving every screen silent. Surfaces `error` so the caller can
+ * tell a genuine query failure apart from "this zone covers no rooms" —
+ * both would otherwise look like an empty `genres` array. */
+async function earliestZoneRoomGenres(
+  admin: SupabaseClient,
+  zoneId: string,
+): Promise<{ genres: string[]; error: unknown }> {
+  const { data, error } = await admin
     .from("audio_zone_rooms")
     .select("rooms(genres, created_at)")
     .eq("audio_zone_id", zoneId);
+  if (error) {
+    return { genres: [], error };
+  }
   const rows = (data ?? []) as {
     rooms: { genres: string[]; created_at: string } | { genres: string[]; created_at: string }[] | null;
   }[];
@@ -22,7 +30,7 @@ async function earliestZoneRoomGenres(admin: SupabaseClient, zoneId: string): Pr
     .map((r) => (Array.isArray(r.rooms) ? r.rooms[0] : r.rooms))
     .filter((r): r is { genres: string[]; created_at: string } => !!r)
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-  return rooms[0]?.genres ?? [];
+  return { genres: rooms[0]?.genres ?? [], error: null };
 }
 
 export async function POST(
@@ -78,7 +86,10 @@ export async function POST(
     : null;
 
   if (!next) {
-    const genres = await earliestZoneRoomGenres(admin, zoneId);
+    const { genres, error: genresError } = await earliestZoneRoomGenres(admin, zoneId);
+    if (genresError) {
+      return NextResponse.json({ error: "Could not read zone room genres." }, { status: 500 });
+    }
     if (genres.length) {
       const suggestions = await buildSuggestions({
         roomGenres: genres,

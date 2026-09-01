@@ -1,0 +1,116 @@
+import { NextResponse } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveNextPlaylistTrack } from "@/lib/business/playlist-resolver";
+import { buildSuggestions } from "@/lib/rooms/suggestions";
+import type { RoomTrack } from "@/lib/rooms/types";
+
+/** The zone's earliest-covered room's genres — deterministic tie-break
+ * (audio_zone_rooms joined to rooms.created_at, ascending) so a
+ * synchronized zone with no playlist assigned still has a genre fallback
+ * instead of leaving every screen silent. */
+async function earliestZoneRoomGenres(admin: SupabaseClient, zoneId: string): Promise<string[]> {
+  const { data } = await admin
+    .from("audio_zone_rooms")
+    .select("rooms(genres, created_at)")
+    .eq("audio_zone_id", zoneId);
+  const rows = (data ?? []) as {
+    rooms: { genres: string[]; created_at: string } | { genres: string[]; created_at: string }[] | null;
+  }[];
+  const rooms = rows
+    .map((r) => (Array.isArray(r.rooms) ? r.rooms[0] : r.rooms))
+    .filter((r): r is { genres: string[]; created_at: string } => !!r)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  return rooms[0]?.genres ?? [];
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ zoneId: string }> },
+) {
+  const { zoneId } = await params;
+  let reportedVersion: unknown;
+  try {
+    ({ reportedVersion } = await request.json());
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+  if (typeof reportedVersion !== "number") {
+    return NextResponse.json({ error: "Missing reportedVersion." }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return NextResponse.json({ error: "Not configured." }, { status: 503 });
+  }
+
+  const { data: current } = await admin
+    .from("audio_zone_playback")
+    .select("track, version")
+    .eq("zone_id", zoneId)
+    .maybeSingle();
+  if (!current) {
+    return NextResponse.json({ error: "Audio zone not found." }, { status: 404 });
+  }
+
+  if (current.version !== reportedVersion) {
+    // Lost the race (or reporting a stale version) — hand back the current
+    // truth; this kiosk's own realtime subscription will also see it soon.
+    return NextResponse.json({ track: current.track, version: current.version });
+  }
+
+  const { data: zone } = await admin
+    .from("audio_zones")
+    .select("default_playlist_id")
+    .eq("id", zoneId)
+    .maybeSingle();
+
+  const currentYoutubeId = (current.track as RoomTrack | null)?.youtubeId ?? null;
+  let next: RoomTrack | null = zone?.default_playlist_id
+    ? await resolveNextPlaylistTrack(admin, zone.default_playlist_id, currentYoutubeId)
+    : null;
+
+  if (!next) {
+    const genres = await earliestZoneRoomGenres(admin, zoneId);
+    if (genres.length) {
+      const suggestions = await buildSuggestions({
+        roomGenres: genres,
+        participantGenres: [],
+        exclude: currentYoutubeId ? [currentYoutubeId] : [],
+        limit: 1,
+      });
+      next = suggestions[0] ?? null;
+    }
+  }
+
+  const { data: updated } = await admin
+    .from("audio_zone_playback")
+    .update({
+      track: next,
+      is_playing: next !== null,
+      position_ms: 0,
+      started_at: new Date().toISOString(),
+      version: reportedVersion + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("zone_id", zoneId)
+    .eq("version", reportedVersion)
+    .select("track, version")
+    .maybeSingle();
+
+  if (!updated) {
+    // Someone else won between our read and this write — read back the truth.
+    const { data: latest } = await admin
+      .from("audio_zone_playback")
+      .select("track, version")
+      .eq("zone_id", zoneId)
+      .maybeSingle();
+    return NextResponse.json({
+      track: latest?.track ?? null,
+      version: latest?.version ?? reportedVersion,
+    });
+  }
+
+  return NextResponse.json({ track: updated.track, version: updated.version });
+}

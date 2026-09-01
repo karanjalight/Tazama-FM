@@ -44,6 +44,7 @@ interface FormValues {
   crossfadeSeconds: number;
   audioDuckingEnabled: boolean;
   announcementsEnabled: boolean;
+  synchronizedPlayback: boolean;
   scheduleStart: string;
   scheduleEnd: string;
 }
@@ -61,6 +62,7 @@ function valuesFor(zone: AudioZone | undefined): FormValues {
       crossfadeSeconds: 3,
       audioDuckingEnabled: true,
       announcementsEnabled: true,
+      synchronizedPlayback: false,
       scheduleStart: "",
       scheduleEnd: "",
     };
@@ -76,6 +78,7 @@ function valuesFor(zone: AudioZone | undefined): FormValues {
     crossfadeSeconds: zone.crossfadeSeconds,
     audioDuckingEnabled: zone.audioDuckingEnabled,
     announcementsEnabled: zone.announcementsEnabled,
+    synchronizedPlayback: zone.synchronizedPlayback,
     scheduleStart: zone.scheduleStart ?? "",
     scheduleEnd: zone.scheduleEnd ?? "",
   };
@@ -124,6 +127,7 @@ export function AddAudioZoneDialog({
       crossfadeSeconds: values.crossfadeSeconds,
       audioDuckingEnabled: values.audioDuckingEnabled,
       announcementsEnabled: values.announcementsEnabled,
+      synchronizedPlayback: values.synchronizedPlayback,
       scheduleStart: values.scheduleStart || null,
       scheduleEnd: values.scheduleEnd || null,
     };
@@ -292,6 +296,19 @@ export function AddAudioZoneDialog({
                     <p className="text-xs text-muted-foreground">Allow announcements to play in this zone</p>
                   </div>
                   <Switch checked={values.announcementsEnabled} onCheckedChange={(v) => patch({ announcementsEnabled: v })} />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm text-foreground">Synchronized playback</p>
+                    <p className="text-xs text-muted-foreground">
+                      Every room in this zone plays the same track together, instead of
+                      advancing independently
+                    </p>
+                  </div>
+                  <Switch
+                    checked={values.synchronizedPlayback}
+                    onCheckedChange={(v) => patch({ synchronizedPlayback: v })}
+                  />
                 </div>
               </div>
             </div>

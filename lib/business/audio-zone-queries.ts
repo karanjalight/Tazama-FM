@@ -28,11 +28,12 @@ interface AudioZoneRow {
   default_playlist_id: string | null;
   schedule_start: string | null;
   schedule_end: string | null;
+  synchronized_playback: boolean;
   created_at: string;
 }
 
 const AUDIO_ZONE_COLUMNS =
-  "id, branch_id, zone_id, name, description, status, volume, volume_limit, crossfade_seconds, audio_ducking_enabled, announcements_enabled, default_playlist_id, schedule_start, schedule_end, created_at";
+  "id, branch_id, zone_id, name, description, status, volume, volume_limit, crossfade_seconds, audio_ducking_enabled, announcements_enabled, default_playlist_id, schedule_start, schedule_end, synchronized_playback, created_at";
 
 /** Truncates a `time` column's "HH:MM:SS" to "HH:MM" for the UI's <input type="time">. */
 function shortTime(value: string | null): string | null {
@@ -126,6 +127,7 @@ function buildAudioZone(
     crossfadeSeconds: row.crossfade_seconds,
     audioDuckingEnabled: row.audio_ducking_enabled,
     announcementsEnabled: row.announcements_enabled,
+    synchronizedPlayback: row.synchronized_playback,
     defaultPlaylistId: row.default_playlist_id,
     defaultPlaylistName: row.default_playlist_id ? (playlistNameById.get(row.default_playlist_id) ?? null) : null,
     scheduleStart: shortTime(row.schedule_start),

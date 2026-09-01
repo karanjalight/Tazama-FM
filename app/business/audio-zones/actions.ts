@@ -55,6 +55,7 @@ const createAudioZoneSchema = z.object({
   crossfadeSeconds: crossfadeSchema.optional(),
   audioDuckingEnabled: z.boolean().optional(),
   announcementsEnabled: z.boolean().optional(),
+  synchronizedPlayback: z.boolean().optional(),
   scheduleStart: timeSchema.nullable().optional(),
   scheduleEnd: timeSchema.nullable().optional(),
 });
@@ -71,6 +72,7 @@ export async function createAudioZone(input: {
   crossfadeSeconds?: number;
   audioDuckingEnabled?: boolean;
   announcementsEnabled?: boolean;
+  synchronizedPlayback?: boolean;
   scheduleStart?: string | null;
   scheduleEnd?: string | null;
 }): Promise<ActionResult> {
@@ -102,6 +104,7 @@ export async function createAudioZone(input: {
       crossfade_seconds: parsed.data.crossfadeSeconds ?? 3,
       audio_ducking_enabled: parsed.data.audioDuckingEnabled ?? true,
       announcements_enabled: parsed.data.announcementsEnabled ?? true,
+      synchronized_playback: parsed.data.synchronizedPlayback ?? false,
       schedule_start: parsed.data.scheduleStart ?? null,
       schedule_end: parsed.data.scheduleEnd ?? null,
       status: "active",
@@ -139,6 +142,7 @@ const updateAudioZoneSchema = z.object({
   crossfadeSeconds: crossfadeSchema.optional(),
   audioDuckingEnabled: z.boolean().optional(),
   announcementsEnabled: z.boolean().optional(),
+  synchronizedPlayback: z.boolean().optional(),
   scheduleStart: timeSchema.nullable().optional(),
   scheduleEnd: timeSchema.nullable().optional(),
 });
@@ -157,6 +161,7 @@ export async function updateAudioZone(input: {
   crossfadeSeconds?: number;
   audioDuckingEnabled?: boolean;
   announcementsEnabled?: boolean;
+  synchronizedPlayback?: boolean;
   scheduleStart?: string | null;
   scheduleEnd?: string | null;
 }): Promise<ActionResult> {
@@ -189,6 +194,7 @@ export async function updateAudioZone(input: {
   if (parsed.data.crossfadeSeconds !== undefined) patch.crossfade_seconds = parsed.data.crossfadeSeconds;
   if (parsed.data.audioDuckingEnabled !== undefined) patch.audio_ducking_enabled = parsed.data.audioDuckingEnabled;
   if (parsed.data.announcementsEnabled !== undefined) patch.announcements_enabled = parsed.data.announcementsEnabled;
+  if (parsed.data.synchronizedPlayback !== undefined) patch.synchronized_playback = parsed.data.synchronizedPlayback;
   if (parsed.data.scheduleStart !== undefined) patch.schedule_start = parsed.data.scheduleStart;
   if (parsed.data.scheduleEnd !== undefined) patch.schedule_end = parsed.data.scheduleEnd;
 

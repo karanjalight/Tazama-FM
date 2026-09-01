@@ -319,6 +319,10 @@ export function AudioZoneDetailPanel({
           <SettingsRow label="Audio Ducking" value={zone.audioDuckingEnabled ? "Enabled" : "Disabled"} />
           <SettingsRow label="Announcements" value={zone.announcementsEnabled ? "Enabled" : "Disabled"} />
           <SettingsRow label="Physical Zone" value={zone.zoneName ?? "None"} />
+          <SettingsRow
+            label="Synchronized Playback"
+            value={zone.synchronizedPlayback ? "Synchronized" : "Independent"}
+          />
           <button
             type="button"
             onClick={() => setEditOpen(true)}

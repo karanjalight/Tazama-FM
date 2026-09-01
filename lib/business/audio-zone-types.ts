@@ -27,6 +27,11 @@ export interface AudioZone {
   crossfadeSeconds: number;
   audioDuckingEnabled: boolean;
   announcementsEnabled: boolean;
+  /** When true, every room this zone covers plays the same track together
+   * (see docs/superpowers/specs/2026-09-01-audio-zone-synchronized-playback-design.md).
+   * When false (default), each covered room keeps advancing independently —
+   * still fed from this zone's playlist, just not in lockstep. */
+  synchronizedPlayback: boolean;
   defaultPlaylistId: string | null;
   defaultPlaylistName: string | null;
   /** "HH:MM" — a plain daily time window, not a link to the separate

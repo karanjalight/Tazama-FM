@@ -13,6 +13,8 @@ import {
   FileText,
   Target,
   Rows3,
+  TrendingUp,
+  Clapperboard,
   Users,
   CreditCard,
   Puzzle,
@@ -47,28 +49,31 @@ export const BUSINESS_NAV_SECTIONS: BusinessNavSection[] = [
     label: "Manage",
     items: [
       { label: "Locations", href: "/business/branches", icon: Building2 },
-      { label: "Rooms & Zones", icon: DoorOpen },
-      { label: "Screens & Devices", icon: MonitorPlay },
-      { label: "Audio Zones", icon: AudioLines },
-      { label: "Content Library", icon: Library },
-      { label: "Playlists", icon: ListMusic },
-      { label: "Schedules", icon: CalendarClock },
-      { label: "Announcements", icon: Megaphone },
+      { label: "Rooms & Zones", href: "/business/branches/:branchId/rooms-zones", icon: DoorOpen },
+      { label: "Screens & Devices", href: "/business/branches/:branchId/screens-devices", icon: MonitorPlay },
+      { label: "Audio Zones", href: "/business/branches/:branchId/audio-zones", icon: AudioLines },
+      { label: "Content Library", href: "/business/content-library", icon: Library },
+      { label: "Playlists", href: "/business/playlists", icon: ListMusic },
+      { label: "Schedules", href: "/business/branches/:branchId/schedules", icon: CalendarClock },
+      { label: "Announcements", href: "/business/announcements", icon: Megaphone },
     ],
   },
   {
-    label: "Engagement",
+    label: "Insights",
     items: [
-      { label: "Analytics", icon: BarChart3 },
-      { label: "Audience Insights", icon: UsersRound },
-      { label: "Reports", icon: FileText },
+      { label: "Analytics", href: "/business/analytics", icon: BarChart3 },
+      { label: "Audience Insights", href: "/business/audience", icon: UsersRound },
+      { label: "Reports", href: "/business/reports", icon: FileText },
     ],
   },
   {
     label: "Advertising",
     items: [
-      { label: "Ad Campaigns", icon: Target },
-      { label: "Ad Inventory", icon: Rows3 },
+      { label: "Advertisements", href: "/business/advertisements", icon: Megaphone },
+      { label: "Campaigns", href: "/business/advertisements/campaigns", icon: Target },
+      { label: "Ad Library", href: "/business/advertisements/library", icon: Clapperboard },
+      { label: "Inventory", href: "/business/advertisements/inventory", icon: Rows3 },
+      { label: "Performance", href: "/business/advertisements/performance", icon: TrendingUp },
     ],
   },
 ];
@@ -85,9 +90,9 @@ export function settingsSection(showStaff: boolean): BusinessNavSection {
     label: "Settings",
     items: [
       ...(showStaff ? [STAFF_NAV_ITEM] : []),
-      { label: "Billing & Plans", icon: CreditCard },
-      { label: "Integrations", icon: Puzzle },
-      { label: "Business Settings", icon: Settings },
+      { label: "Billing & Plans", href: "/business/settings/billing", icon: CreditCard },
+      { label: "Integrations", href: "/business/settings/integrations", icon: Puzzle },
+      { label: "Business Settings", href: "/business/settings/business", icon: Settings },
     ],
   };
 }
@@ -100,4 +105,20 @@ export function isBusinessNavActive(
   if (!item.href) return false;
   if (item.exact) return pathname === item.href;
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
+/**
+ * Per-branch nav items (Rooms & Zones, Screens & Devices, Audio Zones,
+ * Schedules) point at a placeholder `:branchId` segment — there's no single
+ * "the" branch a static nav config can hardcode. Substitutes in the
+ * viewer's real default branch (their first reachable one), or drops the
+ * href entirely (shown as "Soon") if they don't have one yet.
+ */
+export function resolveNavHref(
+  item: BusinessNavItem,
+  defaultBranchSlug: string | null,
+): BusinessNavItem {
+  if (!item.href?.includes(":branchId")) return item;
+  if (!defaultBranchSlug) return { ...item, href: undefined };
+  return { ...item, href: item.href.replace(":branchId", defaultBranchSlug) };
 }

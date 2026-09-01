@@ -17,12 +17,17 @@ const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/business"];
  * Called from the root `proxy.ts` (Next.js 16's renamed middleware).
  */
 export async function updateSession(request: NextRequest) {
-  // The kiosk player (`/player/*`) and the device-pairing screen
-  // (`/business/pair`) are public and unauthenticated — skip the Supabase
-  // round-trip so a freshly-booted TV box loads instantly.
+  // The kiosk player (`/player/*`) and the device-pairing screen (`/pair`)
+  // are public and unauthenticated — skip the Supabase round-trip so a
+  // freshly-booted TV box loads instantly. `/pair` deliberately lives
+  // outside `/business/*` (not just `/business/pair`) so it never inherits
+  // `app/business/layout.tsx`'s own independent auth redirect — that layout
+  // wraps every route nested under `/business`, so a route living there is
+  // never actually reachable by an unauthenticated kiosk regardless of what
+  // this middleware itself decides.
   if (
     request.nextUrl.pathname.startsWith("/player") ||
-    request.nextUrl.pathname === "/business/pair"
+    request.nextUrl.pathname === "/pair"
   ) {
     return NextResponse.next({ request });
   }

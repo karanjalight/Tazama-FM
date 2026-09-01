@@ -17,7 +17,7 @@ export function AudioZonesStep({
   audioZones: AudioZone[];
   onCreateAudioZone: (input: NewAudioZoneInput) => void;
 }) {
-  const dialog = useDialogTrigger();
+  const dialog = useDialogTrigger("audio-zone");
   const roomName = (id: string) => rooms.find((r) => r.id === id)?.name ?? "Unknown room";
 
   return (

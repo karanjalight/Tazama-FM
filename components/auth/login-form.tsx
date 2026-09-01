@@ -10,10 +10,11 @@ import { PasswordField } from "./password-field";
 import { GoogleButton } from "./google-button";
 import { AuthDivider } from "./auth-divider";
 import { SubmitButton } from "./submit-button";
+import type { AccountType } from "./account-type-toggle";
 import { createClient } from "@/lib/supabase/client";
 import { DEMO_AUTH, getDemoUser, saveDemoUser } from "@/lib/demo/demo-session";
 import { authErrorMessage } from "@/lib/auth/messages";
-import { navigateAfterAuth } from "@/lib/auth/navigate";
+import { navigateAfterAuth, resolvePostAuthPath } from "@/lib/auth/navigate";
 import { loginSchema, validate, type FieldErrors } from "@/lib/auth/validation";
 
 export function LoginForm() {
@@ -78,12 +79,16 @@ export function LoginForm() {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("onboarding_complete")
+      .select("onboarding_complete, account_type")
       .eq("id", data.user.id)
       .single();
 
     toast.success("Welcome back to Tazama");
-    navigateAfterAuth(profile?.onboarding_complete ? "/dashboard" : "/onboarding");
+    navigateAfterAuth(
+      profile?.onboarding_complete
+        ? resolvePostAuthPath((profile.account_type as AccountType | null) ?? "")
+        : "/onboarding",
+    );
   }
 
   return (

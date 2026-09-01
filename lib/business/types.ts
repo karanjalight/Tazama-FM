@@ -20,6 +20,16 @@ export interface Branch {
   roomId: string;
   slug: string;
   name: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  timezone: string;
+  description: string | null;
+  imagePath: string | null;
+  allowAds: boolean;
+  allowAnnouncements: boolean;
+  collectEngagementData: boolean;
+  restrictContentRating: boolean;
   devicePairedAt: string | null;
   deviceLastSeenAt: string | null;
   archivedAt: string | null;

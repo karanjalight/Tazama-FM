@@ -1,6 +1,8 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { genreCacheKey } from "@/lib/genres";
-import { searchGenreTracks } from "@/lib/youtube/search";
+import { searchGenreTracks, type YouTubeTrack } from "@/lib/youtube/search";
 
 /** A playable track from the shared catalog (metadata only — YouTube is the CDN). */
 export interface Track {
@@ -110,6 +112,80 @@ export async function ensureGenreSeeded(
   }
 
   return getCachedTracksByGenre(key, want);
+}
+
+/**
+ * Upsert a specific, hand-picked set of YouTube results into the shared
+ * catalog and return every one of them as a `Track` (freshly inserted or
+ * already-cataloged), in the same order as `picks`. For callers — like a
+ * business playlist's "add tracks" flow — that need the tracks' real `id`s
+ * back to link them elsewhere, unlike `ensureGenreSeeded` above, which only
+ * needs the catalog warm and can afford to lose already-existing rows from
+ * its `.select()` result.
+ *
+ * Deliberately NOT a single `.upsert(..., { ignoreDuplicates: false })` call
+ * (the pattern `app/api/tracks/seed/route.ts` uses with `true`): that would
+ * update ALL provided columns on every conflicting row, silently overwriting
+ * `genre` on a track that's already cataloged under a real dashboard genre
+ * with the generic "business" bucket below. Instead this only ever INSERTs
+ * rows that don't already exist (by `youtube_id`), then re-selects the full
+ * set — an existing track's `genre` (and everything else about it) is never
+ * touched.
+ *
+ * SERVER ONLY. Takes an already-resolved `admin` client (the caller has
+ * already done its own `createAdminClient()` null-check).
+ */
+export async function upsertTracksFromYouTube(
+  admin: SupabaseClient,
+  picks: YouTubeTrack[],
+): Promise<Track[]> {
+  if (!picks.length) return [];
+
+  const youtubeIds = picks.map((p) => p.youtubeId);
+  const { data: existingRows } = await admin
+    .from("tracks")
+    .select("*")
+    .in("youtube_id", youtubeIds);
+  const existingIds = new Set(
+    ((existingRows ?? []) as TrackRow[]).map((r) => r.youtube_id),
+  );
+
+  const toInsert = picks.filter((p) => !existingIds.has(p.youtubeId));
+  if (toInsert.length) {
+    const rows = toInsert.map((t) => ({
+      youtube_id: t.youtubeId,
+      title: t.title,
+      artist: t.artist,
+      // Business-picked tracks aren't tied to one dashboard genre bucket —
+      // "business" is a free-text catalog label (tracks.genre has no check
+      // constraint), only ever set on a brand-new row.
+      genre: "business",
+      thumbnail_url: t.thumbnailUrl,
+      is_playable: true,
+    }));
+    // `ignoreDuplicates: true` is safe here — `toInsert` was already
+    // filtered to youtube_ids we just confirmed don't exist, so a conflict
+    // here only means a concurrent insert raced us. We want to KEEP the
+    // winner's row untouched (re-selected below), not clobber it.
+    const { error } = await admin
+      .from("tracks")
+      .upsert(rows, { onConflict: "youtube_id", ignoreDuplicates: true });
+    if (error) console.error("upsertTracksFromYouTube: insert failed", error);
+  }
+
+  const { data: finalRows } = await admin
+    .from("tracks")
+    .select("*")
+    .in("youtube_id", youtubeIds);
+  const byYoutubeId = new Map(
+    ((finalRows ?? []) as TrackRow[]).map((r) => [r.youtube_id, rowToTrack(r)]),
+  );
+
+  // Preserve the caller's pick order; drop any pick that still didn't come
+  // back (e.g. the insert failed above).
+  return picks
+    .map((p) => byYoutubeId.get(p.youtubeId))
+    .filter((t): t is Track => !!t);
 }
 
 /**

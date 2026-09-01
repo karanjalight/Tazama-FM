@@ -6,7 +6,8 @@ import { Logo } from "@/components/brand/logo";
 import { BusinessSidebarNav } from "@/components/business/business-sidebar-nav";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { getBusinessViewer } from "@/lib/business/viewer";
+import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
+import { listBranches } from "@/lib/business/queries";
 
 const ROLE_LABEL: Record<string, string> = {
   owner: "Business Owner",
@@ -27,6 +28,9 @@ export default async function BusinessLayout({
   const viewer = await getBusinessViewer();
   if (!viewer) redirect("/login");
 
+  const branches = await listBranches(viewer.businessId);
+  const defaultBranch = branches.find((b) => canActOnBranch(viewer, b.id)) ?? null;
+
   const showStaff = viewer.role !== "manager";
   const roleLabel = ROLE_LABEL[viewer.role] ?? viewer.role;
 
@@ -42,7 +46,7 @@ export default async function BusinessLayout({
           <Logo />
         </Link>
 
-        <div className="mt-6 flex items-center gap-2.5 rounded-xl border border-border bg-muted/60 px-3 py-2.5">
+        {/* <div className="mt-6 flex items-center gap-2.5 rounded-xl border border-border bg-muted/60 px-3 py-2.5">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
             <Store className="size-4" />
           </span>
@@ -55,10 +59,10 @@ export default async function BusinessLayout({
             </p>
           </div>
           <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-        </div>
+        </div> */}
 
         <div className="no-scrollbar mt-6 min-h-0 flex-1 overflow-y-auto">
-          <BusinessSidebarNav showStaff={showStaff} />
+          <BusinessSidebarNav showStaff={showStaff} defaultBranchSlug={defaultBranch?.slug ?? null} />
         </div>
 
         <div className="border-t border-border pt-4">
@@ -105,7 +109,11 @@ export default async function BusinessLayout({
           </div>
         </div>
         <div className="mask-fade-x px-4 pb-3">
-          <BusinessSidebarNav showStaff={showStaff} orientation="horizontal" />
+          <BusinessSidebarNav
+            showStaff={showStaff}
+            defaultBranchSlug={defaultBranch?.slug ?? null}
+            orientation="horizontal"
+          />
         </div>
       </header>
 

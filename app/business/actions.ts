@@ -45,10 +45,40 @@ function requireAdminLevel(
   return !!viewer && (viewer.role === "owner" || viewer.role === "admin");
 }
 
+const addressSchema = z.string().trim().max(200);
+const citySchema = z.string().trim().max(80);
+const countrySchema = z.string().trim().max(80);
+const timezoneSchema = z.string().trim().max(80);
+const descriptionSchema = z.string().trim().max(1000);
+
+export type CreateBranchResult =
+  | { ok: true; branchId: string }
+  | { ok: false; error: string };
+
+/**
+ * `name`/`genres` are the only required fields — the simple 2-step "Add
+ * Branch" dialog (components/business/create-branch-dialog.tsx) only ever
+ * sends those two, and must keep working unchanged. Everything else is
+ * optional location-detail data from the "Add Location" wizard's first step
+ * (real columns on `branches` since business-locations.sql, just never
+ * written until now). `isActive`/`business`/`imageUrl` from that step have
+ * no backing column (status is derived from device activity, not stored;
+ * there's no real business-switcher; location photos have no Storage
+ * upload path yet) and are intentionally not accepted here.
+ */
 export async function createBranch(input: {
   name: string;
   genres: string[];
-}): Promise<ActionResult> {
+  address?: string;
+  city?: string;
+  country?: string;
+  timezone?: string;
+  description?: string;
+  allowAds?: boolean;
+  allowAnnouncements?: boolean;
+  collectEngagementData?: boolean;
+  restrictContentRating?: boolean;
+}): Promise<CreateBranchResult> {
   const viewer = await getBusinessViewer();
   if (!requireAdminLevel(viewer)) {
     return { ok: false, error: "You don't have permission to add branches." };
@@ -95,20 +125,40 @@ export async function createBranch(input: {
     return { ok: false, error: "Could not initialize branch playback." };
   }
 
-  const { error: branchError } = await admin.from("branches").insert({
+  const branchRow: Record<string, unknown> = {
     business_id: viewer.businessId,
     room_id: room.id,
     name: parsedName.data,
     slug,
-  });
-  if (branchError) {
+  };
+  const address = addressSchema.safeParse(input.address ?? "").data;
+  if (address) branchRow.address = address;
+  const city = citySchema.safeParse(input.city ?? "").data;
+  if (city) branchRow.city = city;
+  const country = countrySchema.safeParse(input.country ?? "").data;
+  if (country) branchRow.country = country;
+  const timezone = timezoneSchema.safeParse(input.timezone ?? "").data;
+  if (timezone) branchRow.timezone = timezone;
+  const description = descriptionSchema.safeParse(input.description ?? "").data;
+  if (description) branchRow.description = description;
+  if (input.allowAds !== undefined) branchRow.allow_ads = input.allowAds;
+  if (input.allowAnnouncements !== undefined) branchRow.allow_announcements = input.allowAnnouncements;
+  if (input.collectEngagementData !== undefined) branchRow.collect_engagement_data = input.collectEngagementData;
+  if (input.restrictContentRating !== undefined) branchRow.restrict_content_rating = input.restrictContentRating;
+
+  const { data: branch, error: branchError } = await admin
+    .from("branches")
+    .insert(branchRow)
+    .select("id")
+    .single();
+  if (branchError || !branch) {
     console.error("createBranch: branches insert failed", branchError);
     return { ok: false, error: "Could not create the branch." };
   }
 
   revalidatePath("/business/branches");
   revalidatePath("/business/dashboard");
-  return { ok: true };
+  return { ok: true, branchId: branch.id };
 }
 
 export async function renameBranch(input: {

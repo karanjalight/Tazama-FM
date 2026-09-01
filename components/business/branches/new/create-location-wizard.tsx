@@ -2,14 +2,12 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronRight, Save } from "lucide-react";
 
 import {
   DEFAULT_ROOMS,
   DEFAULT_ZONES,
-  newDeviceId,
   newId,
   type AudioZone,
   type LocationDetailsForm,
@@ -25,10 +23,12 @@ import { RoomsZonesStep } from "./steps/rooms-zones-step";
 import { ScreensDevicesStep } from "./steps/screens-devices-step";
 import { AudioZonesStep } from "./steps/audio-zones-step";
 import { ReviewCreateStep } from "./steps/review-create-step";
+import { LocationCreatedSuccess } from "./location-created-success";
 import { VioletButton } from "./violet-button";
 import type { NewRoomInput } from "./modals/add-room-dialog";
 import type { NewScreenInput } from "./modals/add-screen-dialog";
 import type { NewAudioZoneInput } from "./modals/add-audio-zone-dialog";
+import { createLocationFromDraft, type CreateLocationResult } from "@/app/business/branches/new/actions";
 
 const TOTAL_STEPS = 5;
 
@@ -44,7 +44,6 @@ const HEADINGS: Record<number, { title: string; subtitle: (name: string) => stri
 };
 
 export function CreateLocationWizard() {
-  const router = useRouter();
   const { draft, setDraft, hydrated, resumed, clearDraft } = useWizardDraft();
   const { step, details, zones, rooms, screens, audioZones } = draft;
 
@@ -99,14 +98,14 @@ export function CreateLocationWizard() {
       roomId: input.roomId,
       name: input.name,
       deviceModel: input.deviceModel,
-      deviceId: newDeviceId(),
+      deviceId: "",
       type: input.type,
       status: "offline",
     };
     setDraft((d) => ({ ...d, screens: [...d.screens, screen] }));
     setSelectedRoomId(input.roomId);
-    toast.success(`Screen "${screen.name}" registered`, {
-      description: `Device ID ${screen.deviceId} — pair it after the location is created.`,
+    toast.success(`Screen "${screen.name}" added`, {
+      description: "A real pairing code will be generated when you create this location.",
     });
   }
 
@@ -124,7 +123,7 @@ export function CreateLocationWizard() {
       roomId: r.id,
       name: `${r.name} TV 01`,
       deviceModel: "Generic Smart TV",
-      deviceId: newDeviceId(),
+      deviceId: "",
       type: "TV",
       status: "offline",
     }));
@@ -138,13 +137,24 @@ export function CreateLocationWizard() {
     toast.success("Draft saved", { description: "Your progress is kept on this device." });
   }
 
-  function handleCreateLocation() {
-    const name = details.name || "Location";
+  const [creating, setCreating] = React.useState(false);
+  const [result, setResult] = React.useState<CreateLocationResult | null>(null);
+
+  async function handleCreateLocation() {
+    setCreating(true);
+    const res = await createLocationFromDraft({ details, zones, rooms, screens, audioZones });
+    setCreating(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
     clearDraft();
-    toast.success(`${name} created`, {
-      description: "It's now available to pair devices and schedule content.",
-    });
-    router.push("/business/branches");
+    setResult(res);
+    toast.success(`${details.name || "Location"} created`);
+  }
+
+  if (result?.ok) {
+    return <LocationCreatedSuccess result={result} locationName={details.name || "Location"} />;
   }
 
   const heading = HEADINGS[step];
@@ -265,7 +275,9 @@ export function CreateLocationWizard() {
               <ChevronRight className="size-4" />
             </VioletButton>
           ) : (
-            <VioletButton onClick={handleCreateLocation}>Create Location</VioletButton>
+            <VioletButton onClick={handleCreateLocation} disabled={creating}>
+              {creating ? "Creating…" : "Create Location"}
+            </VioletButton>
           )}
         </div>
       </div>

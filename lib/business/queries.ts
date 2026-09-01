@@ -27,6 +27,16 @@ interface BranchRow {
   room_id: string;
   slug: string;
   name: string;
+  address: string | null;
+  city: string | null;
+  country: string | null;
+  timezone: string | null;
+  description: string | null;
+  image_path: string | null;
+  allow_ads: boolean | null;
+  allow_announcements: boolean | null;
+  collect_engagement_data: boolean | null;
+  restrict_content_rating: boolean | null;
   device_paired_at: string | null;
   device_last_seen_at: string | null;
   archived_at: string | null;
@@ -39,6 +49,16 @@ function rowToBranch(row: BranchRow): Branch {
     roomId: row.room_id,
     slug: row.slug,
     name: row.name,
+    address: row.address,
+    city: row.city,
+    country: row.country,
+    timezone: row.timezone ?? "Africa/Nairobi",
+    description: row.description,
+    imagePath: row.image_path,
+    allowAds: row.allow_ads ?? true,
+    allowAnnouncements: row.allow_announcements ?? true,
+    collectEngagementData: row.collect_engagement_data ?? true,
+    restrictContentRating: row.restrict_content_rating ?? false,
     devicePairedAt: row.device_paired_at,
     deviceLastSeenAt: row.device_last_seen_at,
     archivedAt: row.archived_at,
@@ -69,6 +89,33 @@ export async function getBranch(
     .select("*")
     .eq("business_id", businessId)
     .eq("id", branchId)
+    .maybeSingle();
+  return data ? rowToBranch(data as BranchRow) : null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Every `/business/branches/[id]/...` page's route param is, in practice,
+ * whatever a human typed or clicked — which is the branch's `slug`
+ * ("nairobi-cbd") far more often than its raw uuid, matching how
+ * `/player/[slug]` already treats slugs as the human-facing handle
+ * elsewhere in the app. `getBranch` above stays uuid-only (it's also used
+ * where the caller already has a real id, e.g. from `listBranches`); this
+ * wrapper is what every `[id]` page should call on the raw route param.
+ */
+export async function getBranchByIdOrSlug(
+  businessId: string,
+  idOrSlug: string,
+): Promise<Branch | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const column = UUID_RE.test(idOrSlug) ? "id" : "slug";
+  const { data } = await admin
+    .from("branches")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq(column, idOrSlug)
     .maybeSingle();
   return data ? rowToBranch(data as BranchRow) : null;
 }

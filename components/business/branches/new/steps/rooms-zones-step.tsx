@@ -25,8 +25,8 @@ export function RoomsZonesStep({
   onCreateZone: (input: { name: string }) => void;
   onCreateRoom: (input: NewRoomInput) => void;
 }) {
-  const zoneDialog = useDialogTrigger();
-  const roomDialog = useDialogTrigger();
+  const zoneDialog = useDialogTrigger("zone");
+  const roomDialog = useDialogTrigger("room");
 
   const roomCountByZone = (zoneId: string) => rooms.filter((r) => r.zoneId === zoneId).length;
   const selectedZone = zones.find((z) => z.id === selectedZoneId) ?? zones[0];

@@ -1,15 +1,17 @@
 /**
- * Static seed content for the "Add Location" wizard preview. Nothing here is
- * wired to Supabase — zones/rooms/screens are pre-seeded client state so
- * steps 2-3 have something real to select, filter, and review, matching the
- * mockups. See components/business/branches/mock-data.ts for the same
- * approach on the Locations list page.
+ * Draft content for the "Add Location" wizard. Nothing here touches
+ * Supabase directly while the draft is being built — the whole wizard's
+ * working state (details/zones/rooms/screens/audioZones) lives in
+ * localStorage as plain JSON (see use-wizard-draft.ts), so every field here
+ * must stay serializable. Room "type" is a plain string key into
+ * ROOM_TYPE_ICONS rather than a stored icon component for that reason (a
+ * LucideIcon component reference can't survive JSON.stringify).
  *
- * The whole wizard's working state (details/zones/rooms/screens/audioZones)
- * is persisted to localStorage as plain JSON (see use-wizard-draft.ts) — so
- * every field here must stay serializable. Room "type" is a plain string
- * key into ROOM_TYPE_ICONS rather than a stored icon component for that
- * reason (a LucideIcon component reference can't survive JSON.stringify).
+ * On "Create Location" (create-location-wizard.tsx), the whole draft is
+ * submitted for real in one batch via createLocationFromDraft()
+ * (app/business/branches/new/actions.ts) — see that file for how draft
+ * zone/room/screen/audio-zone ids get mapped onto the real ones Supabase
+ * assigns.
  */
 import {
   DoorOpen,
@@ -111,10 +113,6 @@ function randomSegment(length: number): string {
 
 export function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${randomSegment(4)}`;
-}
-
-export function newDeviceId(): string {
-  return `SCR-${randomSegment(4)}-${randomSegment(4)}`;
 }
 
 export const DEFAULT_ZONES: WizardZone[] = [

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Copy, ExternalLink, MonitorPlay, MoreVertical, Plus, Sparkles, Tv } from "lucide-react";
+import { ExternalLink, MonitorPlay, MoreVertical, Plus, Sparkles, Tv } from "lucide-react";
 
 import type { WizardRoom, WizardScreen, WizardZone } from "../wizard-data";
 import { cn } from "@/lib/utils";
@@ -29,8 +29,8 @@ export function ScreensDevicesStep({
   onCreateScreen: (input: NewScreenInput) => void;
   onAutoAssign: () => void;
 }) {
-  const roomDialog = useDialogTrigger();
-  const screenDialog = useDialogTrigger();
+  const roomDialog = useDialogTrigger("room");
+  const screenDialog = useDialogTrigger("screen");
 
   const screenCountByRoom = (roomId: string) => screens.filter((s) => s.roomId === roomId).length;
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) ?? rooms[0];
@@ -196,9 +196,8 @@ export function ScreensDevicesStep({
                             </div>
                           </td>
                           <td className="px-3 py-2.5">
-                            <span className="inline-flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-                              {screen.deviceId}
-                              <Copy className="size-3" />
+                            <span className="font-mono text-xs text-muted-foreground italic">
+                              Generated on creation
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-muted-foreground">{screen.type}</td>

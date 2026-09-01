@@ -1,0 +1,236 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
+
+import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
+import { getBranch } from "@/lib/business/queries";
+import { getAudioZone } from "@/lib/business/audio-zone-queries";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { ActionResult } from "@/lib/business/types";
+
+const nameSchema = z.string().trim().min(2, "Give this audio zone a name.").max(60);
+const descriptionSchema = z.string().trim().max(300);
+const percentSchema = z.number().int().min(0).max(100);
+const crossfadeSchema = z.number().int().min(0).max(30);
+const timeSchema = z
+  .string()
+  .trim()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM format.");
+const uuidArraySchema = z.array(z.string().uuid());
+const statusSchema = z.enum(["active", "inactive"]);
+
+function audioZonesPath(branchId: string): string {
+  return `/business/branches/${branchId}/audio-zones`;
+}
+
+async function replaceAudioZoneRooms(
+  admin: SupabaseClient,
+  audioZoneId: string,
+  roomIds: string[],
+): Promise<boolean> {
+  const { error: deleteError } = await admin
+    .from("audio_zone_rooms")
+    .delete()
+    .eq("audio_zone_id", audioZoneId);
+  if (deleteError) return false;
+  if (!roomIds.length) return true;
+
+  const { error: insertError } = await admin
+    .from("audio_zone_rooms")
+    .insert(roomIds.map((room_id) => ({ audio_zone_id: audioZoneId, room_id })));
+  return !insertError;
+}
+
+const createAudioZoneSchema = z.object({
+  branchId: z.string().uuid(),
+  name: nameSchema,
+  description: descriptionSchema.optional(),
+  zoneId: z.string().uuid().nullable().optional(),
+  roomIds: uuidArraySchema.optional(),
+  defaultPlaylistId: z.string().uuid().nullable().optional(),
+  volume: percentSchema.optional(),
+  volumeLimit: percentSchema.optional(),
+  crossfadeSeconds: crossfadeSchema.optional(),
+  audioDuckingEnabled: z.boolean().optional(),
+  announcementsEnabled: z.boolean().optional(),
+  scheduleStart: timeSchema.nullable().optional(),
+  scheduleEnd: timeSchema.nullable().optional(),
+});
+
+export async function createAudioZone(input: {
+  branchId: string;
+  name: string;
+  description?: string;
+  zoneId?: string | null;
+  roomIds?: string[];
+  defaultPlaylistId?: string | null;
+  volume?: number;
+  volumeLimit?: number;
+  crossfadeSeconds?: number;
+  audioDuckingEnabled?: boolean;
+  announcementsEnabled?: boolean;
+  scheduleStart?: string | null;
+  scheduleEnd?: string | null;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const parsed = createAudioZoneSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid audio zone details." };
+  }
+
+  const branch = await getBranch(viewer.businessId, parsed.data.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { data: inserted, error } = await admin
+    .from("audio_zones")
+    .insert({
+      branch_id: branch.id,
+      zone_id: parsed.data.zoneId ?? null,
+      name: parsed.data.name,
+      description: parsed.data.description || null,
+      default_playlist_id: parsed.data.defaultPlaylistId ?? null,
+      volume: parsed.data.volume ?? 50,
+      volume_limit: parsed.data.volumeLimit ?? 100,
+      crossfade_seconds: parsed.data.crossfadeSeconds ?? 3,
+      audio_ducking_enabled: parsed.data.audioDuckingEnabled ?? true,
+      announcements_enabled: parsed.data.announcementsEnabled ?? true,
+      schedule_start: parsed.data.scheduleStart ?? null,
+      schedule_end: parsed.data.scheduleEnd ?? null,
+      status: "active",
+    })
+    .select("id")
+    .single();
+  if (error || !inserted) {
+    console.error("createAudioZone: insert failed", error);
+    return { ok: false, error: "Could not create the audio zone." };
+  }
+
+  if (parsed.data.roomIds?.length) {
+    const ok = await replaceAudioZoneRooms(admin, inserted.id, parsed.data.roomIds);
+    if (!ok) {
+      await admin.from("audio_zones").delete().eq("id", inserted.id);
+      return { ok: false, error: "Could not assign rooms to the audio zone." };
+    }
+  }
+
+  revalidatePath(audioZonesPath(branch.id));
+  return { ok: true };
+}
+
+const updateAudioZoneSchema = z.object({
+  branchId: z.string().uuid(),
+  id: z.string().uuid(),
+  name: nameSchema.optional(),
+  description: descriptionSchema.optional(),
+  zoneId: z.string().uuid().nullable().optional(),
+  roomIds: uuidArraySchema.optional(),
+  status: statusSchema.optional(),
+  defaultPlaylistId: z.string().uuid().nullable().optional(),
+  volume: percentSchema.optional(),
+  volumeLimit: percentSchema.optional(),
+  crossfadeSeconds: crossfadeSchema.optional(),
+  audioDuckingEnabled: z.boolean().optional(),
+  announcementsEnabled: z.boolean().optional(),
+  scheduleStart: timeSchema.nullable().optional(),
+  scheduleEnd: timeSchema.nullable().optional(),
+});
+
+export async function updateAudioZone(input: {
+  branchId: string;
+  id: string;
+  name?: string;
+  description?: string;
+  zoneId?: string | null;
+  roomIds?: string[];
+  status?: "active" | "inactive";
+  defaultPlaylistId?: string | null;
+  volume?: number;
+  volumeLimit?: number;
+  crossfadeSeconds?: number;
+  audioDuckingEnabled?: boolean;
+  announcementsEnabled?: boolean;
+  scheduleStart?: string | null;
+  scheduleEnd?: string | null;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const parsed = updateAudioZoneSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid audio zone details." };
+  }
+
+  const branch = await getBranch(viewer.businessId, parsed.data.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const zone = await getAudioZone(branch.id, parsed.data.id);
+  if (!zone) return { ok: false, error: "Audio zone not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const patch: Record<string, unknown> = {};
+  if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+  if (parsed.data.description !== undefined) patch.description = parsed.data.description || null;
+  if (parsed.data.zoneId !== undefined) patch.zone_id = parsed.data.zoneId;
+  if (parsed.data.status !== undefined) patch.status = parsed.data.status;
+  if (parsed.data.defaultPlaylistId !== undefined) patch.default_playlist_id = parsed.data.defaultPlaylistId;
+  if (parsed.data.volume !== undefined) patch.volume = parsed.data.volume;
+  if (parsed.data.volumeLimit !== undefined) patch.volume_limit = parsed.data.volumeLimit;
+  if (parsed.data.crossfadeSeconds !== undefined) patch.crossfade_seconds = parsed.data.crossfadeSeconds;
+  if (parsed.data.audioDuckingEnabled !== undefined) patch.audio_ducking_enabled = parsed.data.audioDuckingEnabled;
+  if (parsed.data.announcementsEnabled !== undefined) patch.announcements_enabled = parsed.data.announcementsEnabled;
+  if (parsed.data.scheduleStart !== undefined) patch.schedule_start = parsed.data.scheduleStart;
+  if (parsed.data.scheduleEnd !== undefined) patch.schedule_end = parsed.data.scheduleEnd;
+
+  if (Object.keys(patch).length > 0) {
+    const { error } = await admin.from("audio_zones").update(patch).eq("id", zone.id);
+    if (error) {
+      console.error("updateAudioZone: update failed", error);
+      return { ok: false, error: "Could not update the audio zone." };
+    }
+  }
+
+  if (parsed.data.roomIds !== undefined) {
+    const ok = await replaceAudioZoneRooms(admin, zone.id, parsed.data.roomIds);
+    if (!ok) return { ok: false, error: "Audio zone saved, but its rooms couldn't be fully updated." };
+  }
+
+  revalidatePath(audioZonesPath(branch.id));
+  return { ok: true };
+}
+
+export async function deleteAudioZone(input: { branchId: string; id: string }): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const zone = await getAudioZone(branch.id, input.id);
+  if (!zone) return { ok: false, error: "Audio zone not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  // audio_zone_rooms cascade-deletes from audio_zones — no manual cleanup needed.
+  const { error } = await admin.from("audio_zones").delete().eq("id", zone.id);
+  if (error) {
+    console.error("deleteAudioZone: delete failed", error);
+    return { ok: false, error: "Could not delete the audio zone." };
+  }
+
+  revalidatePath(audioZonesPath(branch.id));
+  return { ok: true };
+}

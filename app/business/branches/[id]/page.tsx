@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
-import { getBranch, isOnline, getBranchVolume, listBranchDevices } from "@/lib/business/queries";
+import { getBranchByIdOrSlug, isOnline, getBranchVolume, listBranchDevices } from "@/lib/business/queries";
 import { getRoomBySlug, getRoomQueue, getRoomPlayback } from "@/lib/rooms/queries";
 import { getOrigin } from "@/lib/origin";
 import { roomUrl } from "@/lib/rooms/slug";
@@ -20,10 +20,10 @@ export default async function BranchDetailPage({
   const { id } = await params;
   const viewer = await getBusinessViewer();
   if (!viewer) redirect("/login");
-  if (!canActOnBranch(viewer, id)) notFound();
 
-  const branch = await getBranch(viewer.businessId, id);
+  const branch = await getBranchByIdOrSlug(viewer.businessId, id);
   if (!branch) notFound();
+  if (!canActOnBranch(viewer, branch.id)) notFound();
 
   const room = await getRoomBySlug(branch.slug);
   const [queue, playback, volume, origin, devices] = await Promise.all([

@@ -8,15 +8,21 @@ import * as React from "react";
  * rather than via a `useEffect(() => setState(...), [open])` — React's own
  * guidance for "reset state when reopened" (avoids the set-state-in-effect
  * cascading-render footgun).
+ *
+ * `name` must be unique among the other useDialogTrigger() calls rendered
+ * as siblings under the same parent (e.g. a step with both a zone and a
+ * room dialog) — two independent counters both starting at 0 would
+ * otherwise collide as duplicate React keys once each had been opened the
+ * same number of times.
  */
-export function useDialogTrigger() {
+export function useDialogTrigger(name: string) {
   const [open, setOpen] = React.useState(false);
-  const [dialogKey, setDialogKey] = React.useState(0);
+  const [count, setCount] = React.useState(0);
 
   const show = React.useCallback(() => {
-    setDialogKey((k) => k + 1);
+    setCount((c) => c + 1);
     setOpen(true);
   }, []);
 
-  return { open, dialogKey, show, onOpenChange: setOpen };
+  return { open, dialogKey: `${name}-${count}`, show, onOpenChange: setOpen };
 }

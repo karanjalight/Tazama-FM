@@ -5,7 +5,7 @@ import { Play, Pause, Volume2, VolumeX, Radio, Loader2 } from "lucide-react";
 
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomFollower } from "@/lib/rooms/use-room-follower";
-import { useBranchPlayback, useBranchVolume, requestAdvance } from "@/lib/business/use-branch-playback";
+import { useBranchPlayback, useBranchVolume, useZonePlayback, requestAdvance, requestZoneAdvance } from "@/lib/business/use-branch-playback";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 import type { RoomPlayback, RoomTrack } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
@@ -33,11 +33,13 @@ export function KioskRoomPlayer({
   hostName,
   initialPlayback,
   initialVolume = 80,
+  initialZoneVersion = 0,
 }: {
-  room: { id: string; slug: string; name: string; isBranch?: boolean };
+  room: { id: string; slug: string; name: string; isBranch?: boolean; zoneId?: string | null };
   hostName: string | null;
   initialPlayback: RoomPlayback | null;
   initialVolume?: number;
+  initialZoneVersion?: number;
 }) {
   const [started, setStarted] = React.useState(false);
   const [muted, setMuted] = React.useState(true);
@@ -62,15 +64,25 @@ export function KioskRoomPlayer({
   const volumeRef = React.useRef(initialVolume);
   const hideTimerRef = React.useRef<number | null>(null);
   const applyHostPayloadRef = React.useRef<((p: PlaybackPayload) => void) | null>(null);
+  const zoneVersionRef = React.useRef(initialZoneVersion);
 
   React.useEffect(() => void (syncedRef.current = synced), [synced]);
 
   const handleEnded = React.useCallback(() => {
     if (!room.isBranch) return;
+    if (room.zoneId) {
+      const zoneId = room.zoneId;
+      requestZoneAdvance(zoneId, zoneVersionRef.current).then((result) => {
+        if (!result) return;
+        zoneVersionRef.current = result.version;
+        if (result.payload) applyHostPayloadRef.current?.(result.payload);
+      });
+      return;
+    }
     requestAdvance(room.slug).then((p) => {
       if (p) applyHostPayloadRef.current?.(p);
     });
-  }, [room.isBranch, room.slug]);
+  }, [room.isBranch, room.slug, room.zoneId]);
 
   const { api: yt, containerRef } = useYouTube({ onEnded: handleEnded });
 
@@ -164,7 +176,12 @@ export function KioskRoomPlayer({
 
   const { connected, requestSync } = useRoomFollower(room.id, handlePlayback);
 
-  useBranchPlayback(room.id, !!room.isBranch, handlePlayback);
+  useBranchPlayback(room.id, !!room.isBranch && !room.zoneId, handlePlayback);
+
+  useZonePlayback(room.zoneId ?? "", !!room.zoneId, (p, version) => {
+    zoneVersionRef.current = version;
+    handlePlayback(p);
+  });
 
   useBranchVolume(room.id, !!room.isBranch, (v) => {
     volumeRef.current = v;
@@ -206,11 +223,23 @@ export function KioskRoomPlayer({
   React.useEffect(() => {
     if (!room.isBranch || !ready || nowPlaying || kickedOffRef.current) return;
     kickedOffRef.current = true;
+    if (room.zoneId) {
+      const zoneId = room.zoneId;
+      requestZoneAdvance(zoneId, zoneVersionRef.current).then((result) => {
+        if (result?.payload) {
+          zoneVersionRef.current = result.version;
+          applyHostPayloadRef.current?.(result.payload);
+        } else {
+          kickedOffRef.current = false;
+        }
+      });
+      return;
+    }
     requestAdvance(room.slug).then((p) => {
       if (p) applyHostPayloadRef.current?.(p);
       else kickedOffRef.current = false; // nothing available yet — allow retry
     });
-  }, [room.isBranch, ready, nowPlaying, room.slug]);
+  }, [room.isBranch, ready, nowPlaying, room.slug, room.zoneId]);
 
   /* ------------------------------- controls ------------------------------- */
 

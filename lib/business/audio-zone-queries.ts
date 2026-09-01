@@ -11,6 +11,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isOnline } from "@/lib/business/queries";
 import { listZones, listRooms, type Zone, type Room } from "@/lib/business/locations-queries";
 import type { AudioZone } from "@/lib/business/audio-zone-types";
+import type { RoomTrack } from "@/lib/rooms/types";
 
 interface AudioZoneRow {
   id: string;
@@ -187,4 +188,47 @@ export async function getAudioZone(branchId: string, id: string): Promise<AudioZ
   ]);
 
   return buildAudioZone(row, roomIdsByZone.get(row.id) ?? [], rooms, zones, playlistNameById, speakerCounts);
+}
+
+export interface AudioZonePlaybackState {
+  track: RoomTrack | null;
+  positionMs: number;
+  isPlaying: boolean;
+  version: number;
+  updatedAt: string;
+}
+
+/** The synchronized zone (if any) covering this room — a room isn't
+ * expected to be in more than one synchronized zone at once, but this
+ * deterministically picks one (arbitrary DB order) rather than erroring
+ * if it ever is. */
+export async function getSynchronizedZoneForRoom(roomId: string): Promise<{ id: string } | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data } = await admin
+    .from("audio_zone_rooms")
+    .select("audio_zone_id, audio_zones!inner(synchronized_playback)")
+    .eq("room_id", roomId)
+    .eq("audio_zones.synchronized_playback", true)
+    .limit(1);
+  const rows = (data ?? []) as { audio_zone_id: string }[];
+  return rows[0] ? { id: rows[0].audio_zone_id } : null;
+}
+
+export async function getAudioZonePlayback(zoneId: string): Promise<AudioZonePlaybackState | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data } = await admin
+    .from("audio_zone_playback")
+    .select("track, position_ms, is_playing, version, updated_at")
+    .eq("zone_id", zoneId)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    track: data.track as RoomTrack | null,
+    positionMs: data.position_ms,
+    isPlaying: data.is_playing,
+    version: data.version,
+    updatedAt: data.updated_at,
+  };
 }

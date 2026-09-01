@@ -5,6 +5,7 @@ import { KioskRoomPlayer } from "@/components/player/kiosk-room-player";
 import { resolveKioskPlaylist, kioskTitle } from "@/lib/player/kiosk-playlist";
 import { getRoomBySlug, getRoomPlayback } from "@/lib/rooms/queries";
 import { getRoomVolume } from "@/lib/business/queries";
+import { getSynchronizedZoneForRoom, getAudioZonePlayback } from "@/lib/business/audio-zone-queries";
 
 /**
  * Lightweight kiosk player for Android TV boxes (restaurants/clubs/hotels).
@@ -52,10 +53,24 @@ export default async function PlayerPage({
   // A public room slug → mirror the host's live video.
   const room = await getRoomBySlug(slug);
   if (room && (room.access === "public" || room.ownerBusinessId)) {
-    const [initialPlayback, initialVolume] = await Promise.all([
-      getRoomPlayback(room.id),
-      room.ownerBusinessId ? getRoomVolume(room.id) : Promise.resolve(80),
+    const zone = room.ownerBusinessId ? await getSynchronizedZoneForRoom(room.id) : null;
+    const [roomPlayback, zonePlayback, initialVolume] = await Promise.all([
+      zone ? Promise.resolve(null) : getRoomPlayback(room.id),
+      zone ? getAudioZonePlayback(zone.id) : Promise.resolve(null),
+      getRoomVolume(room.id),
     ]);
+    const initialPlayback = zone
+      ? zonePlayback
+        ? {
+            roomId: room.id,
+            track: zonePlayback.track,
+            positionMs: zonePlayback.positionMs,
+            isPlaying: zonePlayback.isPlaying,
+            listeningMsTotal: 0,
+            updatedAt: zonePlayback.updatedAt,
+          }
+        : null
+      : roomPlayback;
     return (
       <KioskRoomPlayer
         room={{
@@ -63,10 +78,12 @@ export default async function PlayerPage({
           slug: room.slug,
           name: room.name,
           isBranch: !!room.ownerBusinessId,
+          zoneId: zone?.id ?? null,
         }}
         hostName={null}
         initialPlayback={initialPlayback}
         initialVolume={initialVolume}
+        initialZoneVersion={zonePlayback?.version ?? 0}
       />
     );
   }

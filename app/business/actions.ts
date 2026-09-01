@@ -209,6 +209,89 @@ export async function renameBranch(input: {
   return { ok: true };
 }
 
+/**
+ * The general-fields counterpart to `renameBranch` (name only) — everything
+ * else on the Location Details form (address/city/country/timezone/
+ * description/the 4 toggle flags). All optional/patch-style: only fields
+ * actually present in `input` are written, so a caller can send just the
+ * one field a user changed. `name`, if present, is kept in sync on
+ * `rooms.name` too, same as `renameBranch` already does.
+ */
+export async function updateBranchDetails(input: {
+  branchId: string;
+  name?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  timezone?: string;
+  description?: string;
+  allowAds?: boolean;
+  allowAnnouncements?: boolean;
+  collectEngagementData?: boolean;
+  restrictContentRating?: boolean;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const patch: Record<string, unknown> = {};
+
+  if (input.name !== undefined) {
+    const parsed = nameSchema.safeParse(input.name);
+    if (!parsed.success) return { ok: false, error: "Enter a location name (2-60 characters)." };
+    patch.name = parsed.data;
+  }
+  if (input.address !== undefined) {
+    const parsed = addressSchema.safeParse(input.address);
+    if (!parsed.success) return { ok: false, error: "Address is too long." };
+    patch.address = parsed.data || null;
+  }
+  if (input.city !== undefined) {
+    const parsed = citySchema.safeParse(input.city);
+    if (!parsed.success) return { ok: false, error: "City is too long." };
+    patch.city = parsed.data || null;
+  }
+  if (input.country !== undefined) {
+    const parsed = countrySchema.safeParse(input.country);
+    if (!parsed.success) return { ok: false, error: "Country is too long." };
+    patch.country = parsed.data || null;
+  }
+  if (input.timezone !== undefined) {
+    const parsed = timezoneSchema.safeParse(input.timezone);
+    if (!parsed.success || !parsed.data) return { ok: false, error: "Pick a valid timezone." };
+    patch.timezone = parsed.data;
+  }
+  if (input.description !== undefined) {
+    const parsed = descriptionSchema.safeParse(input.description);
+    if (!parsed.success) return { ok: false, error: "Description is too long." };
+    patch.description = parsed.data || null;
+  }
+  if (input.allowAds !== undefined) patch.allow_ads = input.allowAds;
+  if (input.allowAnnouncements !== undefined) patch.allow_announcements = input.allowAnnouncements;
+  if (input.collectEngagementData !== undefined) patch.collect_engagement_data = input.collectEngagementData;
+  if (input.restrictContentRating !== undefined) patch.restrict_content_rating = input.restrictContentRating;
+
+  if (Object.keys(patch).length === 0) return { ok: true };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { error } = await admin.from("branches").update(patch).eq("id", branch.id);
+  if (error) return { ok: false, error: "Could not update the location." };
+
+  if (input.name !== undefined) {
+    await admin.from("rooms").update({ name: patch.name }).eq("id", branch.roomId);
+  }
+
+  revalidatePath("/business/branches");
+  revalidatePath(`/business/branches/${branch.id}`);
+  return { ok: true };
+}
+
 export async function updateBranchGenres(input: {
   branchId: string;
   genres: string[];

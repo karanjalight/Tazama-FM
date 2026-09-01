@@ -22,6 +22,18 @@ import { forgetDevice } from "@/app/business/actions";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
+/** Absolute, not relative — `formatRelativeTime` assumes a past timestamp
+ * ("Xm ago") and would misreport a future expiry as "just now"; this also
+ * sidesteps needing `Date.now()` during render (react-hooks/purity). */
+function formatExpiry(iso: string): string {
+  return new Date(iso).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function DetailRow({
   icon: Icon,
   label,
@@ -137,6 +149,30 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
           </span>
         </div>
         <p className="mt-0.5 text-sm text-muted-foreground">{device.deviceModel || "Unknown model"}</p>
+
+        {device.status === "pending" && device.pairingCode && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-center">
+            <p className="text-xs font-medium text-amber-300">
+              Not connected yet — enter this code on {device.name}&apos;s screen
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(device.pairingCode!);
+                toast.success("Pairing code copied.");
+              }}
+              className="mt-2 font-mono text-3xl font-semibold tracking-[0.3em] text-amber-200 transition-colors hover:text-amber-100"
+              title="Copy pairing code"
+            >
+              {device.pairingCode}
+            </button>
+            <p className="mt-1.5 text-[11px] text-amber-300/70">
+              On the device: open the Tazama Player, choose &ldquo;Enter a code instead,&rdquo; and type this in.
+              {device.pairingCodeExpiresAt &&
+                ` Expires ${formatExpiry(device.pairingCodeExpiresAt)}.`}
+            </p>
+          </div>
+        )}
 
         <div className="mt-4 space-y-3">
           <DetailRow

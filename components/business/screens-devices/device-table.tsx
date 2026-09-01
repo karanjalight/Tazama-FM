@@ -69,6 +69,11 @@ function DeviceRow({
       </td>
       <td className="px-3 py-2.5">
         <StatusPill status={device.status} />
+        {device.status === "pending" && device.pairingCode && (
+          <span className="ml-2 rounded-full bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] font-medium tracking-wider text-amber-400">
+            {device.pairingCode}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2.5 text-muted-foreground">
         {device.lastSeenAt ? formatRelativeTime(device.lastSeenAt) : "Never connected"}
@@ -122,6 +127,11 @@ export function DeviceTable({
                 <span>{device.roomName ?? "Unassigned"}</span>
                 <span>{device.lastSeenAt ? formatRelativeTime(device.lastSeenAt) : "Never connected"}</span>
               </div>
+              {device.status === "pending" && device.pairingCode && (
+                <p className="mt-2 rounded-lg bg-amber-500/15 px-2 py-1 text-center font-mono text-sm font-semibold tracking-[0.2em] text-amber-400">
+                  {device.pairingCode}
+                </p>
+              )}
             </button>
           );
         })}

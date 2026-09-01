@@ -51,7 +51,7 @@ export function KioskRoomPlayer({
   );
 
   const appliedIdRef = React.useRef<string | null>(
-    initialPlayback?.track?.youtubeId ?? null,
+    room.zoneId ? null : (initialPlayback?.track?.youtubeId ?? null),
   );
   const pendingSeekRef = React.useRef<number | null>(null);
   const pauseAfterLoadRef = React.useRef(false);
@@ -206,7 +206,7 @@ export function KioskRoomPlayer({
             track: initialPlayback.track,
             positionMs: initialPlayback.positionMs,
             isPlaying: initialPlayback.isPlaying,
-            at: Date.now(),
+            at: room.zoneId ? new Date(initialPlayback.updatedAt).getTime() : Date.now(),
           }
         : null);
     if (seed && syncedRef.current) {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveNextPlaylistTrack } from "@/lib/business/playlist-resolver";
 import { getRoomBySlug } from "@/lib/rooms/queries";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
 import type { RoomTrack } from "@/lib/rooms/types";
@@ -35,12 +36,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not a branch." }, { status: 404 });
   }
 
-  const { data: branch } = await admin
-    .from("branches")
-    .select("device_paired_at")
-    .eq("room_id", room.id)
-    .maybeSingle();
-  if (!branch?.device_paired_at) {
+  const { count: deviceCount } = await admin
+    .from("branch_devices")
+    .select("id", { count: "exact", head: true })
+    .eq("room_id", room.id);
+  if (!deviceCount) {
     return NextResponse.json({ error: "Device not paired." }, { status: 404 });
   }
 
@@ -74,30 +74,49 @@ export async function POST(request: Request) {
         .eq("room_id", room.id)
         .maybeSingle(),
     ]);
-    const exclude = [
-      ...(existingQueue ?? [])
-        .map((r) => (r.track as RoomTrack | null)?.youtubeId)
-        .filter((id): id is string => !!id),
-      (playback?.track as RoomTrack | null)?.youtubeId,
-    ].filter((id): id is string => !!id);
+    const currentYoutubeId = (playback?.track as RoomTrack | null)?.youtubeId ?? null;
 
-    const suggestions = await buildSuggestions({
-      roomGenres: room.genres,
-      participantGenres: [],
-      exclude,
-      limit: 20,
-    });
+    const { data: zoneLinks } = await admin
+      .from("audio_zone_rooms")
+      .select("audio_zones(default_playlist_id)")
+      .eq("room_id", room.id);
+    const playlistId =
+      ((zoneLinks ?? []) as {
+        audio_zones: { default_playlist_id: string | null } | { default_playlist_id: string | null }[] | null;
+      }[])
+        .map((r) => (Array.isArray(r.audio_zones) ? r.audio_zones[0] : r.audio_zones))
+        .find((z) => z?.default_playlist_id)?.default_playlist_id ?? null;
 
-    if (suggestions.length > 0) {
-      const { error: insertError } = await admin.from("room_queue").insert(
-        suggestions.map((track, i) => ({
-          room_id: room.id,
-          track,
-          added_by: null,
-          played: i === 0,
-        })),
-      );
-      if (!insertError) next = suggestions[0];
+    if (playlistId) {
+      next = await resolveNextPlaylistTrack(admin, playlistId, currentYoutubeId);
+    }
+
+    if (!next) {
+      const exclude = [
+        ...(existingQueue ?? [])
+          .map((r) => (r.track as RoomTrack | null)?.youtubeId)
+          .filter((id): id is string => !!id),
+        currentYoutubeId,
+      ].filter((id): id is string => !!id);
+
+      const suggestions = await buildSuggestions({
+        roomGenres: room.genres,
+        participantGenres: [],
+        exclude,
+        limit: 20,
+      });
+
+      if (suggestions.length > 0) {
+        const { error: insertError } = await admin.from("room_queue").insert(
+          suggestions.map((track, i) => ({
+            room_id: room.id,
+            track,
+            added_by: null,
+            played: i === 0,
+          })),
+        );
+        if (!insertError) next = suggestions[0];
+      }
     }
 
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

@@ -693,6 +693,23 @@ export async function revokeStaff(input: {
   return { ok: true };
 }
 
+/**
+ * Shared by `removeBranchQueueItem`/`setBranchPlayback`/`setRoomVolume`: an
+ * optional `roomId` must belong to `branch` (validated via `getRoom`) or be
+ * rejected; omitted, it resolves to the branch's own default room — same
+ * fallback `playToBranches` uses, just against a single branch instead of a
+ * permitted list, so it isn't a fourth caller of this helper.
+ */
+async function resolveRoomId(
+  branch: { id: string; roomId: string },
+  roomId?: string,
+): Promise<{ ok: true; roomId: string } | { ok: false; error: string }> {
+  if (!roomId) return { ok: true, roomId: branch.roomId };
+  const room = await getRoom(branch.id, roomId);
+  if (!room) return { ok: false, error: "Room not found." };
+  return { ok: true, roomId: room.id };
+}
+
 export async function removeBranchQueueItem(input: {
   branchId: string;
   roomId?: string;
@@ -705,12 +722,9 @@ export async function removeBranchQueueItem(input: {
   const branch = await getBranch(viewer.businessId, input.branchId);
   if (!branch) return { ok: false, error: "Branch not found." };
 
-  let roomId = branch.roomId;
-  if (input.roomId) {
-    const room = await getRoom(branch.id, input.roomId);
-    if (!room) return { ok: false, error: "Room not found." };
-    roomId = room.id;
-  }
+  const resolved = await resolveRoomId(branch, input.roomId);
+  if (!resolved.ok) return resolved;
+  const { roomId } = resolved;
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
@@ -738,12 +752,9 @@ export async function setBranchPlayback(input: {
   const branch = await getBranch(viewer.businessId, input.branchId);
   if (!branch) return { ok: false, error: "Branch not found." };
 
-  let roomId = branch.roomId;
-  if (input.roomId) {
-    const room = await getRoom(branch.id, input.roomId);
-    if (!room) return { ok: false, error: "Room not found." };
-    roomId = room.id;
-  }
+  const resolved = await resolveRoomId(branch, input.roomId);
+  if (!resolved.ok) return resolved;
+  const { roomId } = resolved;
 
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
@@ -791,12 +802,9 @@ export async function setRoomVolume(input: {
   const branch = await getBranch(viewer.businessId, input.branchId);
   if (!branch) return { ok: false, error: "Branch not found." };
 
-  let roomId = branch.roomId;
-  if (input.roomId) {
-    const room = await getRoom(branch.id, input.roomId);
-    if (!room) return { ok: false, error: "Room not found." };
-    roomId = room.id;
-  }
+  const resolved = await resolveRoomId(branch, input.roomId);
+  if (!resolved.ok) return resolved;
+  const { roomId } = resolved;
 
   const clamped = Math.min(100, Math.max(0, Math.round(input.volume)));
 

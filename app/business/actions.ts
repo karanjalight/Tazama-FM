@@ -552,9 +552,16 @@ export async function playToBranches(input: {
     if (permitted.length !== 1) {
       return { ok: false, error: "Pick a single branch to target a specific room." };
     }
-    const room = await getRoom(permitted[0].id, input.roomId);
-    if (!room) return { ok: false, error: "Room not found." };
-    targetRoomId = room.id;
+    // The branch's own default room never has `branch_id` set (see
+    // createBranch), so it can never match `getRoom`'s `.eq("branch_id", ...)`
+    // filter — short-circuit that exact-match case instead of looking it up.
+    if (input.roomId === permitted[0].roomId) {
+      targetRoomId = permitted[0].roomId;
+    } else {
+      const room = await getRoom(permitted[0].id, input.roomId);
+      if (!room) return { ok: false, error: "Room not found." };
+      targetRoomId = room.id;
+    }
   }
 
   const results = await Promise.all(
@@ -705,7 +712,10 @@ async function resolveRoomId(
   branch: { id: string; roomId: string },
   roomId?: string,
 ): Promise<{ ok: true; roomId: string } | { ok: false; error: string }> {
-  if (!roomId) return { ok: true, roomId: branch.roomId };
+  // The branch's own default room never has `branch_id` set (see
+  // createBranch), so it can never match `getRoom`'s `.eq("branch_id", ...)`
+  // filter — short-circuit that exact-match case instead of looking it up.
+  if (!roomId || roomId === branch.roomId) return { ok: true, roomId: branch.roomId };
   const room = await getRoom(branch.id, roomId);
   if (!room) return { ok: false, error: "Room not found." };
   return { ok: true, roomId: room.id };

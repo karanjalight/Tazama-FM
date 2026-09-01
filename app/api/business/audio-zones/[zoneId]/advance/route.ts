@@ -101,11 +101,17 @@ export async function POST(
     }
   }
 
+  // With no next track resolved (no playlist assigned and no genre
+  // fallback), loop the zone's current track instead of going silent — a
+  // synchronized zone otherwise has no way to recover playback. A real next
+  // track always wins; only a zone that has never played anything (nothing
+  // to loop) legitimately stays null.
+  const resolvedTrack = next ?? (current.track as RoomTrack | null);
   const { data: updated, error: updateError } = await admin
     .from("audio_zone_playback")
     .update({
-      track: next,
-      is_playing: next !== null,
+      track: resolvedTrack,
+      is_playing: resolvedTrack !== null,
       position_ms: 0,
       started_at: new Date().toISOString(),
       version: reportedVersion + 1,

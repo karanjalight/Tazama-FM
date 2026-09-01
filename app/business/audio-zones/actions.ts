@@ -116,6 +116,18 @@ export async function createAudioZone(input: {
     return { ok: false, error: "Could not create the audio zone." };
   }
 
+  // audio_zone_playback is the zone-authoritative playback state row the
+  // /advance route depends on. A one-time migration backfilled it for zones
+  // that existed at migration time; every zone created since needs its own
+  // row created here. Non-fatal: the audio_zones row above is already
+  // committed, so a failure here shouldn't undo zone creation — just log it.
+  const { error: playbackError } = await admin
+    .from("audio_zone_playback")
+    .upsert({ zone_id: inserted.id }, { onConflict: "zone_id" });
+  if (playbackError) {
+    console.error("createAudioZone: audio_zone_playback upsert failed", playbackError);
+  }
+
   if (parsed.data.roomIds?.length) {
     const ok = await replaceAudioZoneRooms(admin, inserted.id, parsed.data.roomIds);
     if (!ok) {

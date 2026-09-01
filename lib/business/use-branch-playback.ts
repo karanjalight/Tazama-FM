@@ -138,3 +138,88 @@ export function useBranchVolume(
     };
   }, [roomId, enabled]);
 }
+
+interface ZonePlaybackRow {
+  track: RoomTrack | null;
+  position_ms: number;
+  is_playing: boolean;
+  version: number;
+  updated_at: string;
+}
+
+function rowToZonePayload(row: ZonePlaybackRow): PlaybackPayload {
+  return {
+    track: row.track,
+    positionMs: row.position_ms,
+    isPlaying: row.is_playing,
+    at: new Date(row.updated_at).getTime(),
+  };
+}
+
+/** Sibling of `useBranchPlayback` for a synchronized Audio Zone's own
+ * canonical playback state (`audio_zone_playback`) instead of a single
+ * room's `room_playback`. `onPlayback` also receives the row's `version`
+ * so the caller can report it back on the next track-end — see
+ * `requestZoneAdvance`'s CAS contract. */
+export function useZonePlayback(
+  zoneId: string,
+  enabled: boolean,
+  onPlayback: (p: PlaybackPayload, version: number) => void,
+): void {
+  const cbRef = React.useRef(onPlayback);
+  React.useEffect(() => {
+    cbRef.current = onPlayback;
+  });
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`zone-playback:${zoneId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "audio_zone_playback",
+          filter: `zone_id=eq.${zoneId}`,
+        },
+        (payload) => {
+          const row = payload.new as ZonePlaybackRow | undefined;
+          if (row) cbRef.current(rowToZonePayload(row), row.version);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [zoneId, enabled]);
+}
+
+/** Reports the version this kiosk last observed and asks the zone to
+ * advance. Mirrors `requestAdvance`, but carries the CAS version — the
+ * server only actually advances if `reportedVersion` still matches the
+ * zone's current version (first-valid-reporter-wins). Always returns the
+ * zone's resulting version so the caller can keep its ref current even
+ * when it lost the race. */
+export async function requestZoneAdvance(
+  zoneId: string,
+  reportedVersion: number,
+): Promise<{ payload: PlaybackPayload | null; version: number } | null> {
+  try {
+    const res = await fetch(`/api/business/audio-zones/${zoneId}/advance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportedVersion }),
+    });
+    const data = (await res.json()) as { track?: RoomTrack | null; version?: number };
+    if (typeof data.version !== "number") return null;
+    return {
+      payload: data.track ? { track: data.track, positionMs: 0, isPlaying: true, at: Date.now() } : null,
+      version: data.version,
+    };
+  } catch {
+    return null;
+  }
+}

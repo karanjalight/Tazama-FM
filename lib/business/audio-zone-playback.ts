@@ -11,6 +11,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveNextPlaylistTrack } from "@/lib/business/playlist-resolver";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
+import { nextQueuedZoneTrack } from "@/lib/business/zone-queue";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 /** The zone's earliest-covered room's genres — deterministic tie-break so a
@@ -65,17 +66,28 @@ export async function advanceZonePlayback(
     return { ok: true, track: current.track as RoomTrack | null, version: current.version };
   }
 
-  const { data: zone, error: zoneError } = await admin
-    .from("audio_zones")
-    .select("default_playlist_id")
-    .eq("id", zoneId)
-    .maybeSingle();
-  if (zoneError) return { ok: false, error: "Could not read audio zone." };
-
   const currentYoutubeId = (current.track as RoomTrack | null)?.youtubeId ?? null;
-  let next: RoomTrack | null = zone?.default_playlist_id
-    ? await resolveNextPlaylistTrack(admin, zone.default_playlist_id, currentYoutubeId)
-    : null;
+
+  // A zone-room joiner's suggestion (audio_zone_queue) plays next, ahead of
+  // the zone's own default playlist/genre pick — same "new layer sits above
+  // the existing one, existing one keeps working untouched" shape the
+  // Schedule-override-above-Audio-Zone design already uses. Only queried
+  // when nothing's queued does the zone fall back to its own resolution,
+  // exactly as before this change.
+  let next: RoomTrack | null = await nextQueuedZoneTrack(admin, zoneId);
+
+  if (!next) {
+    const { data: zone, error: zoneError } = await admin
+      .from("audio_zones")
+      .select("default_playlist_id")
+      .eq("id", zoneId)
+      .maybeSingle();
+    if (zoneError) return { ok: false, error: "Could not read audio zone." };
+
+    next = zone?.default_playlist_id
+      ? await resolveNextPlaylistTrack(admin, zone.default_playlist_id, currentYoutubeId)
+      : null;
+  }
 
   if (!next) {
     const { genres, error: genresError } = await earliestZoneRoomGenres(admin, zoneId);

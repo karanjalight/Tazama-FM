@@ -28,7 +28,13 @@ export interface AudioZonePlaybackState {
 
 export interface AudioZone {
   id: string;
+  /** Real, human-readable, publicly shareable identifier for /zones/[slug]
+   * — null only for a legacy row that predates this column and hasn't been
+   * touched since (createAudioZone always assigns one on create; the
+   * migration backfills every pre-existing row, so this should be rare). */
+  slug: string | null;
   branchId: string;
+  branchName: string;
   zoneId: string | null;
   zoneName: string | null;
   name: string;

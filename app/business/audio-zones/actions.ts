@@ -10,7 +10,22 @@ import { getAudioZone, getAudioZonePlayback } from "@/lib/business/audio-zone-qu
 import { advanceZonePlayback } from "@/lib/business/audio-zone-playback";
 import { computeFrozenPosition } from "@/lib/business/playback-freeze";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { slugify, randomSuffix } from "@/lib/rooms/slug";
 import type { ActionResult } from "@/lib/business/types";
+
+/** Real, human-readable, publicly shareable slug for /zones/[slug] — same
+ * 5-retry/randomSuffix(6)-fallback shape already copy-pasted at three other
+ * call sites in this app (app/rooms/actions.ts, app/business/actions.ts,
+ * app/business/locations/actions.ts), scoped to audio_zones.slug this time. */
+async function uniqueZoneSlug(admin: SupabaseClient, base: string): Promise<string> {
+  let slug = slugify(base) || "zone";
+  for (let i = 0; i < 5; i++) {
+    const { data } = await admin.from("audio_zones").select("id").eq("slug", slug).maybeSingle();
+    if (!data) return slug;
+    slug = `${slugify(base) || "zone"}-${randomSuffix()}`;
+  }
+  return `${slugify(base) || "zone"}-${randomSuffix(6)}`;
+}
 
 const nameSchema = z.string().trim().min(2, "Give this audio zone a name.").max(60);
 const descriptionSchema = z.string().trim().max(300);
@@ -93,9 +108,12 @@ export async function createAudioZone(input: {
   const admin = createAdminClient();
   if (!admin) return { ok: false, error: "Not configured." };
 
+  const slug = await uniqueZoneSlug(admin, parsed.data.name);
+
   const { data: inserted, error } = await admin
     .from("audio_zones")
     .insert({
+      slug,
       branch_id: branch.id,
       zone_id: parsed.data.zoneId ?? null,
       name: parsed.data.name,

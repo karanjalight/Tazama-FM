@@ -44,3 +44,11 @@ export const REACTION_EMOJIS = ["❤️", "🔥", "🙌", "😮", "💯", "🕺"
 export function roomChannelName(roomId: string): string {
   return `room:${roomId}`;
 }
+
+/** Sibling of `roomChannelName` for a Zone Room (`/zones/[slug]`) — same
+ * `ROOM_EVENT`/`ReactionPayload`/`QueuePayload`/`REACTION_EMOJIS` contract,
+ * just a different channel namespace so zone traffic never crosses with
+ * room traffic. See `lib/business/use-zone-channel.ts`. */
+export function zoneChannelName(zoneId: string): string {
+  return `zone:${zoneId}`;
+}

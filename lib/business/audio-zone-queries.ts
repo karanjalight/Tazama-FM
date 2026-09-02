@@ -15,6 +15,7 @@ import type { RoomTrack } from "@/lib/rooms/types";
 
 interface AudioZoneRow {
   id: string;
+  slug: string | null;
   branch_id: string;
   zone_id: string | null;
   name: string;
@@ -33,7 +34,7 @@ interface AudioZoneRow {
 }
 
 const AUDIO_ZONE_COLUMNS =
-  "id, branch_id, zone_id, name, description, status, volume, volume_limit, crossfade_seconds, audio_ducking_enabled, announcements_enabled, default_playlist_id, schedule_start, schedule_end, synchronized_playback, created_at";
+  "id, slug, branch_id, zone_id, name, description, status, volume, volume_limit, crossfade_seconds, audio_ducking_enabled, announcements_enabled, default_playlist_id, schedule_start, schedule_end, synchronized_playback, created_at";
 
 /** Truncates a `time` column's "HH:MM:SS" to "HH:MM" for the UI's <input type="time">. */
 function shortTime(value: string | null): string | null {
@@ -124,6 +125,7 @@ async function speakerCountsByRoom(
 
 function buildAudioZone(
   row: AudioZoneRow,
+  branchName: string,
   roomIds: string[],
   rooms: Room[],
   zones: Zone[],
@@ -148,7 +150,9 @@ function buildAudioZone(
 
   return {
     id: row.id,
+    slug: row.slug,
     branchId: row.branch_id,
+    branchName,
     zoneId: row.zone_id,
     zoneName: zone?.name ?? null,
     name: row.name,
@@ -173,6 +177,11 @@ function buildAudioZone(
   };
 }
 
+async function branchNameById(admin: SupabaseClient, branchId: string): Promise<string> {
+  const { data } = await admin.from("branches").select("name").eq("id", branchId).maybeSingle();
+  return (data as { name: string } | null)?.name ?? "";
+}
+
 export async function listAudioZonesForBranch(branchId: string): Promise<AudioZone[]> {
   const admin = createAdminClient();
   if (!admin) return [];
@@ -189,17 +198,18 @@ export async function listAudioZonesForBranch(branchId: string): Promise<AudioZo
   const syncedIds = rows.filter((r) => r.synchronized_playback).map((r) => r.id);
   const playlistIds = [...new Set(rows.map((r) => r.default_playlist_id).filter((x): x is string => !!x))];
 
-  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone] = await Promise.all([
+  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone, branchName] = await Promise.all([
     roomsByAudioZone(admin, ids),
     playlistNames(admin, playlistIds),
     listRooms(branchId),
     listZones(branchId),
     speakerCountsByRoom(admin, branchId),
     playbackStatesByZone(admin, syncedIds),
+    branchNameById(admin, branchId),
   ]);
 
   return rows.map((r) =>
-    buildAudioZone(r, roomIdsByZone.get(r.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone),
+    buildAudioZone(r, branchName, roomIdsByZone.get(r.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone),
   );
 }
 
@@ -216,16 +226,46 @@ export async function getAudioZone(branchId: string, id: string): Promise<AudioZ
   if (!data) return null;
 
   const row = data as AudioZoneRow;
-  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone] = await Promise.all([
+  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone, branchName] = await Promise.all([
     roomsByAudioZone(admin, [row.id]),
     row.default_playlist_id ? playlistNames(admin, [row.default_playlist_id]) : Promise.resolve(new Map<string, string>()),
     listRooms(branchId),
     listZones(branchId),
     speakerCountsByRoom(admin, branchId),
     row.synchronized_playback ? playbackStatesByZone(admin, [row.id]) : Promise.resolve(new Map<string, AudioZonePlaybackState>()),
+    branchNameById(admin, branchId),
   ]);
 
-  return buildAudioZone(row, roomIdsByZone.get(row.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone);
+  return buildAudioZone(row, branchName, roomIdsByZone.get(row.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone);
+}
+
+/**
+ * Public, unscoped lookup for the /zones/[slug] consumer page — no branchId
+ * to scope by (a joiner only ever has the slug), no viewer check (matches
+ * getAudioZonePlayback's existing "unlisted but shareable by link" posture;
+ * the raw audio_zones table itself stays staff-only via RLS, but nothing
+ * here goes through RLS — this is the service-role client, same as every
+ * other business query in this app).
+ */
+export async function getAudioZoneBySlug(slug: string): Promise<AudioZone | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+
+  const { data } = await admin.from("audio_zones").select(AUDIO_ZONE_COLUMNS).eq("slug", slug).maybeSingle();
+  if (!data) return null;
+  const row = data as AudioZoneRow;
+
+  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone, branchName] = await Promise.all([
+    roomsByAudioZone(admin, [row.id]),
+    row.default_playlist_id ? playlistNames(admin, [row.default_playlist_id]) : Promise.resolve(new Map<string, string>()),
+    listRooms(row.branch_id),
+    listZones(row.branch_id),
+    speakerCountsByRoom(admin, row.branch_id),
+    row.synchronized_playback ? playbackStatesByZone(admin, [row.id]) : Promise.resolve(new Map<string, AudioZonePlaybackState>()),
+    branchNameById(admin, row.branch_id),
+  ]);
+
+  return buildAudioZone(row, branchName, roomIdsByZone.get(row.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone);
 }
 
 /** The synchronized zone (if any) covering this room — a room isn't

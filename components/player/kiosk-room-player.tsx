@@ -16,8 +16,10 @@ import {
   requestScheduleContentAdvance,
   type ScheduleContentSnapshot,
 } from "@/lib/business/use-branch-playback";
+import { useZoneChannel } from "@/lib/business/use-zone-channel";
+import { FloatingReactions, type FloatingItem } from "@/components/rooms/room-reactions";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
-import type { RoomPlayback, RoomTrack } from "@/lib/rooms/types";
+import type { RoomPlayback, RoomTrack, RoomViewer } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
 
 /** How often the kiosk asks whether an active Schedule now covers this room
@@ -76,6 +78,11 @@ export function KioskRoomPlayer({
   const [scheduleContent, setScheduleContent] = React.useState<ScheduleContentSnapshot | null>(null);
   const scheduleVersionRef = React.useRef(0);
   const contentTimerRef = React.useRef<number | null>(null);
+  // Zone-room reactions (see components/zones/zone-experience.tsx) rendered
+  // on the physical screen — this kiosk never joins the zone's presence
+  // roster (`joined: false` below), it only listens.
+  const [floatingReactions, setFloatingReactions] = React.useState<FloatingItem[]>([]);
+  const reactionIdRef = React.useRef(0);
 
   const appliedIdRef = React.useRef<string | null>(
     room.zoneId ? null : (initialPlayback?.track?.youtubeId ?? null),
@@ -256,6 +263,27 @@ export function KioskRoomPlayer({
       setScheduleContent(content);
       if (content) armContentTimer(content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
     }
+  });
+
+  // Zone Room reactions (app/zones/[slug], components/zones/zone-experience.tsx)
+  // rendered on the physical screen — listen-only (`joined: false`), this
+  // screen never appears in a zone-room's participant list.
+  const zoneReactionViewer = React.useMemo<RoomViewer>(
+    () => ({ id: `screen-${room.id}`, name: room.name, avatarKey: null, genres: [], plan: "free", accountType: null }),
+    [room.id, room.name],
+  );
+  useZoneChannel({
+    zoneId: room.zoneId ?? "",
+    viewer: zoneReactionViewer,
+    joined: false,
+    enabled: !!room.zoneId,
+    handlers: {
+      onReaction: (r) => {
+        const id = `kr${reactionIdRef.current++}`;
+        setFloatingReactions((prev) => [...prev, { id, emoji: r.emoji, x: r.x }]);
+        setTimeout(() => setFloatingReactions((prev) => prev.filter((f) => f.id !== id)), 2800);
+      },
+    },
   });
 
   // Discovers whether an active Schedule currently covers this room. Only a
@@ -531,6 +559,10 @@ export function KioskRoomPlayer({
           ) : null}
         </div>
       )}
+
+      {/* Reactions sent by anyone who's joined this zone's Zone Room online
+          (app/zones/[slug]) — shared component with the room/zone-room UI. */}
+      <FloatingReactions items={floatingReactions} />
 
       {/* Tap layer: toggles the control bar (clicks never reach the iframe). */}
       <button

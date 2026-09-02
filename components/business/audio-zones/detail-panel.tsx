@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Clock,
+  Copy,
   Gauge,
   ListMusic,
   Music,
@@ -158,6 +159,18 @@ export function AudioZoneDetailPanel({
     router.refresh();
   }
 
+  function copyZoneLink() {
+    if (!zone.slug) {
+      toast.error("This zone doesn't have a link yet — run the latest database migration to generate one.");
+      return;
+    }
+    const url = `${window.location.origin}/zones/${zone.slug}`;
+    navigator.clipboard?.writeText(url).then(
+      () => toast.success("Zone Room link copied"),
+      () => toast.message(url),
+    );
+  }
+
   async function handleDelete() {
     if (!confirm(`Delete "${zone.name}"? This can't be undone.`)) return;
     setDeleting(true);
@@ -210,6 +223,14 @@ export function AudioZoneDetailPanel({
         <span>{zone.roomNames.length} room{zone.roomNames.length === 1 ? "" : "s"}</span>
         <span>{zone.speakersTotal} Speakers</span>
       </div>
+      <button
+        type="button"
+        onClick={copyZoneLink}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Copy className="size-3" />
+        {zone.slug ? `/zones/${zone.slug}` : "Zone Room link"}
+      </button>
 
       <div className="mt-4 flex gap-1 border-b border-border">
         {TABS.map((t) => (

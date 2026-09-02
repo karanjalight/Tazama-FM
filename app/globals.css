@@ -186,6 +186,16 @@
     opacity: 0;
   }
 }
+/* Slow pan/zoom for signage image content — the classic "Ken Burns" digital
+   signage treatment, keeps a still image feeling alive on a big screen. */
+@keyframes tz-kenburns {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    transform: scale(1.08) translate(-1%, -1%);
+  }
+}
 
 @layer utilities {
   .animate-equalize {
@@ -201,12 +211,16 @@
   .animate-live-ping {
     animation: tz-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
+  .animate-kenburns {
+    animation: tz-kenburns 20s ease-in-out infinite alternate;
+  }
   /* Honor reduced-motion for every always-on loop */
   @media (prefers-reduced-motion: reduce) {
     .animate-equalize,
     .animate-progress-pulse,
     .animate-float-up,
-    .animate-live-ping {
+    .animate-live-ping,
+    .animate-kenburns {
       animation: none !important;
     }
   }

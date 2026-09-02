@@ -145,7 +145,34 @@ export function TimingStep({
   }
 
   function saveSessionContent(updated: ScheduleSession) {
-    onChange({ sessions: state.sessions.map((s) => (s.id === updated.id ? updated : s)) });
+    // A block created by clicking/dragging an empty timeline gap (see
+    // `handleCreateBlock`) is a real draft the whole time it's open in
+    // SessionContentDialog, but it isn't added to state.sessions until the
+    // user actually saves — cancelling the dialog just discards it, same as
+    // the wizard's other "draft until saved" flows.
+    const exists = state.sessions.some((s) => s.id === updated.id);
+    onChange({
+      sessions: exists ? state.sessions.map((s) => (s.id === updated.id ? updated : s)) : [...state.sessions, updated],
+    });
+  }
+
+  /** A click/drag on an empty timeline gap — creates a content-only draft
+   * block at that time range and opens it straight into content
+   * configuration (skipping the layer-toggle question, since we already
+   * know it's signage). */
+  function handleCreateBlock(range: { startTime: string; endTime: string }) {
+    const draft = createSession({ label: `Signage ${formatTimeLabel(range.startTime)}`, startTime: range.startTime, endTime: range.endTime, transition: "fade" });
+    draft.contentEnabled = true;
+    setContentSession(draft);
+  }
+
+  /** A drag-move or drag-resize on an existing timeline block. The timeline
+   * itself already clamps every drag to the free gap around the block, so
+   * this never needs to re-validate for overlaps. */
+  function handleMoveOrResize(sessionId: string, range: { startTime: string; endTime: string }) {
+    onChange({
+      sessions: state.sessions.map((s) => (s.id === sessionId ? { ...s, ...range } : s)),
+    });
   }
 
   const sortedSessions = [...state.sessions].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
@@ -275,11 +302,14 @@ export function TimingStep({
           </button>
         </div>
 
-        {state.sessions.length > 0 && (
-          <div className="mt-3">
-            <DayTimeline sessions={state.sessions} onSessionClick={setContentSession} />
-          </div>
-        )}
+        <div className="mt-3">
+          <DayTimeline
+            sessions={state.sessions}
+            onSessionClick={setContentSession}
+            onCreateBlock={handleCreateBlock}
+            onMoveOrResize={handleMoveOrResize}
+          />
+        </div>
 
         <div className="mt-3 space-y-2">
           {sortedSessions.map((session) => (

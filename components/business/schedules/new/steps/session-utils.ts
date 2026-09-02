@@ -1,9 +1,45 @@
 import type { ScheduleSession } from "../schedule-state";
 import { formatDurationSeconds, playlistDurationSummary } from "@/lib/business/schedule-duration";
 
+export const DAY_MINUTES = 24 * 60;
+
 export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return (h || 0) * 60 + (m || 0);
+}
+
+/** "HH:MM" for a minute-of-day value — the inverse of `toMinutes`, used to
+ * turn a drag interaction's computed minutes back into a session field.
+ * Capped at 23:59, not 24:00 — same ceiling a native `<input type="time">`
+ * already enforces (there's no "midnight tomorrow" in this format), and the
+ * server's own HH:MM validation (hours 00–23 only) would reject "24:00". */
+export function minutesToHHMM(minutes: number): string {
+  const clamped = Math.min(DAY_MINUTES - 1, Math.max(0, Math.round(minutes)));
+  const h = Math.floor(clamped / 60);
+  const m = clamped % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * The free window around `anchorMinutes`, bounded by the nearest other
+ * session on each side (or the day's own 00:00/24:00 edges) — what a
+ * create/move/resize drag on the day-timeline must stay inside. `others`
+ * should already exclude the session being dragged, if any, so a session
+ * moving/resizing itself never gets clamped by its own current position.
+ */
+export function freeGapAround(
+  anchorMinutes: number,
+  others: { startTime: string; endTime: string }[],
+): { start: number; end: number } {
+  let start = 0;
+  let end = DAY_MINUTES;
+  for (const o of others) {
+    const oStart = toMinutes(o.startTime);
+    const oEnd = toMinutes(o.endTime);
+    if (oEnd <= anchorMinutes && oEnd > start) start = oEnd;
+    if (oStart >= anchorMinutes && oStart < end) end = oStart;
+  }
+  return { start, end };
 }
 
 export function formatTimeLabel(hhmm: string): string {

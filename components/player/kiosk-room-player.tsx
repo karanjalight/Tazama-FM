@@ -18,6 +18,7 @@ import {
 } from "@/lib/business/use-branch-playback";
 import { useZoneChannel } from "@/lib/business/use-zone-channel";
 import { FloatingReactions, type FloatingItem } from "@/components/rooms/room-reactions";
+import { ScheduleContentDisplay } from "@/components/business/schedules/schedule-content-display";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 import type { RoomPlayback, RoomTrack, RoomViewer } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
@@ -537,28 +538,7 @@ export function KioskRoomPlayer({
           "pause music while content shows" isn't threaded down to the
           kiosk yet, see the Schedules design notes). Advances on its own
           timer (armContentTimer), independent of the audio track. */}
-      {scheduleContent && (
-        <div className="absolute inset-0 z-5 grid place-items-center bg-black">
-          {scheduleContent.contentType === "video" && scheduleContent.url ? (
-            <video
-              key={scheduleContent.contentItemId}
-              src={scheduleContent.url}
-              autoPlay
-              muted
-              playsInline
-              className="size-full object-contain"
-            />
-          ) : scheduleContent.url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- arbitrary business-uploaded aspect ratio, not worth Next/Image's fixed-box ceremony on a kiosk screen
-            <img
-              key={scheduleContent.contentItemId}
-              src={scheduleContent.url}
-              alt=""
-              className="size-full object-contain"
-            />
-          ) : null}
-        </div>
-      )}
+      {scheduleContent && <ScheduleContentDisplay content={scheduleContent} className="absolute inset-0 z-5" />}
 
       {/* Reactions sent by anyone who's joined this zone's Zone Room online
           (app/zones/[slug]) — shared component with the room/zone-room UI. */}

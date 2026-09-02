@@ -21,7 +21,7 @@ import {
 
 import type { Schedule, ScheduleSession } from "@/lib/business/schedule-types";
 import type { ContentItem, Playlist } from "@/lib/business/content-queries";
-import type { ScheduleSession as ClientSession } from "@/components/business/schedules/new/schedule-state";
+import { createSession, type ScheduleSession as ClientSession } from "@/components/business/schedules/new/schedule-state";
 import { toClientSession, toSessionInput } from "./session-convert";
 import { ContentPreviewDialog } from "./content-preview-dialog";
 import {
@@ -35,6 +35,8 @@ import {
 } from "@/app/business/schedules/actions";
 import { playlistDurationSummary, contentDurationSummary, formatDurationSeconds } from "@/lib/business/schedule-duration";
 import { SessionContentDialog } from "@/components/business/schedules/new/steps/session-content-dialog";
+import { DayTimeline } from "@/components/business/schedules/new/steps/day-timeline";
+import { formatTimeLabel } from "@/components/business/schedules/new/steps/session-utils";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -192,8 +194,9 @@ export function ScheduleDetailView({
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
   const [previewItem, setPreviewItem] = React.useState<ContentItem | null>(null);
-  const [editingSession, setEditingSession] = React.useState<ScheduleSession | null>(null);
+  const [editingSession, setEditingSession] = React.useState<ClientSession | null>(null);
   const schedulesHref = `/business/branches/${branchSlugOrId}/schedules`;
+  const clientSessions = React.useMemo(() => schedule.sessions.map(toClientSession), [schedule.sessions]);
 
   async function toggleActive() {
     setPending(true);
@@ -248,7 +251,14 @@ export function ScheduleDetailView({
   }
 
   async function saveSession(updated: ClientSession) {
-    const nextSessions = schedule.sessions.map((s) => (s.id === updated.id ? updated : toClientSession(s)));
+    // A block created by clicking/dragging an empty timeline gap (see
+    // handleCreateBlock) has an id that doesn't exist in schedule.sessions
+    // yet — append rather than (no-op) map-replace, or it would silently
+    // never make it into the saved schedule.
+    const exists = schedule.sessions.some((s) => s.id === updated.id);
+    const nextSessions = exists
+      ? clientSessions.map((s) => (s.id === updated.id ? updated : s))
+      : [...clientSessions, updated];
     const res = await replaceScheduleSessions({ branchId, scheduleId: schedule.id, sessions: nextSessions.map(toSessionInput) });
     if (!res.ok) {
       toast.error(res.error);
@@ -257,6 +267,31 @@ export function ScheduleDetailView({
     res.warnings.forEach((w) => toast.warning(w));
     toast.success("Session updated");
     setEditingSession(null);
+    router.refresh();
+  }
+
+  /** A click/drag on an empty timeline gap — same "draft until saved" flow
+   * as the wizard's own handleCreateBlock: opens straight into content
+   * configuration, and isn't persisted at all unless the dialog is saved. */
+  function handleCreateBlock(range: { startTime: string; endTime: string }) {
+    const draft = createSession({ label: `Signage ${formatTimeLabel(range.startTime)}`, startTime: range.startTime, endTime: range.endTime, transition: "fade" });
+    draft.contentEnabled = true;
+    setEditingSession(draft);
+  }
+
+  /** A drag-move or drag-resize on an existing timeline block — commits
+   * immediately (this is a live, already-saved schedule, unlike the
+   * wizard's in-memory draft), through the same replaceScheduleSessions
+   * round-trip every other session edit here already uses.
+   */
+  async function handleMoveOrResize(sessionId: string, range: { startTime: string; endTime: string }) {
+    const nextSessions = clientSessions.map((s) => (s.id === sessionId ? { ...s, ...range } : s));
+    const res = await replaceScheduleSessions({ branchId, scheduleId: schedule.id, sessions: nextSessions.map(toSessionInput) });
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    res.warnings.forEach((w) => toast.warning(w));
     router.refresh();
   }
 
@@ -365,6 +400,15 @@ export function ScheduleDetailView({
 
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Day Schedule</h2>
+        <p className="text-xs text-muted-foreground">
+          Click or drag an empty gap below to place signage content, drag a block to move it, or drag its edge to resize it.
+        </p>
+        <DayTimeline
+          sessions={clientSessions}
+          onSessionClick={setEditingSession}
+          onCreateBlock={handleCreateBlock}
+          onMoveOrResize={handleMoveOrResize}
+        />
         {schedule.sessions.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
             No sessions configured yet.
@@ -376,7 +420,7 @@ export function ScheduleDetailView({
               branchId={branchId}
               session={session}
               onPreview={setPreviewItem}
-              onEdit={setEditingSession}
+              onEdit={(s) => setEditingSession(toClientSession(s))}
             />
           ))
         )}
@@ -387,7 +431,7 @@ export function ScheduleDetailView({
       {editingSession && (
         <SessionContentDialog
           key={editingSession.id}
-          session={toClientSession(editingSession)}
+          session={editingSession}
           onOpenChange={(open) => !open && setEditingSession(null)}
           onSave={saveSession}
           businessContent={businessContent}

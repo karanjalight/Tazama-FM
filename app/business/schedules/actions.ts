@@ -582,8 +582,17 @@ export async function setScheduleStatus(input: {
       .upsert({ schedule_id: schedule.id }, { onConflict: "schedule_id", ignoreDuplicates: true })
       .select("schedule_id");
     if (playbackInserted && playbackInserted.length > 0) {
+      // track and content share ONE CAS version counter on schedule_playback
+      // (see lib/business/schedule-playback.ts's own doc comment) — calling
+      // both advances with the same hardcoded version here would mean the
+      // second call always finds a stale version (the first one already
+      // bumped it) and silently no-ops, every single time. Re-read the real
+      // version after the track advance so the content advance's CAS check
+      // actually matches. (Confirmed live: this was why an activated
+      // schedule's image/video content never appeared — only its music did.)
       await advanceScheduleTrack(admin, schedule.id, 0).catch(() => {});
-      await advanceScheduleContent(admin, schedule.id, 0).catch(() => {});
+      const { data: afterTrack } = await admin.from("schedule_playback").select("version").eq("schedule_id", schedule.id).maybeSingle();
+      await advanceScheduleContent(admin, schedule.id, afterTrack?.version ?? 0).catch(() => {});
     }
   }
 

@@ -39,6 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { roomUrl } from "@/lib/rooms/slug";
 import { suggestZoneTrack, toggleZoneQueueLike, removeZoneQueueItem, fetchZoneQueue } from "@/app/zones/actions";
+import { ScheduleContentDisplay } from "@/components/business/schedules/schedule-content-display";
 import type { AudioZone } from "@/lib/business/audio-zone-types";
 import type { ZoneQueueItem } from "@/lib/business/zone-queue";
 import type { RoomTrack, RoomViewer } from "@/lib/rooms/types";
@@ -426,14 +427,9 @@ export function ZoneExperience({
       ) : (
         <main className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0 space-y-4">
-            {scheduleContent && (scheduleContent.contentType === "image" || scheduleContent.contentType === "video") && scheduleContent.url && (
+            {scheduleContent && (
               <div className="overflow-hidden rounded-3xl border border-border bg-black">
-                {scheduleContent.contentType === "video" ? (
-                  <video key={scheduleContent.contentItemId} src={scheduleContent.url} controls muted className="aspect-video w-full" />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element -- arbitrary business-uploaded aspect ratio
-                  <img key={scheduleContent.contentItemId} src={scheduleContent.url} alt={scheduleContent.title} className="aspect-video w-full object-contain" />
-                )}
+                <ScheduleContentDisplay content={scheduleContent} className="aspect-video w-full" />
                 <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">Now showing: {scheduleContent.title}</p>
               </div>
             )}

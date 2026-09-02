@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isOnline } from "@/lib/business/queries";
 import { listZones, listRooms, type Zone, type Room } from "@/lib/business/locations-queries";
-import type { AudioZone } from "@/lib/business/audio-zone-types";
+import type { AudioZone, AudioZonePlaybackState } from "@/lib/business/audio-zone-types";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 interface AudioZoneRow {
@@ -70,6 +70,37 @@ async function playlistNames(
   return new Map(((data ?? []) as { id: string; name: string }[]).map((p) => [p.id, p.name]));
 }
 
+/** Batched sibling of `getAudioZonePlayback` — one query for every
+ * synchronized zone's playback state instead of N. */
+async function playbackStatesByZone(
+  admin: SupabaseClient,
+  zoneIds: string[],
+): Promise<Map<string, AudioZonePlaybackState>> {
+  const map = new Map<string, AudioZonePlaybackState>();
+  if (!zoneIds.length) return map;
+  const { data } = await admin
+    .from("audio_zone_playback")
+    .select("zone_id, track, position_ms, is_playing, version, updated_at")
+    .in("zone_id", zoneIds);
+  for (const row of (data ?? []) as {
+    zone_id: string;
+    track: RoomTrack | null;
+    position_ms: number;
+    is_playing: boolean;
+    version: number;
+    updated_at: string;
+  }[]) {
+    map.set(row.zone_id, {
+      track: row.track,
+      positionMs: row.position_ms,
+      isPlaying: row.is_playing,
+      version: row.version,
+      updatedAt: row.updated_at,
+    });
+  }
+  return map;
+}
+
 /** Real speaker (device_kind='audio') counts per room for a branch. */
 async function speakerCountsByRoom(
   admin: SupabaseClient,
@@ -98,6 +129,7 @@ function buildAudioZone(
   zones: Zone[],
   playlistNameById: Map<string, string>,
   speakerCounts: Map<string, { total: number; online: number }>,
+  playbackByZone: Map<string, AudioZonePlaybackState>,
 ): AudioZone {
   const roomNames = roomIds
     .map((id) => rooms.find((r) => r.id === id)?.name)
@@ -136,6 +168,7 @@ function buildAudioZone(
     roomNames,
     speakersTotal,
     speakersOnline,
+    playback: row.synchronized_playback ? (playbackByZone.get(row.id) ?? null) : null,
     createdAt: row.created_at,
   };
 }
@@ -153,18 +186,20 @@ export async function listAudioZonesForBranch(branchId: string): Promise<AudioZo
   if (!rows.length) return [];
 
   const ids = rows.map((r) => r.id);
+  const syncedIds = rows.filter((r) => r.synchronized_playback).map((r) => r.id);
   const playlistIds = [...new Set(rows.map((r) => r.default_playlist_id).filter((x): x is string => !!x))];
 
-  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts] = await Promise.all([
+  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone] = await Promise.all([
     roomsByAudioZone(admin, ids),
     playlistNames(admin, playlistIds),
     listRooms(branchId),
     listZones(branchId),
     speakerCountsByRoom(admin, branchId),
+    playbackStatesByZone(admin, syncedIds),
   ]);
 
   return rows.map((r) =>
-    buildAudioZone(r, roomIdsByZone.get(r.id) ?? [], rooms, zones, playlistNameById, speakerCounts),
+    buildAudioZone(r, roomIdsByZone.get(r.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone),
   );
 }
 
@@ -181,23 +216,16 @@ export async function getAudioZone(branchId: string, id: string): Promise<AudioZ
   if (!data) return null;
 
   const row = data as AudioZoneRow;
-  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts] = await Promise.all([
+  const [roomIdsByZone, playlistNameById, rooms, zones, speakerCounts, playbackByZone] = await Promise.all([
     roomsByAudioZone(admin, [row.id]),
     row.default_playlist_id ? playlistNames(admin, [row.default_playlist_id]) : Promise.resolve(new Map<string, string>()),
     listRooms(branchId),
     listZones(branchId),
     speakerCountsByRoom(admin, branchId),
+    row.synchronized_playback ? playbackStatesByZone(admin, [row.id]) : Promise.resolve(new Map<string, AudioZonePlaybackState>()),
   ]);
 
-  return buildAudioZone(row, roomIdsByZone.get(row.id) ?? [], rooms, zones, playlistNameById, speakerCounts);
-}
-
-export interface AudioZonePlaybackState {
-  track: RoomTrack | null;
-  positionMs: number;
-  isPlaying: boolean;
-  version: number;
-  updatedAt: string;
+  return buildAudioZone(row, roomIdsByZone.get(row.id) ?? [], rooms, zones, playlistNameById, speakerCounts, playbackByZone);
 }
 
 /** The synchronized zone (if any) covering this room — a room isn't

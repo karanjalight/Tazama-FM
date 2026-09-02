@@ -6,12 +6,24 @@
  * view-model the Audio Zones management page itself needs: room coverage,
  * default playlist, and real speaker counts.
  */
+import type { RoomTrack } from "@/lib/rooms/types";
 
 export type AudioZoneStatus = "active" | "inactive";
 
 export interface AudioZoneRoomOption {
   id: string;
   name: string;
+}
+
+/** A synchronized zone's canonical playback state (`audio_zone_playback`) —
+ * shared with `lib/business/audio-zone-queries.ts`'s `getAudioZonePlayback`,
+ * the server read that populates it. */
+export interface AudioZonePlaybackState {
+  track: RoomTrack | null;
+  positionMs: number;
+  isPlaying: boolean;
+  version: number;
+  updatedAt: string;
 }
 
 export interface AudioZone {
@@ -42,6 +54,11 @@ export interface AudioZone {
   roomNames: string[];
   speakersTotal: number;
   speakersOnline: number;
+  /** Only ever populated for a `synchronizedPlayback` zone (an independent
+   * zone has no single canonical "now playing") — the initial snapshot for
+   * the detail panel's transport controls, before `useZonePlayback`'s own
+   * realtime subscription takes over. */
+  playback: AudioZonePlaybackState | null;
   createdAt: string;
 }
 

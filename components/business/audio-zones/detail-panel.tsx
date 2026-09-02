@@ -8,8 +8,11 @@ import {
   Gauge,
   ListMusic,
   Music,
+  Pause,
   Pencil,
+  Play,
   Power,
+  SkipForward,
   Speaker,
   Trash2,
   Volume2,
@@ -17,7 +20,15 @@ import {
 } from "lucide-react";
 
 import { scheduleLabel, type AudioZone } from "@/lib/business/audio-zone-types";
-import { updateAudioZone, deleteAudioZone } from "@/app/business/audio-zones/actions";
+import { useZonePlayback } from "@/lib/business/use-branch-playback";
+import type { RoomTrack } from "@/lib/rooms/types";
+import {
+  updateAudioZone,
+  deleteAudioZone,
+  setZonePlayback,
+  skipZoneTrack,
+  setZoneLiveVolume,
+} from "@/app/business/audio-zones/actions";
 import { AddAudioZoneDialog, type AudioZoneOption } from "./add-audio-zone-dialog";
 import { ICON_COLORS } from "./ui-constants";
 import { cn } from "@/lib/utils";
@@ -90,15 +101,49 @@ export function AudioZoneDetailPanel({
   const color = ICON_COLORS[index % ICON_COLORS.length];
   const active = zone.status === "active";
 
+  const [nowPlaying, setNowPlaying] = React.useState<RoomTrack | null>(zone.playback?.track ?? null);
+  const [isPlaying, setIsPlaying] = React.useState(zone.playback?.isPlaying ?? false);
+  const [togglingPlayback, setTogglingPlayback] = React.useState(false);
+  const [skipping, setSkipping] = React.useState(false);
+
+  // Same live table the kiosk's own remote-control actions write to — a
+  // staff Play/Pause/Skip here and a physical device's own controls stay in
+  // sync with each other automatically, not just with this one panel.
+  useZonePlayback(zone.id, zone.synchronizedPlayback, (payload) => {
+    setNowPlaying(payload.track);
+    setIsPlaying(payload.isPlaying);
+  });
+
   async function commitVolume(next: number) {
     if (next === zone.volume) return;
-    const res = await updateAudioZone({ branchId, id: zone.id, volume: next });
+    const res = await setZoneLiveVolume({ branchId, id: zone.id, volume: next });
     if (!res.ok) {
       toast.error(res.error);
       setVolume(zone.volume);
       return;
     }
     router.refresh();
+  }
+
+  async function handleTogglePlayback() {
+    setTogglingPlayback(true);
+    const next = !isPlaying;
+    const res = await setZonePlayback({ branchId, id: zone.id, isPlaying: next });
+    setTogglingPlayback(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setIsPlaying(next);
+  }
+
+  async function handleSkip() {
+    setSkipping(true);
+    const res = await skipZoneTrack({ branchId, id: zone.id });
+    setSkipping(false);
+    if (!res.ok) toast.error(res.error);
+    // On success, the realtime subscription above (shared with the kiosk)
+    // reports the new track — no need to update local state here.
   }
 
   async function handleToggleStatus() {
@@ -186,19 +231,51 @@ export function AudioZoneDetailPanel({
 
       {tab === "Overview" && (
         <div className="mt-4 space-y-4">
-          {zone.defaultPlaylistName ? (
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-linear-to-br from-violet-500/25 to-fuchsia-500/25 text-foreground">
-                <Music className="size-4.5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-foreground">{zone.defaultPlaylistName}</p>
-                <p className="text-xs text-muted-foreground">Default playlist</p>
+          {zone.synchronizedPlayback ? (
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <div className="flex items-center gap-3">
+                <span className="grid size-11 shrink-0 place-items-center rounded-lg bg-linear-to-br from-violet-500/25 to-fuchsia-500/25 text-foreground">
+                  <Music className="size-4.5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-foreground">{nowPlaying?.title ?? "Nothing playing yet"}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {nowPlaying?.artist ??
+                      (zone.defaultPlaylistName ? `From ${zone.defaultPlaylistName}` : "No default playlist set")}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3.5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleTogglePlayback}
+                  disabled={togglingPlayback}
+                  aria-label={isPlaying ? "Pause" : "Play"}
+                  className="grid size-12 shrink-0 place-items-center rounded-full bg-violet-600 text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+                >
+                  {isPlaying ? (
+                    <Pause className="size-5 fill-current" />
+                  ) : (
+                    <Play className="size-5 translate-x-0.5 fill-current" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  disabled={skipping || !nowPlaying}
+                  aria-label="Skip to next track"
+                  className="grid size-10 shrink-0 place-items-center rounded-full border border-input text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                >
+                  <SkipForward className="size-4.5 fill-current" />
+                </button>
               </div>
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
-              No default playlist set
+              {zone.defaultPlaylistName ? `Default playlist: ${zone.defaultPlaylistName}` : "No default playlist set"}
+              <p className="mt-1.5 text-xs">
+                Turn on Synchronized Playback (in Settings) to control this zone&apos;s music together from here.
+              </p>
             </div>
           )}
 

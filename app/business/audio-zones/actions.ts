@@ -6,7 +6,9 @@ import { z } from "zod";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch } from "@/lib/business/queries";
-import { getAudioZone } from "@/lib/business/audio-zone-queries";
+import { getAudioZone, getAudioZonePlayback } from "@/lib/business/audio-zone-queries";
+import { advanceZonePlayback } from "@/lib/business/audio-zone-playback";
+import { computeFrozenPosition } from "@/lib/business/playback-freeze";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/lib/business/types";
 
@@ -218,6 +220,19 @@ export async function updateAudioZone(input: {
     }
   }
 
+  // A zone predating synchronized playback (or one whose row was somehow
+  // never created) has no `audio_zone_playback` row — flipping the toggle
+  // on should self-heal that rather than leave the new transport controls
+  // failing with "not initialized". Matches createAudioZone's own upsert.
+  if (parsed.data.synchronizedPlayback === true) {
+    const { error: playbackError } = await admin
+      .from("audio_zone_playback")
+      .upsert({ zone_id: zone.id }, { onConflict: "zone_id", ignoreDuplicates: true });
+    if (playbackError) {
+      console.error("updateAudioZone: audio_zone_playback upsert failed", playbackError);
+    }
+  }
+
   if (parsed.data.roomIds !== undefined) {
     const ok = await replaceAudioZoneRooms(admin, zone.id, parsed.data.roomIds);
     if (!ok) return { ok: false, error: "Audio zone saved, but its rooms couldn't be fully updated." };
@@ -247,6 +262,121 @@ export async function deleteAudioZone(input: { branchId: string; id: string }): 
   if (error) {
     console.error("deleteAudioZone: delete failed", error);
     return { ok: false, error: "Could not delete the audio zone." };
+  }
+
+  revalidatePath(audioZonesPath(branch.id));
+  return { ok: true };
+}
+
+// ── Live playback controls (staff-initiated, synchronized zones only) ──────
+//
+// These write straight to `audio_zone_playback`, the same table the kiosk's
+// own `useZonePlayback` subscribes to — a staff play/pause/volume action and
+// a kiosk's own remote-control action reach every screen in the zone the
+// same way. Only meaningful for a zone with `synchronized_playback` on; an
+// unsynchronized zone's rooms each keep their own independent queue (see
+// `synchronizedPlayback`'s own doc comment in audio-zone-types.ts), so there
+// is no single "the" playback state for these actions to touch.
+
+async function requireSynchronizedZone(branchId: string, id: string) {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, branchId)) {
+    return { ok: false as const, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, branchId);
+  if (!branch) return { ok: false as const, error: "Branch not found." };
+
+  const zone = await getAudioZone(branch.id, id);
+  if (!zone) return { ok: false as const, error: "Audio zone not found." };
+  if (!zone.synchronizedPlayback) {
+    return { ok: false as const, error: "Turn on Synchronized Playback to control this zone's music together." };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false as const, error: "Not configured." };
+
+  return { ok: true as const, branch, zone, admin };
+}
+
+export async function setZonePlayback(input: {
+  branchId: string;
+  id: string;
+  isPlaying: boolean;
+}): Promise<ActionResult> {
+  const ctx = await requireSynchronizedZone(input.branchId, input.id);
+  if (!ctx.ok) return ctx;
+  const { branch, zone, admin } = ctx;
+
+  const current = await getAudioZonePlayback(zone.id);
+  const positionMs = computeFrozenPosition(
+    current ? { positionMs: current.positionMs, isPlaying: current.isPlaying, updatedAt: current.updatedAt } : null,
+    input.isPlaying,
+    Date.now(),
+  );
+
+  const { error } = await admin
+    .from("audio_zone_playback")
+    .update({ is_playing: input.isPlaying, position_ms: positionMs, updated_at: new Date().toISOString() })
+    .eq("zone_id", zone.id);
+  if (error) {
+    console.error("setZonePlayback: update failed", error);
+    return { ok: false, error: "Could not update playback." };
+  }
+
+  revalidatePath(audioZonesPath(branch.id));
+  return { ok: true };
+}
+
+export async function skipZoneTrack(input: { branchId: string; id: string }): Promise<ActionResult> {
+  const ctx = await requireSynchronizedZone(input.branchId, input.id);
+  if (!ctx.ok) return ctx;
+  const { branch, zone, admin } = ctx;
+
+  const current = await getAudioZonePlayback(zone.id);
+  if (!current) return { ok: false, error: "Audio zone playback not initialized." };
+
+  const result = await advanceZonePlayback(admin, zone.id, current.version);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath(audioZonesPath(branch.id));
+  return { ok: true };
+}
+
+/** Unlike `setZonePlayback`/`skipZoneTrack`, volume applies regardless of
+ * sync mode — every room's own speaker output volume is a real, independent
+ * thing worth controlling together even when each room's *track* isn't. */
+export async function setZoneLiveVolume(input: {
+  branchId: string;
+  id: string;
+  volume: number;
+}): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const zone = await getAudioZone(branch.id, input.id);
+  if (!zone) return { ok: false, error: "Audio zone not found." };
+
+  const clamped = Math.min(zone.volumeLimit, Math.max(0, Math.round(input.volume)));
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  // Config baseline (shown in Settings, applied to rooms added later) and
+  // the live output volume for every room this zone covers right now — kept
+  // in the same write so they can never drift out of sync with each other.
+  const [{ error: zoneError }, roomsResult] = await Promise.all([
+    admin.from("audio_zones").update({ volume: clamped }).eq("id", zone.id),
+    zone.roomIds.length
+      ? admin.from("rooms").update({ volume: clamped }).in("id", zone.roomIds)
+      : Promise.resolve({ error: null }),
+  ]);
+  if (zoneError || roomsResult.error) {
+    console.error("setZoneLiveVolume: update failed", zoneError, roomsResult.error);
+    return { ok: false, error: "Could not update volume." };
   }
 
   revalidatePath(audioZonesPath(branch.id));

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Play, Pause, Volume2, VolumeX, Radio, Loader2 } from "lucide-react";
+import { Play, Pause, SkipForward, Volume2, VolumeX, Radio, Loader2 } from "lucide-react";
 
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomFollower } from "@/lib/rooms/use-room-follower";
@@ -68,7 +68,10 @@ export function KioskRoomPlayer({
 
   React.useEffect(() => void (syncedRef.current = synced), [synced]);
 
-  const handleEnded = React.useCallback(() => {
+  // Shared by natural track-end (useYouTube's onEnded) and the explicit
+  // Skip button / remote key below — only a branch kiosk has anything to
+  // skip (no live host queue to hijack, unlike the consumer room mirror).
+  const handleSkip = React.useCallback(() => {
     if (!room.isBranch) return;
     if (room.zoneId) {
       const zoneId = room.zoneId;
@@ -84,7 +87,7 @@ export function KioskRoomPlayer({
     });
   }, [room.isBranch, room.slug, room.zoneId]);
 
-  const { api: yt, containerRef } = useYouTube({ onEnded: handleEnded });
+  const { api: yt, containerRef } = useYouTube({ onEnded: handleSkip });
 
   // `yt` is a fresh object each render (position polls 4×/s); keep a stable ref.
   const ytRef = React.useRef(yt);
@@ -328,7 +331,9 @@ export function KioskRoomPlayer({
     };
   }, [revealControls]);
 
-  // Remote / keyboard control (OK = Enter, D-pad up/down = volume, M = mute).
+  // Remote / keyboard control (OK = Enter, D-pad up/down = volume, → = skip
+  // on a branch kiosk, M = mute). MediaTrackNext covers a remote's dedicated
+  // skip button where one exists, in addition to the D-pad's right arrow.
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       revealControls();
@@ -343,13 +348,17 @@ export function KioskRoomPlayer({
       } else if (e.key === "ArrowDown") {
         e.preventDefault();
         changeVolume(volumeRef.current - 10);
+      } else if ((e.key === "ArrowRight" || e.key === "MediaTrackNext") && room.isBranch) {
+        e.preventDefault();
+        if (!started) enableSound();
+        handleSkip();
       } else if (e.key.toLowerCase() === "m") {
         if (started) toggleMute();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [started, enableSound, togglePlay, toggleMute, changeVolume, revealControls]);
+  }, [started, enableSound, togglePlay, toggleMute, changeVolume, handleSkip, room.isBranch, revealControls]);
 
   /* -------------------------------- render -------------------------------- */
 
@@ -431,6 +440,19 @@ export function KioskRoomPlayer({
               <Play className="size-6 translate-x-0.5 fill-current" />
             )}
           </button>
+
+          {/* No live host queue to hijack on a branch kiosk (unlike the
+              consumer room mirror), so skip only makes sense here. */}
+          {room.isBranch && (
+            <button
+              type="button"
+              onClick={handleSkip}
+              aria-label="Skip to next track"
+              className="grid size-11 shrink-0 place-items-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <SkipForward className="size-5 fill-current" />
+            </button>
+          )}
 
           <div className="min-w-0 flex-1">
             <p className="truncate text-lg font-semibold sm:text-2xl">

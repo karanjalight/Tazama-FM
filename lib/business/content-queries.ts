@@ -182,6 +182,33 @@ export async function getContentItem(
   return rowToContentItem(row, names);
 }
 
+/** Batched sibling of `getContentItem` — one query for a set of ids instead
+ * of N. Used by Schedules, whose sessions reference content items across
+ * several link tables (schedule_session_content / _ads). */
+export async function getContentItemsByIds(
+  businessId: string,
+  ids: string[],
+): Promise<Map<string, ContentItem>> {
+  const map = new Map<string, ContentItem>();
+  const uniqueIds = [...new Set(ids)];
+  if (!uniqueIds.length) return map;
+
+  const admin = createAdminClient();
+  if (!admin) return map;
+
+  const { data } = await admin
+    .from("content_items")
+    .select("*")
+    .eq("business_id", businessId)
+    .in("id", uniqueIds);
+  const rows = (data ?? []) as ContentItemRow[];
+  if (!rows.length) return map;
+
+  const names = await namesForRows(admin, rows);
+  for (const row of rows) map.set(row.id, rowToContentItem(row, names));
+  return map;
+}
+
 interface PlaylistRow {
   id: string;
   business_id: string;
@@ -201,6 +228,7 @@ interface TrackJoinRow {
   genre: string;
   thumbnail_url: string | null;
   is_playable: boolean;
+  duration_seconds: number | null;
 }
 
 interface PlaylistTrackJoinRow {

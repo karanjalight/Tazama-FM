@@ -20,6 +20,7 @@ function toTrack(l: LikedTrack): Track {
     genre: "liked",
     thumbnailUrl: l.thumbnailUrl,
     isPlayable: true,
+    durationSeconds: null,
   };
 }
 

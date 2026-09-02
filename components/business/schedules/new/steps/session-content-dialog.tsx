@@ -10,6 +10,7 @@ import { ContentSelector } from "./content-selector";
 import { ContentOptionsPanel } from "./content-options-panel";
 import { PlaylistBuilder } from "./playlist-builder";
 import { SessionAdConfig } from "./session-ad-config";
+import type { ContentItem, Playlist } from "@/lib/business/content-queries";
 import {
   Dialog,
   DialogContent,
@@ -25,10 +26,16 @@ export function SessionContentDialog({
   session,
   onOpenChange,
   onSave,
+  businessContent,
+  businessAds,
+  businessPlaylists,
 }: {
   session: ScheduleSession;
   onOpenChange: (open: boolean) => void;
   onSave: (updated: ScheduleSession) => void;
+  businessContent: ContentItem[];
+  businessAds: ContentItem[];
+  businessPlaylists: Playlist[];
 }) {
   const [draft, setDraft] = React.useState<ScheduleSession>(session);
 
@@ -96,7 +103,11 @@ export function SessionContentDialog({
             <div className="border-t border-border pt-4">
               <p className="mb-3 text-sm font-semibold text-foreground">Content</p>
               <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-                <ContentSelector selected={draft.selectedContent} onChange={(items) => patch({ selectedContent: items })} />
+                <ContentSelector
+                  businessContent={businessContent}
+                  selected={draft.selectedContent}
+                  onChange={(items) => patch({ selectedContent: items })}
+                />
                 <ContentOptionsPanel
                   value={{
                     contentOrder: draft.contentOrder,
@@ -104,7 +115,7 @@ export function SessionContentDialog({
                     color: draft.backgroundColor,
                     repeat: draft.contentRepeat,
                     frequencyMode: draft.contentFrequencyMode,
-                    frequencyInterval: draft.contentFrequencyInterval,
+                    frequencyIntervalMinutes: draft.contentFrequencyIntervalMinutes,
                   }}
                   showFrequency={draft.playlistEnabled}
                   onChange={(p) =>
@@ -114,7 +125,7 @@ export function SessionContentDialog({
                       ...(p.color !== undefined && { backgroundColor: p.color }),
                       ...(p.repeat !== undefined && { contentRepeat: p.repeat }),
                       ...(p.frequencyMode !== undefined && { contentFrequencyMode: p.frequencyMode }),
-                      ...(p.frequencyInterval !== undefined && { contentFrequencyInterval: p.frequencyInterval }),
+                      ...(p.frequencyIntervalMinutes !== undefined && { contentFrequencyIntervalMinutes: p.frequencyIntervalMinutes }),
                     })
                   }
                 />
@@ -159,7 +170,12 @@ export function SessionContentDialog({
           {draft.playlistEnabled && (
             <div className="border-t border-border pt-4">
               <p className="mb-3 text-sm font-semibold text-foreground">Playlist</p>
-              <PlaylistBuilder genres={draft.genres} songs={draft.songs} onChange={(p) => patch(p)} />
+              <PlaylistBuilder
+                genres={draft.genres}
+                songs={draft.songs}
+                onChange={(p) => patch(p)}
+                businessPlaylists={businessPlaylists}
+              />
             </div>
           )}
 
@@ -167,7 +183,7 @@ export function SessionContentDialog({
             <div className="border-t border-border pt-4">
               <p className="text-sm font-semibold text-foreground">Advertisement</p>
               <p className="mb-3 text-xs text-muted-foreground">Ads always pause content and music, play alone, then hand control back.</p>
-              <SessionAdConfig value={adConfigValue} onChange={(p) => patch(p)} />
+              <SessionAdConfig value={adConfigValue} onChange={(p) => patch(p)} businessAds={businessAds} />
             </div>
           )}
 

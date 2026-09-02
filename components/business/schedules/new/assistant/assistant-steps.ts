@@ -1,9 +1,14 @@
-export const STEP_GREETINGS: Record<number, string> = {
-  1: "Hi Michael 👋 You're creating a new schedule. Let's start with the basics — what would you like to schedule?",
-  2: "Where should this run? Tell me the locations, zones or rooms, or just ask me to target everything.",
-  3: "Let's build your day. Tell me what should play and when — like \"dancehall in the morning\" — or add sessions manually below.",
-  4: "Everything looks ready. Here's what will happen when you create this schedule.",
-};
+/** Parameterized by the real signed-in viewer's name — the old mock
+ * hardcoded "Michael" here regardless of who was actually logged in. */
+export function stepGreetings(viewerName: string): Record<number, string> {
+  const firstName = viewerName.trim().split(/\s+/)[0] || "there";
+  return {
+    1: `Hi ${firstName} 👋 You're creating a new schedule. Let's start with the basics — what would you like to schedule?`,
+    2: "Where should this run? Tell me the locations, zones or rooms, or just ask me to target everything.",
+    3: "Let's build your day. Tell me what should play and when — like \"dancehall in the morning\" — or add sessions manually below.",
+    4: "Everything looks ready. Here's what will happen when you create this schedule.",
+  };
+}
 
 export const STEP_SUGGESTIONS: Record<number, string[]> = {
   1: ["Happy hour promotion", "Morning playlist", "Customer announcement", "Advertisement"],

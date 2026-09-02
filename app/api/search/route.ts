@@ -52,6 +52,10 @@ export async function POST(request: Request) {
     genre: "search",
     thumbnailUrl: h.thumbnailUrl,
     isPlayable: true,
+    // Live search hit, not yet cataloged — search.list doesn't return
+    // duration (that's a separate videos.list call, only worth the extra
+    // request once a track is actually being persisted somewhere).
+    durationSeconds: null,
   }));
 
   return NextResponse.json({

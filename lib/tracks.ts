@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { genreCacheKey } from "@/lib/genres";
 import { searchGenreTracks, type YouTubeTrack } from "@/lib/youtube/search";
+import { fetchDurations } from "@/lib/youtube/durations";
 
 /** A playable track from the shared catalog (metadata only — YouTube is the CDN). */
 export interface Track {
@@ -13,6 +14,9 @@ export interface Track {
   genre: string;
   thumbnailUrl: string | null;
   isPlayable: boolean;
+  /** Real seconds, from YouTube's `videos.list.contentDetails` — null for a
+   * track cataloged before this column existed, until something re-touches it. */
+  durationSeconds: number | null;
 }
 
 /** How many tracks we want cached per genre before we stop seeding. */
@@ -26,6 +30,7 @@ interface TrackRow {
   genre: string;
   thumbnail_url: string | null;
   is_playable: boolean;
+  duration_seconds: number | null;
 }
 
 export function rowToTrack(r: TrackRow): Track {
@@ -37,6 +42,7 @@ export function rowToTrack(r: TrackRow): Track {
     genre: r.genre,
     thumbnailUrl: r.thumbnail_url,
     isPlayable: r.is_playable,
+    durationSeconds: r.duration_seconds,
   };
 }
 
@@ -97,6 +103,7 @@ export async function ensureGenreSeeded(
   }
 
   if (found.length) {
+    const durations = await fetchDurations(found.map((t) => t.youtubeId));
     const rows = found.map((t) => ({
       youtube_id: t.youtubeId,
       title: t.title,
@@ -104,6 +111,7 @@ export async function ensureGenreSeeded(
       genre: key,
       thumbnail_url: t.thumbnailUrl,
       is_playable: true,
+      duration_seconds: durations.get(t.youtubeId) ?? null,
     }));
     // Idempotent; youtube_id is globally unique so a video keeps its first genre.
     await admin
@@ -152,6 +160,7 @@ export async function upsertTracksFromYouTube(
 
   const toInsert = picks.filter((p) => !existingIds.has(p.youtubeId));
   if (toInsert.length) {
+    const durations = await fetchDurations(toInsert.map((t) => t.youtubeId));
     const rows = toInsert.map((t) => ({
       youtube_id: t.youtubeId,
       title: t.title,
@@ -162,6 +171,7 @@ export async function upsertTracksFromYouTube(
       genre: "business",
       thumbnail_url: t.thumbnailUrl,
       is_playable: true,
+      duration_seconds: durations.get(t.youtubeId) ?? null,
     }));
     // `ignoreDuplicates: true` is safe here — `toInsert` was already
     // filtered to youtube_ids we just confirmed don't exist, so a conflict
@@ -294,4 +304,56 @@ export async function getTrendingArtists(limit = 10): Promise<TrendingArtist[]> 
     .map(([name, v]) => ({ name, trackCount: v.count, track: v.track }))
     .sort((a, b) => b.trackCount - a.trackCount || a.name.localeCompare(b.name))
     .slice(0, limit);
+}
+
+/**
+ * Real durations (in seconds) for a set of `tracks.id`s, keyed by track id —
+ * what the Schedules playlist-duration math needs. Read-through cache: any
+ * row whose `duration_seconds` is still null (cataloged before this column
+ * existed) gets resolved from YouTube and patched in place before returning,
+ * same shape as `ensureGenreSeeded`'s self-healing. A track that still can't
+ * be resolved (e.g. the video was deleted) is simply absent from the map —
+ * callers treat a missing id as "unknown," not zero.
+ *
+ * SERVER ONLY. Takes an already-resolved `admin` client.
+ */
+export async function getTrackDurations(
+  admin: SupabaseClient,
+  trackIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const ids = [...new Set(trackIds.filter(Boolean))];
+  if (!ids.length) return out;
+
+  const { data } = await admin
+    .from("tracks")
+    .select("id, youtube_id, duration_seconds")
+    .in("id", ids);
+  const rows = (data ?? []) as { id: string; youtube_id: string; duration_seconds: number | null }[];
+
+  const missing = rows.filter((r) => r.duration_seconds === null);
+  for (const r of rows) {
+    if (r.duration_seconds !== null) out.set(r.id, r.duration_seconds);
+  }
+  if (!missing.length) return out;
+
+  const resolved = await fetchDurations(missing.map((r) => r.youtube_id));
+  if (!resolved.size) return out;
+
+  const patches: { id: string; youtube_id: string; duration_seconds: number }[] = [];
+  for (const r of missing) {
+    const seconds = resolved.get(r.youtube_id);
+    if (seconds === undefined) continue;
+    out.set(r.id, seconds);
+    patches.push({ id: r.id, youtube_id: r.youtube_id, duration_seconds: seconds });
+  }
+  if (patches.length) {
+    await Promise.all(
+      patches.map((p) =>
+        admin.from("tracks").update({ duration_seconds: p.duration_seconds }).eq("id", p.id),
+      ),
+    );
+  }
+
+  return out;
 }

@@ -5,10 +5,29 @@ import { Play, Pause, SkipForward, Volume2, VolumeX, Radio, Loader2 } from "luci
 
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useRoomFollower } from "@/lib/rooms/use-room-follower";
-import { useBranchPlayback, useBranchVolume, useZonePlayback, requestAdvance, requestZoneAdvance } from "@/lib/business/use-branch-playback";
+import {
+  useBranchPlayback,
+  useBranchVolume,
+  useZonePlayback,
+  useSchedulePlayback,
+  requestAdvance,
+  requestZoneAdvance,
+  requestScheduleAdvance,
+  requestScheduleContentAdvance,
+  type ScheduleContentSnapshot,
+} from "@/lib/business/use-branch-playback";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 import type { RoomPlayback, RoomTrack } from "@/lib/rooms/types";
 import { cn } from "@/lib/utils";
+
+/** How often the kiosk asks whether an active Schedule now covers this room
+ * — same cadence as the device heartbeat below, so this file has exactly
+ * one "poll every ~25s" pattern instead of two different intervals. */
+const SCHEDULE_POLL_MS = 25_000;
+/** A content item with neither an explicit display duration nor its own
+ * natural length (shouldn't happen — the wizard requires one for images —
+ * but the kiosk must never get stuck showing something forever). */
+const FALLBACK_CONTENT_SECONDS = 30;
 
 /** Max drift before we hard-seek to match the host (mirrors the room). */
 const DRIFT_MS = 1500;
@@ -49,6 +68,14 @@ export function KioskRoomPlayer({
   const [nowPlaying, setNowPlaying] = React.useState<RoomTrack | null>(
     initialPlayback?.track ?? null,
   );
+  // Highest-priority playback source: an active Schedule temporarily
+  // overriding this room's normal Audio Zone / room playback. Discovered at
+  // runtime (not server-rendered — a schedule can activate/deactivate at
+  // any moment) via a poll of /api/business/rooms/[roomId]/active-schedule.
+  const [activeScheduleId, setActiveScheduleId] = React.useState<string | null>(null);
+  const [scheduleContent, setScheduleContent] = React.useState<ScheduleContentSnapshot | null>(null);
+  const scheduleVersionRef = React.useRef(0);
+  const contentTimerRef = React.useRef<number | null>(null);
 
   const appliedIdRef = React.useRef<string | null>(
     room.zoneId ? null : (initialPlayback?.track?.youtubeId ?? null),
@@ -73,6 +100,15 @@ export function KioskRoomPlayer({
   // skip (no live host queue to hijack, unlike the consumer room mirror).
   const handleSkip = React.useCallback(() => {
     if (!room.isBranch) return;
+    if (activeScheduleId) {
+      const scheduleId = activeScheduleId;
+      requestScheduleAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
+        if (!result) return;
+        scheduleVersionRef.current = result.version;
+        if (result.payload) applyHostPayloadRef.current?.(result.payload);
+      });
+      return;
+    }
     if (room.zoneId) {
       const zoneId = room.zoneId;
       requestZoneAdvance(zoneId, zoneVersionRef.current).then((result) => {
@@ -85,7 +121,7 @@ export function KioskRoomPlayer({
     requestAdvance(room.slug).then((p) => {
       if (p) applyHostPayloadRef.current?.(p);
     });
-  }, [room.isBranch, room.slug, room.zoneId]);
+  }, [room.isBranch, room.slug, room.zoneId, activeScheduleId]);
 
   const { api: yt, containerRef } = useYouTube({ onEnded: handleSkip });
 
@@ -179,12 +215,110 @@ export function KioskRoomPlayer({
 
   const { connected, requestSync } = useRoomFollower(room.id, handlePlayback);
 
-  useBranchPlayback(room.id, !!room.isBranch && !room.zoneId, handlePlayback);
+  useBranchPlayback(room.id, !!room.isBranch && !room.zoneId && !activeScheduleId, handlePlayback);
 
-  useZonePlayback(room.zoneId ?? "", !!room.zoneId, (p, version) => {
+  useZonePlayback(room.zoneId ?? "", !!room.zoneId && !activeScheduleId, (p, version) => {
     zoneVersionRef.current = version;
     handlePlayback(p);
   });
+
+  // Highest-priority source — see the poll effect below for how
+  // `activeScheduleId` gets set/cleared. Disabling the two hooks above
+  // whenever this one is active is what makes "only one source subscribed
+  // at a time" true by construction, not by extra coordination logic.
+  const requestScheduleContentAdvanceRef = React.useRef<(() => void) | null>(null);
+
+  const armContentTimer = React.useCallback((seconds: number) => {
+    if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
+    contentTimerRef.current = window.setTimeout(() => {
+      requestScheduleContentAdvanceRef.current?.();
+    }, Math.max(1, seconds) * 1000);
+  }, []);
+
+  const handleScheduleContentAdvance = React.useCallback(() => {
+    if (!activeScheduleId) return;
+    requestScheduleContentAdvance(activeScheduleId, scheduleVersionRef.current).then((result) => {
+      if (!result) return;
+      scheduleVersionRef.current = result.version;
+      setScheduleContent(result.content);
+      armContentTimer(result.content?.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
+    });
+  }, [activeScheduleId, armContentTimer]);
+
+  React.useEffect(() => {
+    requestScheduleContentAdvanceRef.current = handleScheduleContentAdvance;
+  });
+
+  useSchedulePlayback(activeScheduleId ?? "", !!activeScheduleId, (p, content, version) => {
+    scheduleVersionRef.current = version;
+    handlePlayback(p);
+    if (content?.contentItemId !== scheduleContent?.contentItemId) {
+      setScheduleContent(content);
+      if (content) armContentTimer(content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
+    }
+  });
+
+  // Discovers whether an active Schedule currently covers this room. Only a
+  // branch kiosk has anything to override (no schedule targets a personal
+  // room). ~25s cadence: a Deactivate can take up to that long to visibly
+  // lift, an accepted, explained tradeoff (see the Schedules design notes)
+  // rather than a new class of problem — the existing device heartbeat
+  // already tolerates the same order of latency.
+  React.useEffect(() => {
+    if (!room.isBranch) return;
+    let cancelled = false;
+
+    async function poll() {
+      try {
+        const res = await fetch(`/api/business/rooms/${room.id}/active-schedule`);
+        const data = (await res.json()) as {
+          scheduleId?: string | null;
+          playback?: {
+            track: RoomTrack | null;
+            content: ScheduleContentSnapshot | null;
+            isPlaying: boolean;
+            positionMs: number;
+            version: number;
+            updatedAt: string;
+          } | null;
+        };
+        if (cancelled) return;
+        const nextId = data.scheduleId ?? null;
+        setActiveScheduleId((current) => {
+          if (current === nextId) return current;
+          if (nextId && data.playback) {
+            scheduleVersionRef.current = data.playback.version;
+            setScheduleContent(data.playback.content);
+            if (data.playback.content) {
+              armContentTimer(data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
+            } else if (contentTimerRef.current) {
+              window.clearTimeout(contentTimerRef.current);
+            }
+            applyHostPayloadRef.current?.({
+              track: data.playback.track,
+              positionMs: data.playback.positionMs,
+              isPlaying: data.playback.isPlaying,
+              at: new Date(data.playback.updatedAt).getTime(),
+            });
+          } else if (!nextId) {
+            setScheduleContent(null);
+            if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
+          }
+          return nextId;
+        });
+      } catch {
+        // Best-effort — a missed poll just means the override lags by one more cycle.
+      }
+    }
+
+    poll();
+    const id = setInterval(poll, SCHEDULE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
+    };
+  }, [room.isBranch, room.id, armContentTimer]);
 
   useBranchVolume(room.id, !!room.isBranch, (v) => {
     volumeRef.current = v;
@@ -369,6 +503,34 @@ export function KioskRoomPlayer({
         ref={containerRef}
         className="absolute inset-0 size-full [&_iframe]:size-full"
       />
+
+      {/* An active Schedule's visual content layer — sits on top of the
+          YouTube iframe (audio keeps playing underneath; per-session
+          "pause music while content shows" isn't threaded down to the
+          kiosk yet, see the Schedules design notes). Advances on its own
+          timer (armContentTimer), independent of the audio track. */}
+      {scheduleContent && (
+        <div className="absolute inset-0 z-5 grid place-items-center bg-black">
+          {scheduleContent.contentType === "video" && scheduleContent.url ? (
+            <video
+              key={scheduleContent.contentItemId}
+              src={scheduleContent.url}
+              autoPlay
+              muted
+              playsInline
+              className="size-full object-contain"
+            />
+          ) : scheduleContent.url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- arbitrary business-uploaded aspect ratio, not worth Next/Image's fixed-box ceremony on a kiosk screen
+            <img
+              key={scheduleContent.contentItemId}
+              src={scheduleContent.url}
+              alt=""
+              className="size-full object-contain"
+            />
+          ) : null}
+        </div>
+      )}
 
       {/* Tap layer: toggles the control bar (clicks never reach the iframe). */}
       <button

@@ -1,17 +1,19 @@
-import { FIT_OPTIONS, FREQUENCY_OPTIONS } from "../wizard-data";
+import { FIT_OPTIONS, CONTENT_FREQUENCY_OPTIONS, type ContentFit } from "../wizard-data";
 import { cn } from "@/lib/utils";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 
 const ORDER_OPTIONS = ["Play in listed order", "Shuffle"] as const;
+const FIT_LABELS = FIT_OPTIONS.map((f) => f.label);
+const CONTENT_FREQUENCY_LABELS = CONTENT_FREQUENCY_OPTIONS.map((f) => f.label);
 
 export interface ContentOptionsValue {
   contentOrder: "listed" | "shuffle";
-  fit: string;
+  fit: ContentFit;
   color: string;
   repeat: "loop" | "once";
   frequencyMode: "continuous" | "periodic";
-  frequencyInterval: string;
+  frequencyIntervalMinutes: number | null;
 }
 
 export function ContentOptionsPanel({
@@ -81,7 +83,14 @@ export function ContentOptionsPanel({
             </div>
             {value.frequencyMode === "periodic" ? (
               <>
-                <Select value={value.frequencyInterval} onValueChange={(v) => onChange({ frequencyInterval: v })} items={FREQUENCY_OPTIONS} />
+                <Select
+                  value={CONTENT_FREQUENCY_OPTIONS.find((f) => f.minutes === value.frequencyIntervalMinutes)?.label ?? CONTENT_FREQUENCY_LABELS[0]}
+                  onValueChange={(label) => {
+                    const match = CONTENT_FREQUENCY_OPTIONS.find((f) => f.label === label);
+                    if (match) onChange({ frequencyIntervalMinutes: match.minutes });
+                  }}
+                  items={CONTENT_FREQUENCY_LABELS}
+                />
                 <p className="text-xs text-muted-foreground">Content interrupts the playlist at this interval, then hands back to music.</p>
               </>
             ) : (
@@ -92,7 +101,14 @@ export function ContentOptionsPanel({
 
         <div className="space-y-1.5">
           <Label>Fit</Label>
-          <Select value={value.fit} onValueChange={(v) => onChange({ fit: v })} items={FIT_OPTIONS} />
+          <Select
+            value={FIT_OPTIONS.find((f) => f.id === value.fit)?.label ?? FIT_LABELS[0]}
+            onValueChange={(label) => {
+              const match = FIT_OPTIONS.find((f) => f.label === label);
+              if (match) onChange({ fit: match.id });
+            }}
+            items={FIT_LABELS}
+          />
           <p className="text-xs text-muted-foreground">How content fills the screen.</p>
         </div>
 

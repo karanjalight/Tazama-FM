@@ -1,5 +1,5 @@
 import type { ScheduleSession } from "../schedule-state";
-import { sumDurations } from "./duration-utils";
+import { formatDurationSeconds, playlistDurationSummary } from "@/lib/business/schedule-duration";
 
 export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
@@ -86,8 +86,15 @@ export function summarizeSessionContent(session: ScheduleSession): string {
 
   if (session.playlistEnabled) {
     if (session.songs.length > 0) {
-      const total = sumDurations(session.songs.map((s) => s.duration));
-      parts.push(`Playlist: ${session.songs.length} song${session.songs.length === 1 ? "" : "s"} · ${total}`);
+      const summary = playlistDurationSummary({
+        startTime: session.startTime,
+        endTime: session.endTime,
+        playlistEnabled: session.playlistEnabled,
+        songs: session.songs.map((s) => ({ durationSeconds: s.track.durationSeconds })),
+      });
+      parts.push(
+        `Playlist: ${session.songs.length} song${session.songs.length === 1 ? "" : "s"} · ${formatDurationSeconds(summary.scheduledSeconds)}`,
+      );
     } else {
       parts.push("Playlist: no songs yet");
     }
@@ -119,7 +126,8 @@ export function describeSessionBehavior(session: ScheduleSession): string {
   } else if (session.contentPlaylistInteraction === "pause-music") {
     base = `Content plays ${session.contentRepeat === "loop" ? "on a loop" : "once"} and pauses the playlist while it's on screen.`;
   } else if (session.contentFrequencyMode === "periodic") {
-    base = `Playlist music plays continuously; content interrupts every ${session.contentFrequencyInterval.toLowerCase()}, then hands back to music.`;
+    const minutes = session.contentFrequencyIntervalMinutes ?? 30;
+    base = `Playlist music plays continuously; content interrupts every ${minutes} minute${minutes === 1 ? "" : "s"}, then hands back to music.`;
   } else {
     base = `Content plays ${session.contentRepeat === "loop" ? "on a loop" : "once"} while playlist music continues in the background.`;
   }

@@ -53,6 +53,7 @@ export async function uploadContentItem(formData: FormData): Promise<ActionResul
   const title = formData.get("title");
   const contentType = formData.get("contentType");
   const file = formData.get("file");
+  const durationRaw = formData.get("durationSeconds");
   if (
     typeof title !== "string" ||
     typeof contentType !== "string" ||
@@ -60,6 +61,12 @@ export async function uploadContentItem(formData: FormData): Promise<ActionResul
   ) {
     return { ok: false, error: "Missing title, type, or file." };
   }
+  // Best-effort, client-read from the file itself (see upload-content-dialog.tsx)
+  // — absent for images (no natural duration) or when metadata read failed.
+  const durationSeconds =
+    typeof durationRaw === "string" && Number.isFinite(Number(durationRaw)) && Number(durationRaw) > 0
+      ? Math.round(Number(durationRaw))
+      : null;
 
   const parsedTitle = titleSchema.safeParse(title);
   if (!parsedTitle.success) {
@@ -95,6 +102,7 @@ export async function uploadContentItem(formData: FormData): Promise<ActionResul
     format,
     storage_path: uploaded.path,
     size_bytes: file.size,
+    duration_seconds: durationSeconds,
     status: "pending",
     uploaded_by: profile?.id ?? null,
   });

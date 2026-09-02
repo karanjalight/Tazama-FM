@@ -3,51 +3,47 @@
 import * as React from "react";
 import Image from "next/image";
 import { toast } from "sonner";
-import { FileText, GripVertical, Image as ImageIcon, Library, Pencil, Trash2, UploadCloud, Video } from "lucide-react";
+import { FileText, GripVertical, Image as ImageIcon, Library, Trash2, Video } from "lucide-react";
 
 import type { SelectedContentItem } from "../schedule-state";
-import type { ScheduleContentItem } from "../wizard-data";
+import { DISPLAY_DURATION_PRESETS } from "../wizard-data";
 import { ContentLibraryPickerDialog } from "./content-library-picker-dialog";
+import type { ContentItem } from "@/lib/business/content-queries";
 import { cn } from "@/lib/utils";
 import { useDialogTrigger } from "@/components/business/branches/new/use-dialog-trigger";
 
-const TYPE_ICON = { Video, Image: ImageIcon, Document: FileText } as const;
+const TYPE_ICON = { video: Video, image: ImageIcon, audio: Video, document: FileText } as const;
 
 export function ContentSelector({
+  businessContent,
   selected,
   onChange,
 }: {
+  businessContent: ContentItem[];
   selected: SelectedContentItem[];
   onChange: (items: SelectedContentItem[]) => void;
 }) {
   const libraryDialog = useDialogTrigger("content-library");
   const [dragIndex, setDragIndex] = React.useState<number | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  function addFromLibrary(items: ScheduleContentItem[]) {
-    const additions = items.map((item, i) => ({ ...item, order: selected.length + i }));
+  function addFromLibrary(items: ContentItem[]) {
+    const additions: SelectedContentItem[] = items.map((item) => ({
+      contentItemId: item.id,
+      item,
+      // Video/audio default to the file's own real length; an image has no
+      // natural duration, so it's left blank until the user sets one.
+      displaySeconds: item.durationSeconds,
+    }));
     onChange([...selected, ...additions]);
     toast.success(`Added ${items.length} item${items.length === 1 ? "" : "s"} to this schedule`);
   }
 
-  function removeItem(id: string) {
-    onChange(selected.filter((i) => i.id !== id).map((i, idx) => ({ ...i, order: idx })));
+  function removeItem(contentItemId: string) {
+    onChange(selected.filter((i) => i.contentItemId !== contentItemId));
   }
 
-  function handleFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const additions: SelectedContentItem[] = Array.from(files).map((file, i) => ({
-      id: `upload-${Date.now()}-${i}`,
-      title: file.name.replace(/\.[^/.]+$/, ""),
-      type: file.type.startsWith("video") ? "Video" : file.type.startsWith("image") ? "Image" : "Document",
-      format: (file.name.split(".").pop() ?? "FILE").toUpperCase(),
-      duration: file.type.startsWith("video") ? "00:10" : null,
-      resolution: "1920×1080",
-      thumbnail: file.type.startsWith("image") ? URL.createObjectURL(file) : null,
-      order: selected.length + i,
-    }));
-    onChange([...selected, ...additions]);
-    toast.success(`Uploaded ${additions.length} file${additions.length === 1 ? "" : "s"}`);
+  function setDisplaySeconds(contentItemId: string, seconds: number | null) {
+    onChange(selected.map((i) => (i.contentItemId === contentItemId ? { ...i, displaySeconds: seconds } : i)));
   }
 
   function reorder(from: number, to: number) {
@@ -55,7 +51,7 @@ export function ContentSelector({
     const next = [...selected];
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
-    onChange(next.map((item, idx) => ({ ...item, order: idx })));
+    onChange(next);
   }
 
   return (
@@ -73,17 +69,17 @@ export function ContentSelector({
                 <th className="w-8 px-2 py-2" />
                 <th className="px-2 py-2 font-medium">Preview</th>
                 <th className="px-2 py-2 font-medium">Title</th>
-                <th className="px-2 py-2 font-medium">Duration</th>
-                <th className="px-2 py-2 font-medium">Source</th>
+                <th className="px-2 py-2 font-medium">Display duration</th>
                 <th className="px-2 py-2 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {selected.map((item, i) => {
-                const Icon = TYPE_ICON[item.type];
+              {selected.map((sel, i) => {
+                const Icon = TYPE_ICON[sel.item.contentType];
+                const missingDuration = sel.displaySeconds == null;
                 return (
                   <tr
-                    key={item.id}
+                    key={sel.contentItemId}
                     draggable
                     onDragStart={() => setDragIndex(i)}
                     onDragOver={(e) => e.preventDefault()}
@@ -98,8 +94,8 @@ export function ContentSelector({
                     </td>
                     <td className="px-2 py-2">
                       <div className="relative size-12 overflow-hidden rounded-lg bg-muted">
-                        {item.thumbnail ? (
-                          <Image src={item.thumbnail} alt="" fill sizes="48px" className="object-cover" unoptimized />
+                        {sel.item.previewUrl ? (
+                          <Image src={sel.item.previewUrl} alt="" fill sizes="48px" className="object-cover" unoptimized />
                         ) : (
                           <div className="grid h-full place-items-center bg-linear-to-br from-violet-500/20 to-fuchsia-500/20">
                             <Icon className="size-4 text-foreground/40" />
@@ -109,33 +105,52 @@ export function ContentSelector({
                     </td>
                     <td className="px-2 py-2">
                       <div className="flex items-center gap-1.5">
-                        <p className="font-medium text-foreground">{item.title}</p>
-                        <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
-                          {item.type}
+                        <p className="font-medium text-foreground">{sel.item.title}</p>
+                        <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400 capitalize">
+                          {sel.item.contentType}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground">{item.resolution}</p>
                     </td>
-                    <td className="px-2 py-2 font-mono text-muted-foreground">{item.duration ?? "—"}</td>
-                    <td className="px-2 py-2 text-muted-foreground">Uploaded</td>
-                    <td className="px-2 py-2 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          aria-label="Edit"
-                          className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    <td className="px-2 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={sel.displaySeconds != null && DISPLAY_DURATION_PRESETS.some((p) => p.seconds === sel.displaySeconds) ? String(sel.displaySeconds) : "custom"}
+                          onChange={(e) => {
+                            if (e.target.value === "custom") return;
+                            setDisplaySeconds(sel.contentItemId, Number(e.target.value));
+                          }}
+                          className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground"
                         >
-                          <Pencil className="size-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Remove"
-                          onClick={() => removeItem(item.id)}
-                          className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
+                          {DISPLAY_DURATION_PRESETS.map((p) => (
+                            <option key={p.seconds} value={p.seconds}>
+                              {p.label}
+                            </option>
+                          ))}
+                          <option value="custom">Custom…</option>
+                        </select>
+                        <input
+                          type="number"
+                          min={1}
+                          value={sel.displaySeconds ?? ""}
+                          onChange={(e) => setDisplaySeconds(sel.contentItemId, e.target.value ? Number(e.target.value) : null)}
+                          placeholder="sec"
+                          className={cn(
+                            "h-8 w-16 rounded-lg border bg-background px-2 text-xs text-foreground",
+                            missingDuration ? "border-rose-400" : "border-input",
+                          )}
+                        />
                       </div>
+                      {missingDuration && <p className="mt-1 text-[10px] text-rose-400">Set a display duration.</p>}
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <button
+                        type="button"
+                        aria-label="Remove"
+                        onClick={() => removeItem(sel.contentItemId)}
+                        className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
                     </td>
                   </tr>
                 );
@@ -145,48 +160,26 @@ export function ContentSelector({
         </div>
       )}
 
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          handleFiles(e.dataTransfer.files);
-        }}
-        className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-dashed border-input py-6 text-center"
-      >
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="flex flex-col items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <UploadCloud className="size-6" />
-          <span className="text-sm font-medium">Upload files</span>
-          <span className="text-xs">or drag and drop</span>
-        </button>
-        <p className="text-[11px] text-muted-foreground/70">Supported formats: MP4, MOV, JPG, PNG · Max size: 500MB</p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept="video/*,image/*"
-          className="hidden"
-          onChange={(e) => handleFiles(e.target.files)}
-        />
-      </div>
-
       <button
         type="button"
         onClick={libraryDialog.show}
         className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-input py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
       >
         <Library className="size-4" />
-        Browse Library
+        Browse Content Library
       </button>
+      {businessContent.length === 0 && (
+        <p className="mt-1.5 text-center text-xs text-muted-foreground">
+          Nothing in your Content Library yet — upload content there first.
+        </p>
+      )}
 
       <ContentLibraryPickerDialog
         key={libraryDialog.dialogKey}
         open={libraryDialog.open}
         onOpenChange={libraryDialog.onOpenChange}
-        alreadySelectedIds={selected.map((s) => s.id)}
+        items={businessContent}
+        alreadySelectedIds={selected.map((s) => s.contentItemId)}
         onAdd={addFromLibrary}
       />
     </div>

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 
-import { TRANSITIONS } from "../wizard-data";
+import { TRANSITIONS, type Transition } from "../wizard-data";
 import type { ScheduleSession } from "../schedule-state";
 import { findOverlappingSession, formatTimeLabel } from "./session-utils";
 import {
@@ -29,13 +29,14 @@ export function AddSessionDialog({
   onOpenChange: (open: boolean) => void;
   sessions: ScheduleSession[];
   editing?: ScheduleSession;
-  onSave: (input: { label: string; startTime: string; endTime: string; transition: string }) => void;
+  onSave: (input: { label: string; startTime: string; endTime: string; transition: Transition }) => void;
 }) {
   const [label, setLabel] = React.useState(editing?.label ?? "");
   const [startTime, setStartTime] = React.useState(editing?.startTime ?? "09:00");
   const [endTime, setEndTime] = React.useState(editing?.endTime ?? "12:00");
-  const [transition, setTransition] = React.useState(editing?.transition ?? "Fade");
+  const [transition, setTransition] = React.useState<Transition>(editing?.transition ?? "fade");
   const [error, setError] = React.useState("");
+  const transitionLabels = TRANSITIONS.map((t) => t.label);
 
   function handleSave() {
     if (!label.trim()) {
@@ -90,7 +91,14 @@ export function AddSessionDialog({
 
           <div className="space-y-1.5">
             <Label>Transition effect</Label>
-            <Select value={transition} onValueChange={setTransition} items={TRANSITIONS} />
+            <Select
+              value={TRANSITIONS.find((t) => t.id === transition)?.label ?? transitionLabels[0]}
+              onValueChange={(label) => {
+                const match = TRANSITIONS.find((t) => t.label === label);
+                if (match) setTransition(match.id);
+              }}
+              items={transitionLabels}
+            />
             <p className="text-xs text-muted-foreground">How content transitions within this session.</p>
           </div>
 

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CheckCircle2, ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 
-import { RECURRENCE_OPTIONS, WEEK_DAYS } from "../wizard-data";
+import { RECURRENCE_OPTIONS, WEEK_DAYS, type Transition } from "../wizard-data";
 import type { ScheduleSession, ScheduleState } from "../schedule-state";
 import { createSession } from "../schedule-state";
 import { DayTimeline } from "./day-timeline";
@@ -24,12 +24,17 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDialogTrigger } from "@/components/business/branches/new/use-dialog-trigger";
+import type { ContentItem, Playlist } from "@/lib/business/content-queries";
 
+// Real IANA zone identifiers — Intl.DateTimeFormat (schedule-session-resolver.ts's
+// currentHHMMInTimezone, used to resolve which session is live right now)
+// needs a real zone string, not a display label like the old mock's
+// "East Africa Time (EAT)".
 const TIMEZONES = [
-  "East Africa Time (EAT)",
-  "West Africa Time (WAT)",
-  "Central Africa Time (CAT)",
-  "South Africa Standard Time (SAST)",
+  { id: "Africa/Nairobi", label: "East Africa Time (Nairobi)" },
+  { id: "Africa/Lagos", label: "West Africa Time (Lagos)" },
+  { id: "Africa/Harare", label: "Central Africa Time (Harare)" },
+  { id: "Africa/Johannesburg", label: "South Africa Standard Time (Johannesburg)" },
 ] as const;
 
 const DAY_MINUTES = 24 * 60;
@@ -102,9 +107,15 @@ function SessionRow({
 export function TimingStep({
   state,
   onChange,
+  businessContent,
+  businessAds,
+  businessPlaylists,
 }: {
   state: ScheduleState;
   onChange: (patch: Partial<ScheduleState>) => void;
+  businessContent: ContentItem[];
+  businessAds: ContentItem[];
+  businessPlaylists: Playlist[];
 }) {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
   const addDialog = useDialogTrigger("add-session");
@@ -118,7 +129,7 @@ export function TimingStep({
     onChange({ customDays: next });
   }
 
-  function handleAddOrEditSave(input: { label: string; startTime: string; endTime: string; transition: string }) {
+  function handleAddOrEditSave(input: { label: string; startTime: string; endTime: string; transition: Transition }) {
     if (editingSession) {
       onChange({
         sessions: state.sessions.map((s) => (s.id === editingSession.id ? { ...s, ...input } : s)),
@@ -221,8 +232,8 @@ export function TimingStep({
                 className="h-11 w-full rounded-xl border border-input bg-background px-3.5 text-[15px] text-foreground"
               >
                 {TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
+                  <option key={tz.id} value={tz.id}>
+                    {tz.label}
                   </option>
                 ))}
               </select>
@@ -309,6 +320,9 @@ export function TimingStep({
           session={contentSession}
           onOpenChange={(open) => !open && setContentSession(null)}
           onSave={saveSessionContent}
+          businessContent={businessContent}
+          businessAds={businessAds}
+          businessPlaylists={businessPlaylists}
         />
       )}
     </div>

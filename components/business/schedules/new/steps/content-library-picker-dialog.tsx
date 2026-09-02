@@ -4,7 +4,7 @@ import * as React from "react";
 import Image from "next/image";
 import { Check, FileText, Image as ImageIcon, Video } from "lucide-react";
 
-import { SCHEDULE_CONTENT_LIBRARY, type ScheduleContentItem } from "../wizard-data";
+import type { ContentItem } from "@/lib/business/content-queries";
 import {
   Dialog,
   DialogContent,
@@ -17,32 +17,37 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { VioletButton } from "@/components/business/branches/new/violet-button";
 
-const TYPE_ICON = { Video, Image: ImageIcon, Document: FileText } as const;
+const TYPE_ICON = { video: Video, image: ImageIcon, audio: Video, document: FileText } as const;
 
+/** Shared picker for both "Browse Content Library" (Option A) and "Add ads
+ * from Content Library" (Option C's ad layer) — same real business content,
+ * scoped by `purpose` at the call site (content vs. ad_creative). */
 export function ContentLibraryPickerDialog({
   open,
   onOpenChange,
+  items,
   alreadySelectedIds,
   onAdd,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  items: ContentItem[];
   alreadySelectedIds: string[];
-  onAdd: (items: ScheduleContentItem[]) => void;
+  onAdd: (items: ContentItem[]) => void;
 }) {
   const [query, setQuery] = React.useState("");
   const [picked, setPicked] = React.useState<string[]>([]);
 
   const q = query.trim().toLowerCase();
-  const items = SCHEDULE_CONTENT_LIBRARY.filter((c) => !q || c.title.toLowerCase().includes(q));
+  const filtered = items.filter((c) => !q || c.title.toLowerCase().includes(q));
 
   function toggle(id: string) {
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
   function handleAdd() {
-    const items = SCHEDULE_CONTENT_LIBRARY.filter((c) => picked.includes(c.id));
-    onAdd(items);
+    const chosen = items.filter((c) => picked.includes(c.id));
+    onAdd(chosen);
     setPicked([]);
     onOpenChange(false);
   }
@@ -63,8 +68,8 @@ export function ContentLibraryPickerDialog({
         />
 
         <div className="mt-3 grid max-h-80 grid-cols-2 gap-2.5 overflow-y-auto sm:grid-cols-3">
-          {items.map((item) => {
-            const Icon = TYPE_ICON[item.type];
+          {filtered.map((item) => {
+            const Icon = TYPE_ICON[item.contentType];
             const already = alreadySelectedIds.includes(item.id);
             const selected = picked.includes(item.id);
             return (
@@ -79,8 +84,8 @@ export function ContentLibraryPickerDialog({
                 )}
               >
                 <div className="relative aspect-video bg-muted">
-                  {item.thumbnail ? (
-                    <Image src={item.thumbnail} alt="" fill sizes="150px" className="object-cover" unoptimized />
+                  {item.previewUrl ? (
+                    <Image src={item.previewUrl} alt="" fill sizes="150px" className="object-cover" unoptimized />
                   ) : (
                     <div className="grid h-full place-items-center bg-linear-to-br from-violet-500/20 to-fuchsia-500/20">
                       <Icon className="size-6 text-foreground/40" />
@@ -94,15 +99,17 @@ export function ContentLibraryPickerDialog({
                 </div>
                 <div className="p-2">
                   <p className="truncate text-xs font-medium text-foreground">{item.title}</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {item.format} {item.duration && `· ${item.duration}`}
+                  <p className="text-[10px] text-muted-foreground capitalize">
+                    {item.contentType} {item.durationSeconds ? `· ${Math.round(item.durationSeconds)}s` : ""}
                   </p>
                 </div>
               </button>
             );
           })}
-          {items.length === 0 && (
-            <p className="col-span-full py-8 text-center text-sm text-muted-foreground">No content matches your search.</p>
+          {filtered.length === 0 && (
+            <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+              {items.length === 0 ? "Your Content Library is empty." : "No content matches your search."}
+            </p>
           )}
         </div>
 

@@ -1,17 +1,26 @@
-import type {
-  AdPosition,
-  Priority,
-  RecurrenceType,
-  ScheduleContentItem,
-  ScheduleSong,
-} from "./wizard-data";
+import type { AdPosition, Priority, RecurrenceType, Transition, ContentFit } from "./wizard-data";
 import { newSessionId } from "./wizard-data";
+import type { ContentItem } from "@/lib/business/content-queries";
+import type { Track } from "@/lib/tracks";
 
-export interface SelectedContentItem extends ScheduleContentItem {
-  order: number;
+/** A content item picked into a session, with its real record kept alongside
+ * for display (title/thumbnail/type/its own natural duration). */
+export interface SelectedContentItem {
+  contentItemId: string;
+  item: ContentItem;
+  /** Seconds this item shows within THIS session. Defaults to the item's own
+   * `durationSeconds` for video/audio; required (enforced in the UI) for an
+   * image, which has no natural duration. */
+  displaySeconds: number | null;
 }
 
-export type SessionSong = ScheduleSong & { source: "ai" | "manual" };
+export type SongSource = "search" | "genre" | "playlist";
+
+export interface SessionSong {
+  trackId: string;
+  track: Track;
+  source: SongSource;
+}
 
 /**
  * One time-block in the day being built on the Timing step. Content,
@@ -21,23 +30,25 @@ export type SessionSong = ScheduleSong & { source: "ai" | "manual" };
  * enforced by the platform, not configurable per session.
  */
 export interface ScheduleSession {
+  /** Client-local draft id (newSessionId()) — the whole array is replaced
+   * wholesale on save, so this never needs to match a server-side id. */
   id: string;
   label: string;
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
-  transition: string;
+  transition: Transition;
 
   // Content layer — controls what's on screen.
   contentEnabled: boolean;
   selectedContent: SelectedContentItem[];
   contentOrder: "listed" | "shuffle";
-  fit: string;
+  fit: ContentFit;
   backgroundColor: string;
   /** Hospital example: loop a short video continuously, or play a long one once. */
   contentRepeat: "loop" | "once";
   /** Only meaningful when playlistEnabled is also true — insert content periodically over the music instead of running it continuously. */
   contentFrequencyMode: "continuous" | "periodic";
-  contentFrequencyInterval: string;
+  contentFrequencyIntervalMinutes: number | null;
 
   // Playlist layer — background music / music videos. Only active when explicitly enabled.
   playlistEnabled: boolean;
@@ -63,7 +74,7 @@ export function createSession(input: {
   label: string;
   startTime: string;
   endTime: string;
-  transition: string;
+  transition: Transition;
 }): ScheduleSession {
   return {
     id: newSessionId(),
@@ -75,11 +86,11 @@ export function createSession(input: {
     contentEnabled: false,
     selectedContent: [],
     contentOrder: "listed",
-    fit: "Fill screen",
+    fit: "fill",
     backgroundColor: "#7c3aed",
     contentRepeat: "loop",
     contentFrequencyMode: "continuous",
-    contentFrequencyInterval: "Every 30 minutes",
+    contentFrequencyIntervalMinutes: 30,
 
     playlistEnabled: false,
     genres: [],
@@ -111,12 +122,18 @@ export interface ScheduleState {
   notes: string;
   overrideExisting: boolean;
 
-  // Step 2 — Target & Placement
-  locationIds: string[];
+  // Step 2 — Target & Placement (real ids: branches/zones/rooms/devices)
+  branchIds: string[];
   zoneIds: string[];
   roomIds: string[];
+  /** Client-only bookkeeping: which Audio Zones the user picked — their
+   * covered rooms are what actually populate `roomIds`. Not sent to the
+   * server (the schema targets rooms directly; an Audio Zone isn't its own
+   * target type), kept here only so the UI can show "via Main Bar Zone"
+   * and let the user toggle the whole zone back off. */
+  audioZoneIds: string[];
   screenMode: "all" | "specific";
-  specificScreenIds: string[];
+  specificDeviceIds: string[];
 
   // Step 3 — Timing (day builder)
   sessions: ScheduleSession[];
@@ -125,6 +142,7 @@ export interface ScheduleState {
   recurrence: RecurrenceType;
   customDays: string[];
   timezone: string;
+  synchronizedPlayback: boolean;
 
   // Step 4 — Review & Activation
   activation: ActivationMode;
@@ -134,31 +152,38 @@ export interface ScheduleState {
   status: "draft" | "active";
 }
 
-export const DEFAULT_SCHEDULE_STATE: ScheduleState = {
-  name: "",
-  description: "",
-  priority: "normal",
-  tags: [],
-  color: "#7c3aed",
-  notes: "",
-  overrideExisting: false,
+export function defaultScheduleState(timezone: string): ScheduleState {
+  return {
+    name: "",
+    description: "",
+    priority: "normal",
+    tags: [],
+    color: "#7c3aed",
+    notes: "",
+    overrideExisting: false,
 
-  locationIds: [],
-  zoneIds: [],
-  roomIds: [],
-  screenMode: "all",
-  specificScreenIds: [],
+    branchIds: [],
+    zoneIds: [],
+    roomIds: [],
+    audioZoneIds: [],
+    screenMode: "all",
+    specificDeviceIds: [],
 
-  sessions: [],
-  startDate: "",
-  endDate: "",
-  recurrence: "none",
-  customDays: [],
-  timezone: "East Africa Time (EAT)",
+    sessions: [],
+    // Left blank rather than defaulting to "today" — reading the wall clock
+    // during a component's init state would violate react-hooks/purity;
+    // the Timing step already requires the user to pick a start date.
+    startDate: "",
+    endDate: "",
+    recurrence: "none",
+    customDays: [],
+    timezone,
+    synchronizedPlayback: false,
 
-  activation: "now",
-  scheduledStartDate: "",
-  scheduledStartTime: "09:00",
+    activation: "now",
+    scheduledStartDate: "",
+    scheduledStartTime: "09:00",
 
-  status: "draft",
-};
+    status: "draft",
+  };
+}

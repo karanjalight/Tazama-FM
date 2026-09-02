@@ -5,7 +5,7 @@ import { AudioLines, Minus, Send, Sparkles, X } from "lucide-react";
 
 import type { ScheduleState } from "../schedule-state";
 import { matchAssistantIntent } from "./assistant-scripts";
-import { STEP_GREETINGS, STEP_SUGGESTIONS } from "./assistant-steps";
+import { stepGreetings, STEP_SUGGESTIONS } from "./assistant-steps";
 import { AssistantMessageBubble } from "./assistant-message";
 import type { AssistantMessage } from "./assistant-types";
 import { cn } from "@/lib/utils";
@@ -24,6 +24,7 @@ export function TazamaAssistant({
   onMinimize,
   onClose,
   className,
+  viewerName,
 }: {
   step: number;
   state: ScheduleState;
@@ -31,9 +32,11 @@ export function TazamaAssistant({
   onMinimize?: () => void;
   onClose?: () => void;
   className?: string;
+  viewerName: string;
 }) {
+  const greetings = React.useMemo(() => stepGreetings(viewerName), [viewerName]);
   const [messages, setMessages] = React.useState<AssistantMessage[]>([
-    { id: newMsgId(), role: "assistant", text: STEP_GREETINGS[1], time: now() },
+    { id: newMsgId(), role: "assistant", text: greetings[1], time: now() },
   ]);
   const [input, setInput] = React.useState("");
   const [isTyping, setIsTyping] = React.useState(false);
@@ -45,9 +48,9 @@ export function TazamaAssistant({
   React.useEffect(() => {
     if (seenSteps.current.has(step)) return;
     seenSteps.current.add(step);
-    setMessages((m) => [...m, { id: newMsgId(), role: "assistant", text: STEP_GREETINGS[step] ?? "", time: now() }]);
+    setMessages((m) => [...m, { id: newMsgId(), role: "assistant", text: greetings[step] ?? "", time: now() }]);
     setSuggestions(STEP_SUGGESTIONS[step] ?? []);
-  }, [step]);
+  }, [step, greetings]);
 
   React.useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });

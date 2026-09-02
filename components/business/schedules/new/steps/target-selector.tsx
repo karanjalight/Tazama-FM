@@ -3,17 +3,17 @@
 import * as React from "react";
 import { ChevronDown, ChevronRight, Search } from "lucide-react";
 
-import { TARGET_TREE, type TargetLocation, type TargetZone } from "../wizard-data";
+import type { TargetLocationOption, TargetZoneOption } from "@/lib/business/schedule-target-tree";
 import { Input } from "@/components/ui/input";
 
-function allRoomIdsOf(zones: TargetZone[]): string[] {
+function allRoomIdsOf(zones: TargetZoneOption[]): string[] {
   return zones.flatMap((z) => z.rooms.map((r) => r.id));
 }
 
-function computeDerived(roomIds: string[]) {
+function computeDerived(tree: TargetLocationOption[], roomIds: string[]) {
   const zoneIds: string[] = [];
   const locationIds: string[] = [];
-  for (const loc of TARGET_TREE) {
+  for (const loc of tree) {
     let allZonesFull = loc.zones.length > 0;
     let anyRoomInLoc = false;
     for (const zone of loc.zones) {
@@ -21,8 +21,10 @@ function computeDerived(roomIds: string[]) {
       const allInZone = zoneRoomIds.length > 0 && zoneRoomIds.every((id) => roomIds.includes(id));
       const anyInZone = zoneRoomIds.some((id) => roomIds.includes(id));
       if (anyInZone) anyRoomInLoc = true;
-      if (allInZone) zoneIds.push(zone.id);
-      else allZonesFull = false;
+      // The synthetic "Unassigned" grouping is never a real zones.id — never
+      // let it into zoneIds even when every one of its rooms is selected.
+      if (allInZone && zone.real) zoneIds.push(zone.id);
+      else if (!allInZone) allZonesFull = false;
     }
     if (allZonesFull && anyRoomInLoc) locationIds.push(loc.id);
   }
@@ -30,14 +32,16 @@ function computeDerived(roomIds: string[]) {
 }
 
 export function TargetSelector({
+  tree,
   roomIds,
   onChange,
 }: {
+  tree: TargetLocationOption[];
   roomIds: string[];
   onChange: (next: { locationIds: string[]; zoneIds: string[]; roomIds: string[] }) => void;
 }) {
   const [query, setQuery] = React.useState("");
-  const [expanded, setExpanded] = React.useState<Set<string>>(new Set([TARGET_TREE[0]?.id ?? ""]));
+  const [expanded, setExpanded] = React.useState<Set<string>>(new Set([tree[0]?.id ?? ""]));
 
   function toggleExpand(id: string) {
     setExpanded((s) => {
@@ -49,7 +53,7 @@ export function TargetSelector({
   }
 
   function setRooms(nextRoomIds: string[]) {
-    onChange(computeDerived(nextRoomIds));
+    onChange(computeDerived(tree, nextRoomIds));
   }
 
   function toggleRoom(roomId: string) {
@@ -57,7 +61,7 @@ export function TargetSelector({
     setRooms(next);
   }
 
-  function toggleZone(zone: TargetZone) {
+  function toggleZone(zone: TargetZoneOption) {
     const zoneRoomIds = zone.rooms.map((r) => r.id);
     const allSelected = zoneRoomIds.every((id) => roomIds.includes(id));
     const next = allSelected
@@ -66,9 +70,9 @@ export function TargetSelector({
     setRooms(next);
   }
 
-  function toggleLocation(loc: TargetLocation) {
+  function toggleLocation(loc: TargetLocationOption) {
     const locRoomIds = allRoomIdsOf(loc.zones);
-    const allSelected = locRoomIds.every((id) => roomIds.includes(id));
+    const allSelected = locRoomIds.length > 0 && locRoomIds.every((id) => roomIds.includes(id));
     const next = allSelected
       ? roomIds.filter((id) => !locRoomIds.includes(id))
       : [...new Set([...roomIds, ...locRoomIds])];
@@ -81,12 +85,20 @@ export function TargetSelector({
 
   const q = query.trim().toLowerCase();
   const locations = q
-    ? TARGET_TREE.filter(
+    ? tree.filter(
         (loc) =>
           loc.name.toLowerCase().includes(q) ||
           loc.zones.some((z) => z.name.toLowerCase().includes(q) || z.rooms.some((r) => r.name.toLowerCase().includes(q))),
       )
-    : TARGET_TREE;
+    : tree;
+
+  if (!tree.length) {
+    return (
+      <p className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+        No locations, zones or rooms yet — set up Rooms &amp; Zones for a location first.
+      </p>
+    );
+  }
 
   return (
     <div>

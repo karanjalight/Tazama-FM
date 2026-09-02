@@ -19,7 +19,7 @@ export function RecentlyPlayed() {
   React.useEffect(() => {
     const load = () =>
       setTracks(
-        readRecent().map((t) => ({ ...t, genre: "recent", isPlayable: true })),
+        readRecent().map((t) => ({ ...t, genre: "recent", isPlayable: true, durationSeconds: null })),
       );
     load();
     window.addEventListener(RECENT_EVENT, load);

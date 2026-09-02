@@ -1,11 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import { AudioLines, ChevronRight, Save } from "lucide-react";
 
-import { DEFAULT_SCHEDULE_STATE, type ScheduleState } from "./schedule-state";
+import { defaultScheduleState, type ScheduleState } from "./schedule-state";
+import { toSessionInput } from "@/components/business/schedules/detail/session-convert";
 import { ScheduleStepIndicator } from "./step-indicator";
 import { BasicDetailsStep } from "./steps/basic-details-step";
 import { TargetPlacementStep } from "./steps/target-placement-step";
@@ -13,16 +15,42 @@ import { TimingStep } from "./steps/timing-step";
 import { ReviewStep } from "./steps/review-step";
 import { SuccessState } from "./success-state";
 import { TazamaAssistant } from "./assistant/tazama-assistant";
+import { createSchedule, updateSchedule, replaceScheduleSessions, setScheduleStatus } from "@/app/business/schedules/actions";
+import type { ScheduleTargetOptions } from "@/lib/business/schedule-target-tree";
+import type { ContentItem, Playlist } from "@/lib/business/content-queries";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 const TOTAL_STEPS = 4;
-const LOCATION_LIST_HREF = "/business/branches/nairobi-cbd/schedules";
 
-export function CreateScheduleWizard() {
+export function CreateScheduleWizard({
+  branchId,
+  branchSlugOrId,
+  timezone,
+  viewerName,
+  targets,
+  businessContent,
+  businessAds,
+  businessPlaylists,
+}: {
+  branchId: string;
+  branchSlugOrId: string;
+  timezone: string;
+  viewerName: string;
+  targets: ScheduleTargetOptions;
+  businessContent: ContentItem[];
+  businessAds: ContentItem[];
+  businessPlaylists: Playlist[];
+}) {
+  const router = useRouter();
+  const schedulesHref = `/business/branches/${branchSlugOrId}/schedules`;
+
   const [step, setStep] = React.useState(1);
-  const [state, setState] = React.useState<ScheduleState>(DEFAULT_SCHEDULE_STATE);
+  const [state, setState] = React.useState<ScheduleState>(() => defaultScheduleState(timezone));
+  const [scheduleId, setScheduleId] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
   const [created, setCreated] = React.useState(false);
+  const [activationWarning, setActivationWarning] = React.useState<string | null>(null);
   const [assistantOpen, setAssistantOpen] = React.useState(true);
   const [mobileAssistantOpen, setMobileAssistantOpen] = React.useState(false);
 
@@ -30,32 +58,106 @@ export function CreateScheduleWizard() {
     setState((s) => ({ ...s, ...p }));
   }
 
-  function handleSaveDraft() {
+  /** Creates the schedule on first save, updates it on every save after —
+   * both draft saves and the final "Create Schedule" go through this same
+   * path, so a schedule started via "Save as draft" from step 1 is the
+   * exact same row the wizard finishes on step 4, never a duplicate. */
+  async function persist(current: ScheduleState): Promise<{ ok: true; id: string; warnings: string[] } | { ok: false; error: string }> {
+    const startDate = current.startDate || new Date().toISOString().slice(0, 10);
+    const payload = {
+      branchId,
+      name: current.name || "Untitled schedule",
+      description: current.description,
+      priority: current.priority,
+      tags: current.tags,
+      color: current.color,
+      notes: current.notes,
+      overrideExisting: current.overrideExisting,
+      screenMode: current.screenMode,
+      synchronizedPlayback: current.synchronizedPlayback,
+      startDate,
+      endDate: current.endDate || null,
+      recurrence: current.recurrence,
+      customDays: current.customDays,
+      timezone: current.timezone,
+      activation: current.activation,
+      scheduledStartAt:
+        current.activation === "scheduled" && current.scheduledStartDate
+          ? `${current.scheduledStartDate}T${current.scheduledStartTime || "09:00"}:00`
+          : null,
+      branchIds: current.branchIds,
+      zoneIds: current.zoneIds,
+      roomIds: current.roomIds,
+      deviceIds: current.specificDeviceIds,
+    };
+
+    if (!scheduleId) {
+      const createRes = await createSchedule(payload);
+      if (!createRes.ok) return { ok: false, error: createRes.error };
+      setScheduleId(createRes.scheduleId);
+      const sessionsRes = await replaceScheduleSessions({
+        branchId,
+        scheduleId: createRes.scheduleId,
+        sessions: current.sessions.map(toSessionInput),
+      });
+      if (!sessionsRes.ok) return { ok: false, error: sessionsRes.error };
+      return { ok: true, id: createRes.scheduleId, warnings: sessionsRes.warnings };
+    }
+
+    const updateRes = await updateSchedule({ ...payload, id: scheduleId });
+    if (!updateRes.ok) return { ok: false, error: updateRes.error };
+    const sessionsRes = await replaceScheduleSessions({ branchId, scheduleId, sessions: current.sessions.map(toSessionInput) });
+    if (!sessionsRes.ok) return { ok: false, error: sessionsRes.error };
+    return { ok: true, id: scheduleId, warnings: sessionsRes.warnings };
+  }
+
+  async function handleSaveDraft() {
+    setSaving(true);
+    const result = await persist(state);
+    setSaving(false);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    result.warnings.forEach((w) => toast.warning(w));
     toast.success("Draft saved", { description: "Your schedule is saved and can be finished later." });
   }
 
-  function handleCreate() {
-    const goingLive = state.activation === "now";
-    setState((s) => ({ ...s, status: goingLive ? "active" : "draft" }));
-    toast.success(`${state.name || "Schedule"} created`, {
-      description: goingLive
-        ? "It's now active and will run as configured."
-        : `It will go live on ${state.scheduledStartDate || "the scheduled date"} at ${state.scheduledStartTime}.`,
-    });
+  async function handleCreate() {
+    setSaving(true);
+    const result = await persist(state);
+    if (!result.ok) {
+      setSaving(false);
+      toast.error(result.error);
+      return;
+    }
+    result.warnings.forEach((w) => toast.warning(w));
+
+    let warning: string | null = null;
+    if (state.activation === "now") {
+      const activateRes = await setScheduleStatus({ branchId, id: result.id, status: "active" });
+      if (!activateRes.ok) warning = activateRes.error;
+    }
+    setSaving(false);
+    setActivationWarning(warning);
+    toast.success(`${state.name || "Schedule"} created`);
     setCreated(true);
+    router.refresh();
   }
 
-  if (created) {
-    return <SuccessState state={state} locationHref={LOCATION_LIST_HREF} />;
+  if (created && scheduleId) {
+    return (
+      <SuccessState
+        state={state}
+        targets={targets}
+        scheduleHref={`${schedulesHref}/${scheduleId}`}
+        activationWarning={activationWarning}
+      />
+    );
   }
 
   const assistantPanel = (
-    <TazamaAssistant
-      step={step}
-      state={state}
-      onApply={patch}
-      onMinimize={() => setAssistantOpen(false)}
-    />
+    <TazamaAssistant step={step} state={state} onApply={patch} onMinimize={() => setAssistantOpen(false)} viewerName={viewerName} />
   );
 
   return (
@@ -66,11 +168,7 @@ export function CreateScheduleWizard() {
             Locations
           </Link>
           <ChevronRight className="size-3.5" />
-          <Link href="/business/branches" className="hover:text-foreground">
-            Nairobi CBD
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <Link href={LOCATION_LIST_HREF} className="hover:text-foreground">
+          <Link href={schedulesHref} className="hover:text-foreground">
             Schedules
           </Link>
           <ChevronRight className="size-3.5" />
@@ -79,7 +177,8 @@ export function CreateScheduleWizard() {
         <button
           type="button"
           onClick={handleSaveDraft}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          disabled={saving}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
         >
           <Save className="size-3.5" />
           Save as draft
@@ -89,7 +188,7 @@ export function CreateScheduleWizard() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Create Schedule</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Plan and automate content, playlists, advertisements and announcements.
+          Plan and automate content, playlists and advertisements — layered on top of your Audio Zones.
         </p>
       </header>
 
@@ -100,9 +199,17 @@ export function CreateScheduleWizard() {
           <p className="text-xs font-medium text-muted-foreground">Step {step} of {TOTAL_STEPS}</p>
 
           {step === 1 && <BasicDetailsStep state={state} onChange={patch} />}
-          {step === 2 && <TargetPlacementStep state={state} onChange={patch} />}
-          {step === 3 && <TimingStep state={state} onChange={patch} />}
-          {step === 4 && <ReviewStep state={state} onChange={patch} />}
+          {step === 2 && <TargetPlacementStep state={state} onChange={patch} targets={targets} />}
+          {step === 3 && (
+            <TimingStep
+              state={state}
+              onChange={patch}
+              businessContent={businessContent}
+              businessAds={businessAds}
+              businessPlaylists={businessPlaylists}
+            />
+          )}
+          {step === 4 && <ReviewStep state={state} onChange={patch} targets={targets} />}
 
           <div className="flex items-center justify-between border-t border-border pt-4">
             {step === 1 ? (
@@ -126,7 +233,8 @@ export function CreateScheduleWizard() {
               <button
                 type="button"
                 onClick={handleSaveDraft}
-                className="rounded-xl border border-input px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                disabled={saving}
+                className="rounded-xl border border-input px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
               >
                 Save as draft
               </button>
@@ -143,9 +251,10 @@ export function CreateScheduleWizard() {
                 <button
                   type="button"
                   onClick={handleCreate}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500"
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-60"
                 >
-                  Create Schedule
+                  {saving ? "Creating…" : "Create Schedule"}
                 </button>
               )}
             </div>

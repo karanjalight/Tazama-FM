@@ -43,6 +43,7 @@ export function UploadContentDialog() {
   const [title, setTitle] = React.useState("");
   const [contentType, setContentType] = React.useState<ContentTypeOption>("video");
   const [file, setFile] = React.useState<File | null>(null);
+  const [durationSeconds, setDurationSeconds] = React.useState<number | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -50,7 +51,28 @@ export function UploadContentDialog() {
     setTitle("");
     setContentType("video");
     setFile(null);
+    setDurationSeconds(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  // Best-effort: read the file's own real duration client-side (the server
+  // never decodes media) so Schedules can default a video/audio content
+  // item's on-screen time to its actual length instead of asking staff to
+  // guess. Failure just leaves durationSeconds null — an image (no natural
+  // duration) never reaches this branch anyway.
+  function handleFileChange(next: File | null) {
+    setFile(next);
+    setDurationSeconds(null);
+    if (!next || !/^(video|audio)\//.test(next.type)) return;
+    const el = document.createElement(next.type.startsWith("video/") ? "video" : "audio");
+    const url = URL.createObjectURL(next);
+    el.preload = "metadata";
+    el.src = url;
+    el.onloadedmetadata = () => {
+      if (Number.isFinite(el.duration)) setDurationSeconds(el.duration);
+      URL.revokeObjectURL(url);
+    };
+    el.onerror = () => URL.revokeObjectURL(url);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -61,6 +83,7 @@ export function UploadContentDialog() {
     formData.set("title", title.trim());
     formData.set("contentType", contentType);
     formData.set("file", file);
+    if (durationSeconds !== null) formData.set("durationSeconds", String(Math.round(durationSeconds)));
     const res = await uploadContentItem(formData);
     setSubmitting(false);
     if (!res.ok) {
@@ -135,7 +158,7 @@ export function UploadContentDialog() {
                 ref={fileInputRef}
                 id="content-upload-file"
                 type="file"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
                 className="block w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-2 file:text-sm file:font-medium file:text-foreground hover:file:bg-muted/70"
               />
               <p className="text-xs text-muted-foreground">

@@ -1,8 +1,9 @@
 import type * as React from "react";
 import { AlertTriangle, Rocket, Timer } from "lucide-react";
 
-import { PRIORITIES, RECURRENCE_OPTIONS, TARGET_TREE } from "../wizard-data";
+import { PRIORITIES, RECURRENCE_OPTIONS } from "../wizard-data";
 import type { ScheduleState } from "../schedule-state";
+import type { ScheduleTargetOptions } from "@/lib/business/schedule-target-tree";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { formatTimeLabel, sessionHasContent, summarizeSessionContent, toMinutes } from "./session-utils";
@@ -16,9 +17,9 @@ function SummarySection({ title, children }: { title: string; children: React.Re
   );
 }
 
-function totalScreensFor(roomIds: string[]): number {
+function totalScreensFor(tree: ScheduleTargetOptions["locations"], roomIds: string[]): number {
   let total = 0;
-  for (const loc of TARGET_TREE) {
+  for (const loc of tree) {
     for (const zone of loc.zones) {
       for (const room of zone.rooms) {
         if (roomIds.includes(room.id)) total += room.screens;
@@ -36,16 +37,18 @@ function estimatedPlaysPerDay(frequency: string, sessionMinutes: number): number
 export function ReviewStep({
   state,
   onChange,
+  targets,
 }: {
   state: ScheduleState;
   onChange: (patch: Partial<ScheduleState>) => void;
+  targets: ScheduleTargetOptions;
 }) {
   const recurrence = RECURRENCE_OPTIONS.find((r) => r.id === state.recurrence);
-  const screensSelected = totalScreensFor(state.roomIds);
+  const screensSelected = totalScreensFor(targets.locations, state.roomIds);
 
-  const locations = TARGET_TREE.filter((l) => state.locationIds.includes(l.id)).map((l) => l.name);
-  const zones = TARGET_TREE.flatMap((l) => l.zones).filter((z) => state.zoneIds.includes(z.id)).map((z) => z.name);
-  const rooms = TARGET_TREE.flatMap((l) => l.zones.flatMap((z) => z.rooms)).filter((r) => state.roomIds.includes(r.id)).map((r) => r.name);
+  const locations = targets.locations.filter((l) => state.branchIds.includes(l.id)).map((l) => l.name);
+  const zones = targets.locations.flatMap((l) => l.zones).filter((z) => state.zoneIds.includes(z.id)).map((z) => z.name);
+  const rooms = targets.locations.flatMap((l) => l.zones.flatMap((z) => z.rooms)).filter((r) => state.roomIds.includes(r.id)).map((r) => r.name);
 
   const sortedSessions = [...state.sessions].sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
   const unconfiguredCount = state.sessions.filter((s) => !sessionHasContent(s)).length;
@@ -74,6 +77,9 @@ export function ReviewStep({
             {zones.length > 0 && <p className="text-muted-foreground">Zones: {zones.join(", ")}</p>}
             {rooms.length > 0 && <p className="text-muted-foreground">Rooms: {rooms.join(", ")}</p>}
             <p className="font-medium text-foreground">{screensSelected} screens</p>
+            <p className="text-xs text-muted-foreground">
+              {state.synchronizedPlayback ? "Synchronized playback" : "Independent playback per screen"}
+            </p>
           </div>
         </SummarySection>
 
@@ -129,7 +135,7 @@ export function ReviewStep({
               </div>
             </div>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Estimates only — based on historical screen uptime and average foot traffic.
+              Estimates only — based on the ad frequency you set, not live analytics.
             </p>
           </div>
         )}
@@ -148,7 +154,9 @@ export function ReviewStep({
                 <span className="flex items-center gap-1.5 text-sm text-foreground">
                   <Rocket className="size-3.5" /> Activate immediately
                 </span>
-                <span className="block text-xs text-muted-foreground">This schedule starts running as soon as it&apos;s created.</span>
+                <span className="block text-xs text-muted-foreground">
+                  This schedule starts overriding its targeted screens as soon as it&apos;s created.
+                </span>
               </span>
             </label>
             <label className="flex cursor-pointer items-start gap-2.5 rounded-lg p-1.5 hover:bg-muted/40">
@@ -161,9 +169,12 @@ export function ReviewStep({
               />
               <span>
                 <span className="flex items-center gap-1.5 text-sm text-foreground">
-                  <Timer className="size-3.5" /> Schedule to start later
+                  <Timer className="size-3.5" /> Create as a draft
                 </span>
-                <span className="block text-xs text-muted-foreground">Pick a date and time for this schedule to switch on.</span>
+                <span className="block text-xs text-muted-foreground">
+                  Save it for now — activate it yourself from the Schedules list when you&apos;re ready
+                  (a target date below is just a reminder for you, not an automatic start).
+                </span>
               </span>
             </label>
             {state.activation === "scheduled" && (

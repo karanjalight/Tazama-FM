@@ -223,3 +223,112 @@ export async function requestZoneAdvance(
     return null;
   }
 }
+
+// ── Schedule override (highest-priority playback source) ───────────────
+//
+// An active Schedule's own canonical state (`schedule_playback`) — the
+// kiosk switches to this instead of useBranchPlayback/useZonePlayback
+// whenever /api/business/rooms/[roomId]/active-schedule reports one
+// currently covering this room. Both `track` and `content` share one CAS
+// `version` — a track-advance and a content-advance landing in the exact
+// same instant can race each other (one wins, the other's request is
+// dropped as stale); the loser's own next boundary just re-fires the
+// advance, so this self-corrects rather than needing two separate locks.
+
+export interface ScheduleContentSnapshot {
+  contentItemId: string;
+  title: string;
+  contentType: "video" | "image" | "audio" | "document";
+  url: string | null;
+  previewUrl: string | null;
+  displaySeconds: number | null;
+}
+
+interface SchedulePlaybackRow {
+  track: RoomTrack | null;
+  content: ScheduleContentSnapshot | null;
+  position_ms: number;
+  is_playing: boolean;
+  version: number;
+  updated_at: string;
+}
+
+export function useSchedulePlayback(
+  scheduleId: string,
+  enabled: boolean,
+  onPlayback: (p: PlaybackPayload, content: ScheduleContentSnapshot | null, version: number) => void,
+): void {
+  const cbRef = React.useRef(onPlayback);
+  React.useEffect(() => {
+    cbRef.current = onPlayback;
+  });
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`schedule-playback:${scheduleId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "schedule_playback",
+          filter: `schedule_id=eq.${scheduleId}`,
+        },
+        (payload) => {
+          const row = payload.new as SchedulePlaybackRow | undefined;
+          if (!row) return;
+          cbRef.current(
+            { track: row.track, positionMs: row.position_ms, isPlaying: row.is_playing, at: new Date(row.updated_at).getTime() },
+            row.content,
+            row.version,
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [scheduleId, enabled]);
+}
+
+export async function requestScheduleAdvance(
+  scheduleId: string,
+  reportedVersion: number,
+): Promise<{ payload: PlaybackPayload | null; version: number } | null> {
+  try {
+    const res = await fetch(`/api/business/schedules/${scheduleId}/advance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportedVersion }),
+    });
+    const data = (await res.json()) as { track?: RoomTrack | null; version?: number; noActiveSession?: boolean };
+    if (typeof data.version !== "number") return null;
+    return {
+      payload: data.track ? { track: data.track, positionMs: 0, isPlaying: true, at: Date.now() } : null,
+      version: data.version,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function requestScheduleContentAdvance(
+  scheduleId: string,
+  reportedVersion: number,
+): Promise<{ content: ScheduleContentSnapshot | null; version: number } | null> {
+  try {
+    const res = await fetch(`/api/business/schedules/${scheduleId}/advance-content`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportedVersion }),
+    });
+    const data = (await res.json()) as { content?: ScheduleContentSnapshot | null; version?: number };
+    if (typeof data.version !== "number") return null;
+    return { content: data.content ?? null, version: data.version };
+  } catch {
+    return null;
+  }
+}

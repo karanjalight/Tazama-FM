@@ -8,13 +8,14 @@ import { AD_POSITIONS, FREQUENCY_OPTIONS } from "../wizard-data";
 import type { AdPosition } from "../wizard-data";
 import type { SelectedContentItem } from "../schedule-state";
 import { ContentLibraryPickerDialog } from "./content-library-picker-dialog";
+import type { ContentItem } from "@/lib/business/content-queries";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useDialogTrigger } from "@/components/business/branches/new/use-dialog-trigger";
 
-const TYPE_ICON = { Video, Image: ImageIcon, Document: FileText } as const;
+const TYPE_ICON = { video: Video, image: ImageIcon, audio: Video, document: FileText } as const;
 
 export interface SessionAdValue {
   selectedAds: SelectedContentItem[];
@@ -31,14 +32,16 @@ export interface SessionAdValue {
 export function SessionAdConfig({
   value,
   onChange,
+  businessAds,
 }: {
   value: SessionAdValue;
   onChange: (patch: Partial<SessionAdValue>) => void;
+  businessAds: ContentItem[];
 }) {
   const adPicker = useDialogTrigger("session-ads");
 
-  function removeAd(id: string) {
-    onChange({ selectedAds: value.selectedAds.filter((a) => a.id !== id) });
+  function removeAd(contentItemId: string) {
+    onChange({ selectedAds: value.selectedAds.filter((a) => a.contentItemId !== contentItemId) });
   }
 
   return (
@@ -52,24 +55,26 @@ export function SessionAdConfig({
         {value.selectedAds.length > 0 ? (
           <div className="mt-2 space-y-1.5">
             {value.selectedAds.map((ad) => {
-              const Icon = TYPE_ICON[ad.type];
+              const Icon = TYPE_ICON[ad.item.contentType];
               return (
-                <div key={ad.id} className="flex items-center gap-2.5 rounded-lg border border-border p-2">
+                <div key={ad.contentItemId} className="flex items-center gap-2.5 rounded-lg border border-border p-2">
                   <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-muted">
-                    {ad.thumbnail ? (
-                      <Image src={ad.thumbnail} alt="" fill sizes="36px" className="object-cover" unoptimized />
+                    {ad.item.previewUrl ? (
+                      <Image src={ad.item.previewUrl} alt="" fill sizes="36px" className="object-cover" unoptimized />
                     ) : (
                       <div className="grid h-full place-items-center bg-linear-to-br from-violet-500/20 to-fuchsia-500/20">
                         <Icon className="size-4 text-foreground/40" />
                       </div>
                     )}
                   </div>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{ad.title}</span>
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground">{ad.duration ?? "—"}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{ad.item.title}</span>
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {ad.item.durationSeconds != null ? `${ad.item.durationSeconds}s` : "—"}
+                  </span>
                   <button
                     type="button"
                     aria-label="Remove ad"
-                    onClick={() => removeAd(ad.id)}
+                    onClick={() => removeAd(ad.contentItemId)}
                     className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-400"
                   >
                     <Trash2 className="size-3.5" />
@@ -137,17 +142,35 @@ export function SessionAdConfig({
       <div className="space-y-2.5 border-t border-border pt-3" style={{ "--switch-accent": "var(--color-violet-600)" } as React.CSSProperties}>
         <Label>Additional rules</Label>
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm text-foreground">Minimum spacing between plays</p>
             <p className="text-xs text-muted-foreground">Add a gap after each ad plays</p>
           </div>
+          {value.adMinSpacingEnabled && (
+            <Input
+              type="number"
+              min={1}
+              value={value.adMinSpacingMinutes}
+              onChange={(e) => onChange({ adMinSpacingMinutes: Number(e.target.value) || 1 })}
+              className="h-8 w-16 shrink-0 text-xs"
+            />
+          )}
           <Switch checked={value.adMinSpacingEnabled} onCheckedChange={(v) => onChange({ adMinSpacingEnabled: v })} />
         </div>
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm text-foreground">Do not repeat within</p>
             <p className="text-xs text-muted-foreground">Avoid showing the same ad too frequently</p>
           </div>
+          {value.adNoRepeatEnabled && (
+            <Input
+              type="number"
+              min={1}
+              value={value.adNoRepeatMinutes}
+              onChange={(e) => onChange({ adNoRepeatMinutes: Number(e.target.value) || 1 })}
+              className="h-8 w-16 shrink-0 text-xs"
+            />
+          )}
           <Switch checked={value.adNoRepeatEnabled} onCheckedChange={(v) => onChange({ adNoRepeatEnabled: v })} />
         </div>
         <div className="flex items-center justify-between gap-3">
@@ -163,8 +186,16 @@ export function SessionAdConfig({
         key={adPicker.dialogKey}
         open={adPicker.open}
         onOpenChange={adPicker.onOpenChange}
-        alreadySelectedIds={value.selectedAds.map((a) => a.id)}
-        onAdd={(items) => onChange({ selectedAds: [...value.selectedAds, ...items.map((item, i) => ({ ...item, order: value.selectedAds.length + i }))] })}
+        items={businessAds}
+        alreadySelectedIds={value.selectedAds.map((a) => a.contentItemId)}
+        onAdd={(items) =>
+          onChange({
+            selectedAds: [
+              ...value.selectedAds,
+              ...items.map((item) => ({ contentItemId: item.id, item, displaySeconds: item.durationSeconds })),
+            ],
+          })
+        }
       />
     </div>
   );

@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getRoomQueue } from "@/lib/rooms/queries";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 export interface ZoneQueueItem {
@@ -102,9 +103,53 @@ async function unplayedRanked(admin: SupabaseClient, zoneId: string, viewerId: s
   return mapped;
 }
 
+export type ZonePlaybackTarget = { kind: "zone" } | { kind: "room"; roomId: string } | { kind: "none" };
+
+/**
+ * Where a zone's *real* playback and suggestions actually live. Only a
+ * `synchronized_playback` zone has its own canonical `audio_zone_playback`
+ * row (every room it covers mirrors the same track together) — every other
+ * zone (the default) has each covered room advance independently via the
+ * exact tables/route a standalone branch kiosk already uses
+ * (`room_playback`/`room_queue`, `app/api/business/branches/advance`), so
+ * `audio_zone_playback`/`audio_zone_queue` for such a zone is never written
+ * to at all. Picking the zone's first covered room as "the" room a zone-room
+ * joiner sees/suggests into is exact for every real zone today (one room
+ * each), and the only coherent answer even if a zone someday covers more —
+ * a non-synchronized zone has no single "now playing" to begin with.
+ */
+export async function resolvePlaybackTarget(admin: SupabaseClient, zoneId: string): Promise<ZonePlaybackTarget> {
+  const { data: zone } = await admin.from("audio_zones").select("synchronized_playback").eq("id", zoneId).maybeSingle();
+  if (!zone) return { kind: "none" };
+  if (zone.synchronized_playback) return { kind: "zone" };
+  const { data: link } = await admin
+    .from("audio_zone_rooms")
+    .select("room_id")
+    .eq("audio_zone_id", zoneId)
+    .limit(1)
+    .maybeSingle();
+  return link ? { kind: "room", roomId: link.room_id } : { kind: "none" };
+}
+
 export async function getZoneQueue(zoneId: string, viewerId: string | null): Promise<ZoneQueueItem[]> {
   const admin = createAdminClient();
   if (!admin) return [];
+  const target = await resolvePlaybackTarget(admin, zoneId);
+  if (target.kind === "none") return [];
+  if (target.kind === "room") {
+    const items = await getRoomQueue(target.roomId, viewerId);
+    return items.map((i) => ({
+      id: i.id,
+      zoneId,
+      track: i.track,
+      addedBy: i.addedBy,
+      addedByName: i.addedByName,
+      likeCount: i.likeCount,
+      likedByMe: i.likedByMe,
+      played: i.played,
+      createdAt: i.createdAt,
+    }));
+  }
   return unplayedRanked(admin, zoneId, viewerId);
 }
 

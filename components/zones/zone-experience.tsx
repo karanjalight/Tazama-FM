@@ -31,6 +31,7 @@ import { ReactionBar, type FloatingItem } from "@/components/rooms/room-reaction
 import { useYouTube } from "@/lib/rooms/use-youtube";
 import { useZoneChannel } from "@/lib/business/use-zone-channel";
 import {
+  useBranchPlayback,
   useZonePlayback,
   useSchedulePlayback,
   requestScheduleContentAdvance,
@@ -42,7 +43,7 @@ import { suggestZoneTrack, toggleZoneQueueLike, removeZoneQueueItem, fetchZoneQu
 import { ScheduleContentDisplay } from "@/components/business/schedules/schedule-content-display";
 import type { AudioZone } from "@/lib/business/audio-zone-types";
 import type { ZoneQueueItem } from "@/lib/business/zone-queue";
-import type { RoomTrack, RoomViewer } from "@/lib/rooms/types";
+import type { RoomPlayback, RoomTrack, RoomViewer } from "@/lib/rooms/types";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 
 const DRIFT_MS = 1500;
@@ -53,23 +54,35 @@ export function ZoneExperience({
   zone,
   viewer,
   initialQueue,
+  initialRoomPlayback,
   origin,
 }: {
   zone: AudioZone;
   viewer: RoomViewer;
   initialQueue: ZoneQueueItem[];
+  /** Seeded only for a non-`synchronizedPlayback` zone (the default) — its
+   * covered room's own `room_playback`, the same source that room's kiosk
+   * itself plays from. A synchronized zone instead seeds from `zone.playback`
+   * below. See `resolvePlaybackTarget` for why these are two different tables. */
+  initialRoomPlayback: RoomPlayback | null;
   origin: string;
 }) {
+  // The room a non-synchronized zone's playback/suggestions actually live on
+  // — see `resolvePlaybackTarget`. Every real zone today covers exactly one
+  // room, so this is exact, not a guess.
+  const primaryRoomId = zone.roomIds[0] ?? null;
+  const initialSnapshot = zone.synchronizedPlayback ? zone.playback : initialRoomPlayback;
+
   const [joined, setJoined] = React.useState(false);
-  const [nowPlaying, setNowPlaying] = React.useState<RoomTrack | null>(zone.playback?.track ?? null);
-  const [zoneTrack, setZoneTrack] = React.useState<RoomTrack | null>(zone.playback?.track ?? null);
+  const [nowPlaying, setNowPlaying] = React.useState<RoomTrack | null>(initialSnapshot?.track ?? null);
+  const [zoneTrack, setZoneTrack] = React.useState<RoomTrack | null>(initialSnapshot?.track ?? null);
   const [queue, setQueue] = React.useState<ZoneQueueItem[]>(initialQueue);
   const [reactions, setReactions] = React.useState<FloatingItem[]>([]);
   const [synced, setSynced] = React.useState(true);
   const [scheduleContent, setScheduleContent] = React.useState<ScheduleContentSnapshot | null>(null);
   const [activeScheduleId, setActiveScheduleId] = React.useState<string | null>(null);
 
-  const appliedIdRef = React.useRef<string | null>(zone.playback?.track?.youtubeId ?? null);
+  const appliedIdRef = React.useRef<string | null>(initialSnapshot?.track?.youtubeId ?? null);
   const pendingSeekRef = React.useRef<number | null>(null);
   const pauseAfterLoadRef = React.useRef(false);
   const lastPayloadRef = React.useRef<PlaybackPayload | null>(null);
@@ -145,10 +158,15 @@ export function ZoneExperience({
     [applyZonePayload],
   );
 
-  useZonePlayback(zone.id, joined, (p, version) => {
+  // Exactly one of these two is ever enabled for a given zone — a
+  // synchronized zone's canonical `audio_zone_playback`, or (the default)
+  // its covered room's own `room_playback`, the same source that room's
+  // kiosk itself plays from (see `resolvePlaybackTarget`).
+  useZonePlayback(zone.id, joined && zone.synchronizedPlayback, (p, version) => {
     zoneVersionRef.current = version;
     handlePlayback(p);
   });
+  useBranchPlayback(primaryRoomId ?? "", joined && !zone.synchronizedPlayback && !!primaryRoomId, handlePlayback);
 
   /* ------------------------- schedule override content -------------------- */
 
@@ -182,7 +200,6 @@ export function ZoneExperience({
   // Same discovery + ~25s cadence the kiosk uses — any room the zone covers
   // resolves the same schedule, since schedule targeting already fans out
   // branch/zone/room coverage (see the Zone Rooms design notes).
-  const primaryRoomId = zone.roomIds[0] ?? null;
   React.useEffect(() => {
     if (!joined || !primaryRoomId) return;
     let cancelled = false;
@@ -276,7 +293,7 @@ export function ZoneExperience({
 
   function join() {
     setJoined(true);
-    const snap = zone.playback;
+    const snap = initialSnapshot;
     if (snap?.track && snap.isPlaying) {
       loadTrack(snap.track);
       pendingSeekRef.current = snap.positionMs;
@@ -344,7 +361,7 @@ export function ZoneExperience({
 
   async function onRemove(item: ZoneQueueItem) {
     setQueue((q) => q.filter((i) => i.id !== item.id));
-    await removeZoneQueueItem(item.id);
+    await removeZoneQueueItem(zone.id, item.id);
     apiRef.current?.sendQueuePing();
     await refetchQueue();
   }

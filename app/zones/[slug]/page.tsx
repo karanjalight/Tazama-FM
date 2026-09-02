@@ -6,6 +6,7 @@ import { getAudioZoneBySlug } from "@/lib/business/audio-zone-queries";
 import { getZoneQueue } from "@/lib/business/zone-queue";
 import { getRoomViewer } from "@/lib/rooms/viewer";
 import { getOrCreateGuestViewer } from "@/lib/rooms/guest-session";
+import { getRoomPlayback } from "@/lib/rooms/queries";
 import { getOrigin } from "@/lib/origin";
 import { GuestSessionSync } from "@/components/rooms/guest-session-sync";
 
@@ -43,12 +44,28 @@ export default async function ZoneRoomPage({
   }
   if (!viewer) redirect("/login");
 
-  const [initialQueue, origin] = await Promise.all([getZoneQueue(zone.id, viewer.id), getOrigin()]);
+  // Only a `synchronized_playback` zone has its own canonical playback row
+  // (`zone.playback`, already fetched in `getAudioZoneBySlug`); every other
+  // zone (the default) has its covered room playing independently via
+  // `room_playback` — the same source the room's own kiosk reads — so that's
+  // what a joiner needs seeded here instead (see `resolvePlaybackTarget`).
+  const primaryRoomId = zone.roomIds[0] ?? null;
+  const [initialQueue, initialRoomPlayback, origin] = await Promise.all([
+    getZoneQueue(zone.id, viewer.id),
+    zone.synchronizedPlayback || !primaryRoomId ? Promise.resolve(null) : getRoomPlayback(primaryRoomId),
+    getOrigin(),
+  ]);
 
   return (
     <>
       {isGuest && <GuestSessionSync />}
-      <ZoneExperience zone={zone} viewer={viewer} initialQueue={initialQueue} origin={origin} />
+      <ZoneExperience
+        zone={zone}
+        viewer={viewer}
+        initialQueue={initialQueue}
+        initialRoomPlayback={initialRoomPlayback}
+        origin={origin}
+      />
     </>
   );
 }

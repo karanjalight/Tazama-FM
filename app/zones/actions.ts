@@ -11,7 +11,8 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getRoomViewer } from "@/lib/rooms/viewer";
 import { resolveZoneActor } from "@/lib/business/zone-viewer";
-import { getZoneQueue, type ZoneQueueItem } from "@/lib/business/zone-queue";
+import { getZoneQueue, resolvePlaybackTarget, type ZoneQueueItem } from "@/lib/business/zone-queue";
+import { addToQueue, removeFromQueue, toggleLike } from "@/app/rooms/actions";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 const trackSchema = z.object({
@@ -27,9 +28,20 @@ const trackSchema = z.object({
 const MAX_QUEUE_LENGTH = 100;
 
 export async function suggestZoneTrack(zoneId: string, track: RoomTrack): Promise<{ ok: boolean }> {
-  const actor = await resolveZoneActor();
   const admin = createAdminClient();
-  if (!actor || !admin) return { ok: false };
+  if (!admin) return { ok: false };
+
+  // Only a `synchronized_playback` zone owns a real `audio_zone_queue` — every
+  // other zone (the default) has its covered room advance independently via
+  // the same `room_queue` a standalone branch kiosk already reads, so a
+  // suggestion has to land there instead or it would never actually play
+  // (see `resolvePlaybackTarget`'s own doc comment for the full story).
+  const target = await resolvePlaybackTarget(admin, zoneId);
+  if (target.kind === "none") return { ok: false };
+  if (target.kind === "room") return addToQueue(target.roomId, track);
+
+  const actor = await resolveZoneActor();
+  if (!actor) return { ok: false };
   const parsed = trackSchema.safeParse(track);
   if (!parsed.success) return { ok: false };
 
@@ -49,9 +61,14 @@ export async function suggestZoneTrack(zoneId: string, track: RoomTrack): Promis
   return { ok: !error };
 }
 
-export async function removeZoneQueueItem(queueId: string): Promise<{ ok: boolean }> {
+export async function removeZoneQueueItem(zoneId: string, queueId: string): Promise<{ ok: boolean }> {
   const admin = createAdminClient();
   if (!admin) return { ok: false };
+
+  const target = await resolvePlaybackTarget(admin, zoneId);
+  if (target.kind === "none") return { ok: false };
+  if (target.kind === "room") return removeFromQueue(queueId);
+
   const { data: row } = await admin.from("audio_zone_queue").select("id, added_by").eq("id", queueId).maybeSingle();
   if (!row) return { ok: false };
   const actor = await resolveZoneActor();
@@ -61,9 +78,15 @@ export async function removeZoneQueueItem(queueId: string): Promise<{ ok: boolea
 }
 
 export async function toggleZoneQueueLike(zoneId: string, queueId: string): Promise<{ ok: boolean; liked: boolean }> {
-  const actor = await resolveZoneActor();
   const admin = createAdminClient();
-  if (!actor || !admin) return { ok: false, liked: false };
+  if (!admin) return { ok: false, liked: false };
+
+  const target = await resolvePlaybackTarget(admin, zoneId);
+  if (target.kind === "none") return { ok: false, liked: false };
+  if (target.kind === "room") return toggleLike(target.roomId, queueId);
+
+  const actor = await resolveZoneActor();
+  if (!actor) return { ok: false, liked: false };
 
   const { data: existing } = await admin
     .from("audio_zone_queue_likes")

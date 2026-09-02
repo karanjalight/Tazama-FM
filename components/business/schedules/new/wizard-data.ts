@@ -67,6 +67,7 @@ export const FREQUENCY_OPTIONS = [
 /** `content_frequency_interval_minutes` IS a real integer column — so unlike
  * ad frequency, this option list carries the actual minute value. */
 export const CONTENT_FREQUENCY_OPTIONS: { minutes: number; label: string }[] = [
+  { minutes: 1, label: "Every minute" },
   { minutes: 5, label: "Every 5 minutes" },
   { minutes: 10, label: "Every 10 minutes" },
   { minutes: 15, label: "Every 15 minutes" },

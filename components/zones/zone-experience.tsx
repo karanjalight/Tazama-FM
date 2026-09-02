@@ -131,8 +131,14 @@ export function ZoneExperience({
   React.useEffect(() => {
     if (!yt.isPlaying) return;
     if (pendingSeekRef.current != null) {
-      ytRef.current.seek(pendingSeekRef.current);
+      const target = pendingSeekRef.current;
       pendingSeekRef.current = null;
+      const durationMs = ytRef.current.getDurationMs();
+      // Same desync `applyZonePayload` guards against, reached via a fresh
+      // load instead of an already-loaded track — a Zone Room never drives
+      // playback, so just skip the nonsensical seek (see that guard's own
+      // comment) rather than seeking somewhere past the track's real end.
+      if (!(durationMs > 0 && target > durationMs)) ytRef.current.seek(target);
     }
     if (pauseAfterLoadRef.current) {
       ytRef.current.pause();
@@ -152,6 +158,15 @@ export function ZoneExperience({
         loadTrack(p.track);
         pendingSeekRef.current = expected;
         pauseAfterLoadRef.current = !p.isPlaying;
+        return;
+      }
+      const durationMs = ytRef.current.getDurationMs();
+      if (durationMs > 0 && expected > durationMs) {
+        // `expected` has outgrown the track's own real length — the row is
+        // desynced (see kiosk-room-player.tsx's identical guard for the full
+        // story). A Zone Room joiner never drives playback, so it can't
+        // self-heal this like the kiosk does; just skip the seek and wait
+        // for a real advance (from a kiosk) to correct the row.
         return;
       }
       if (Math.abs(ytRef.current.getPositionMs() - expected) > DRIFT_MS) ytRef.current.seek(expected);

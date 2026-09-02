@@ -176,20 +176,15 @@ export function KioskRoomPlayer({
     requestScheduleContentAdvanceRef.current = handleScheduleContentAdvance;
   });
 
-  // Shared by natural track-end (useYouTube's onEnded) and the explicit
-  // Skip button / remote key below — only a branch kiosk has anything to
-  // skip (no live host queue to hijack, unlike the consumer room mirror).
-  const handleSkip = React.useCallback(() => {
+  // Re-resolves whatever's actually playing the music track for the current
+  // mode (schedule / zone / plain branch) — shared by the explicit skip
+  // below AND by `applyHostPayload`'s own duration guard (a track that's
+  // desynced past its real length needs a genuine server-side advance, not
+  // a local seek, or `started_at` never gets refreshed and it can never
+  // recover on its own).
+  const forceTrackAdvance = React.useCallback(() => {
     if (!room.isBranch) return;
     if (activeScheduleId) {
-      // A schedule currently showing visual content is what the remote's
-      // "skip" should move past — the same instinct as skipping a video ad.
-      // Only when nothing's showing does skip fall through to the schedule's
-      // own music track, unchanged from before.
-      if (scheduleContent) {
-        handleScheduleContentAdvance();
-        return;
-      }
       const scheduleId = activeScheduleId;
       requestScheduleAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
         if (!result) return;
@@ -211,7 +206,22 @@ export function KioskRoomPlayer({
     requestAdvance(room.slug).then((p) => {
       if (p) applyHostPayloadRef.current?.(p);
     });
-  }, [room.isBranch, room.slug, room.zoneId, activeScheduleId, scheduleContent, handleScheduleContentAdvance]);
+  }, [room.isBranch, room.slug, room.zoneId, activeScheduleId]);
+
+  // Shared by natural track-end (useYouTube's onEnded) and the explicit
+  // Skip button / remote key below — only a branch kiosk has anything to
+  // skip (no live host queue to hijack, unlike the consumer room mirror).
+  const handleSkip = React.useCallback(() => {
+    if (!room.isBranch) return;
+    // A schedule currently showing visual content is what the remote's
+    // "skip" should move past — the same instinct as skipping a video ad.
+    // Only when nothing's showing does skip fall through to the music track.
+    if (activeScheduleId && scheduleContent) {
+      handleScheduleContentAdvance();
+      return;
+    }
+    forceTrackAdvance();
+  }, [room.isBranch, activeScheduleId, scheduleContent, handleScheduleContentAdvance, forceTrackAdvance]);
 
   const { api: yt, containerRef } = useYouTube({ onEnded: handleSkip });
 
@@ -253,14 +263,24 @@ export function KioskRoomPlayer({
   React.useEffect(() => {
     if (!yt.isPlaying) return;
     if (pendingSeekRef.current != null) {
-      ytRef.current.seek(pendingSeekRef.current);
+      const target = pendingSeekRef.current;
       pendingSeekRef.current = null;
+      const durationMs = ytRef.current.getDurationMs();
+      if (durationMs > 0 && target > durationMs) {
+        // Same desync this file's other duration guard handles (see
+        // `applyHostPayload`) — just reached via a fresh load instead of an
+        // already-loaded track. Don't seek somewhere nonsensical; request a
+        // real advance so the server refreshes `started_at`.
+        forceTrackAdvance();
+      } else {
+        ytRef.current.seek(target);
+      }
     }
     if (pauseAfterLoadRef.current) {
       ytRef.current.pause();
       pauseAfterLoadRef.current = false;
     }
-  }, [yt.isPlaying]);
+  }, [yt.isPlaying, forceTrackAdvance]);
 
   // Mirror a host snapshot onto this player — identical to the room's listener.
   const applyHostPayload = React.useCallback(
@@ -277,13 +297,29 @@ export function KioskRoomPlayer({
         pauseAfterLoadRef.current = !p.isPlaying;
         return;
       }
+      const durationMs = ytRef.current.getDurationMs();
+      if (durationMs > 0 && expected > durationMs) {
+        // `expected` (elapsed real time since the track's `started_at`)
+        // has outgrown the track's OWN real length — normally impossible
+        // (the track would have naturally ended and advanced well before
+        // this), but it happens once nothing forces a real advance for a
+        // while (e.g. no client was watching, or this exact guard wasn't
+        // here yet and a prior desync already pushed it out of range).
+        // Seeking to a position past the real end just restarts the video
+        // locally without ever telling the server — `started_at` stays
+        // frozen, `expected` keeps growing every tick, and it can never
+        // recover on its own. Request a genuine advance instead, so the
+        // server resolves a fresh track and refreshes `started_at`.
+        forceTrackAdvance();
+        return;
+      }
       if (Math.abs(ytRef.current.getPositionMs() - expected) > DRIFT_MS) {
         ytRef.current.seek(expected);
       }
       if (p.isPlaying && !ytPlayingRef.current) ytRef.current.play();
       if (!p.isPlaying && ytPlayingRef.current) ytRef.current.pause();
     },
-    [loadTrack],
+    [loadTrack, forceTrackAdvance],
   );
 
   React.useEffect(() => {

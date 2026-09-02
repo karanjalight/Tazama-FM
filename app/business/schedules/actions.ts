@@ -478,6 +478,23 @@ export async function replaceScheduleSessions(input: {
     return { ok: false, error: "Sessions saved, but some content/playlist details couldn't be attached." };
   }
 
+  // `replaceSessionsRows` just deleted+reinserted every session (fresh ids,
+  // even for ones staff didn't touch), so a live `schedule_playback` row's
+  // `session_id`/`content_item_id` can now reference something that no
+  // longer exists — without this, the kiosk keeps showing whatever it last
+  // resolved until its own content timer happens to fire (or someone
+  // presses skip), which can be minutes away. Force a fresh content
+  // resolution now so an edit reaches the screen immediately instead —
+  // same idempotent CAS advance a skip already uses, just triggered by the
+  // save itself. Track/music is deliberately left untouched here — a
+  // content-only edit shouldn't also skip whatever's currently playing.
+  if (schedule.status === "active") {
+    const { data: freshPlayback } = await admin.from("schedule_playback").select("version").eq("schedule_id", schedule.id).maybeSingle();
+    if (freshPlayback) {
+      await advanceScheduleContent(admin, schedule.id, freshPlayback.version).catch(() => {});
+    }
+  }
+
   revalidatePath(schedulesPath(input.branchId));
   return { ok: true, warnings };
 }

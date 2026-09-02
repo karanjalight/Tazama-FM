@@ -636,7 +636,11 @@ export function KioskRoomPlayer({
           "pause music while content shows" isn't threaded down to the
           kiosk yet, see the Schedules design notes). Advances on its own
           timer (armContentTimer), independent of the audio track. */}
-      {scheduleContent && <ScheduleContentDisplay content={scheduleContent} className="absolute inset-0 z-5" />}
+      {/* Always mounted (even with content:null) so it can cross-fade its own
+          exit and reveal the video underneath smoothly instead of an abrupt
+          cut — see the component's own doc comment. Layer itself renders
+          nothing and blocks no pointer events once nothing's transitioning. */}
+      <ScheduleContentDisplay content={scheduleContent} className="pointer-events-none absolute inset-0 z-5" />
 
       {/* Reactions sent by anyone who's joined this zone's Zone Room online
           (app/zones/[slug]) — shared component with the room/zone-room UI. */}

@@ -31,5 +31,5 @@ export async function POST(
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 404 });
   if (result.noActiveSession) return NextResponse.json({ noActiveSession: true });
 
-  return NextResponse.json({ track: result.track ?? null, version: result.version });
+  return NextResponse.json({ track: result.track ?? null, version: result.version, sessionEndsInSeconds: result.sessionEndsInSeconds });
 }

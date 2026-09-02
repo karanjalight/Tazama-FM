@@ -43,6 +43,7 @@ export function ScheduleContentDisplay({
           autoPlay
           muted
           playsInline
+          preload="auto"
           className="size-full object-contain duration-700 animate-in fade-in"
         />
       ) : content.contentType === "image" && content.url ? (

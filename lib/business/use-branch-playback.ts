@@ -249,6 +249,12 @@ interface SchedulePlaybackRow {
   content: ScheduleContentSnapshot | null;
   position_ms: number;
   is_playing: boolean;
+  /** When the *track* last actually changed — NOT `updated_at`, which also
+   * moves on a content-only write (they share this one row). Using
+   * `updated_at` here made a content advance a few seconds into a song look
+   * like the song had just restarted, since `Date.now() - at` would come out
+   * near zero and get hard-seeked back to `position_ms` (effectively 0). */
+  started_at: string | null;
   version: number;
   updated_at: string;
 }
@@ -280,7 +286,12 @@ export function useSchedulePlayback(
           const row = payload.new as SchedulePlaybackRow | undefined;
           if (!row) return;
           cbRef.current(
-            { track: row.track, positionMs: row.position_ms, isPlaying: row.is_playing, at: new Date(row.updated_at).getTime() },
+            {
+              track: row.track,
+              positionMs: row.position_ms,
+              isPlaying: row.is_playing,
+              at: new Date(row.started_at ?? row.updated_at).getTime(),
+            },
             row.content,
             row.version,
           );
@@ -297,18 +308,24 @@ export function useSchedulePlayback(
 export async function requestScheduleAdvance(
   scheduleId: string,
   reportedVersion: number,
-): Promise<{ payload: PlaybackPayload | null; version: number } | null> {
+): Promise<{ payload: PlaybackPayload | null; version: number; sessionEndsInSeconds: number | null } | null> {
   try {
     const res = await fetch(`/api/business/schedules/${scheduleId}/advance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportedVersion }),
     });
-    const data = (await res.json()) as { track?: RoomTrack | null; version?: number; noActiveSession?: boolean };
+    const data = (await res.json()) as {
+      track?: RoomTrack | null;
+      version?: number;
+      noActiveSession?: boolean;
+      sessionEndsInSeconds?: number;
+    };
     if (typeof data.version !== "number") return null;
     return {
       payload: data.track ? { track: data.track, positionMs: 0, isPlaying: true, at: Date.now() } : null,
       version: data.version,
+      sessionEndsInSeconds: data.sessionEndsInSeconds ?? null,
     };
   } catch {
     return null;
@@ -318,16 +335,16 @@ export async function requestScheduleAdvance(
 export async function requestScheduleContentAdvance(
   scheduleId: string,
   reportedVersion: number,
-): Promise<{ content: ScheduleContentSnapshot | null; version: number } | null> {
+): Promise<{ content: ScheduleContentSnapshot | null; version: number; sessionEndsInSeconds: number | null } | null> {
   try {
     const res = await fetch(`/api/business/schedules/${scheduleId}/advance-content`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportedVersion }),
     });
-    const data = (await res.json()) as { content?: ScheduleContentSnapshot | null; version?: number };
+    const data = (await res.json()) as { content?: ScheduleContentSnapshot | null; version?: number; sessionEndsInSeconds?: number };
     if (typeof data.version !== "number") return null;
-    return { content: data.content ?? null, version: data.version };
+    return { content: data.content ?? null, version: data.version, sessionEndsInSeconds: data.sessionEndsInSeconds ?? null };
   } catch {
     return null;
   }

@@ -414,6 +414,7 @@ async function playbackByScheduleId(
     map.set(row.schedule_id, {
       sessionId: row.session_id,
       track: row.track,
+      startedAt: row.started_at,
       contentItemId: row.content_item_id,
       content: row.content,
       contentStartedAt: row.content_started_at,

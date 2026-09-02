@@ -34,6 +34,7 @@ import {
   useBranchPlayback,
   useZonePlayback,
   useSchedulePlayback,
+  requestScheduleAdvance,
   requestScheduleContentAdvance,
   type ScheduleContentSnapshot,
 } from "@/lib/business/use-branch-playback";
@@ -49,6 +50,14 @@ import type { PlaybackPayload } from "@/lib/rooms/channel";
 const DRIFT_MS = 1500;
 const SCHEDULE_POLL_MS = 25_000;
 const FALLBACK_CONTENT_SECONDS = 30;
+/** Slack added on top of a computed "seconds until session end" before
+ * arming a timer from it — see kiosk-room-player.tsx's identical constant. */
+const SESSION_BOUNDARY_BUFFER_SECONDS = 2;
+/** "Recheck" duration armed when the current session has no visual content
+ * at all — deliberately huge so only the session-boundary cap in
+ * `armContentTimer` can make this fire soon; see kiosk-room-player.tsx's
+ * identical constant for the full reasoning. */
+const NO_CONTENT_RECHECK_SECONDS = 24 * 60 * 60;
 
 export function ZoneExperience({
   zone,
@@ -91,9 +100,15 @@ export function ZoneExperience({
   const zoneVersionRef = React.useRef(zone.playback?.version ?? 0);
   const scheduleVersionRef = React.useRef(0);
   const contentTimerRef = React.useRef<number | null>(null);
+  // Freshest known "seconds until the current session ends" — caps a
+  // content item's own duration so a session boundary is noticed on time
+  // instead of only whenever the previously-showing item's own duration
+  // happens to expire (see schedule-playback.ts / kiosk-room-player.tsx,
+  // which mirrors this same mechanism).
+  const sessionEndsInSecondsRef = React.useRef<number | null>(null);
   const reactionIdRef = React.useRef(0);
   const queueRef = React.useRef(queue);
-  const requestScheduleContentAdvanceRef = React.useRef<(() => void) | null>(null);
+  const requestScheduleContentAdvanceRef = React.useRef<((alsoRecheckTrack?: boolean) => void) | null>(null);
 
   React.useEffect(() => void (syncedRef.current = synced), [synced]);
   React.useEffect(() => void (queueRef.current = queue), [queue]);
@@ -172,20 +187,38 @@ export function ZoneExperience({
 
   const armContentTimer = React.useCallback((seconds: number) => {
     if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
+    const requested = Math.max(1, seconds);
+    const boundary = sessionEndsInSecondsRef.current;
+    const boundaryWithSlack = boundary != null ? boundary + SESSION_BOUNDARY_BUFFER_SECONDS : null;
+    const boundaryIsTighter = boundaryWithSlack != null && boundaryWithSlack < requested;
+    const effective = boundaryIsTighter ? boundaryWithSlack : requested;
     contentTimerRef.current = window.setTimeout(() => {
-      requestScheduleContentAdvanceRef.current?.();
-    }, Math.max(1, seconds) * 1000);
+      requestScheduleContentAdvanceRef.current?.(boundaryIsTighter);
+    }, effective * 1000);
   }, []);
 
-  const handleScheduleContentAdvance = React.useCallback(() => {
-    if (!activeScheduleId) return;
-    requestScheduleContentAdvance(activeScheduleId, scheduleVersionRef.current).then((result) => {
-      if (!result) return;
-      scheduleVersionRef.current = result.version;
-      setScheduleContent(result.content);
-      armContentTimer(result.content?.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
-    });
-  }, [activeScheduleId, armContentTimer]);
+  const handleScheduleContentAdvance = React.useCallback(
+    (alsoRecheckTrack?: boolean) => {
+      if (!activeScheduleId) return;
+      const scheduleId = activeScheduleId;
+      requestScheduleContentAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
+        if (!result) return;
+        scheduleVersionRef.current = result.version;
+        sessionEndsInSecondsRef.current = result.sessionEndsInSeconds;
+        setScheduleContent(result.content);
+        armContentTimer(result.content ? (result.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS);
+      });
+      if (alsoRecheckTrack) {
+        requestScheduleAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
+          if (!result) return;
+          scheduleVersionRef.current = result.version;
+          sessionEndsInSecondsRef.current = result.sessionEndsInSeconds;
+          if (result.payload) applyZonePayloadRef.current(result.payload);
+        });
+      }
+    },
+    [activeScheduleId, armContentTimer],
+  );
   React.useEffect(() => void (requestScheduleContentAdvanceRef.current = handleScheduleContentAdvance));
 
   useSchedulePlayback(activeScheduleId ?? "", joined && !!activeScheduleId, (p, content, version) => {
@@ -193,7 +226,7 @@ export function ZoneExperience({
     handlePlayback(p);
     if (content?.contentItemId !== scheduleContent?.contentItemId) {
       setScheduleContent(content);
-      if (content) armContentTimer(content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
+      armContentTimer(content ? (content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS);
     }
   });
 
@@ -215,23 +248,32 @@ export function ZoneExperience({
             isPlaying: boolean;
             positionMs: number;
             version: number;
+            // When the *track* last changed — NOT `updatedAt`, which also
+            // moves on a content-only write (see use-branch-playback.ts's
+            // identical note on `useSchedulePlayback`).
+            startedAt: string | null;
             updatedAt: string;
           } | null;
+          sessionEndsInSeconds?: number;
         };
         if (cancelled) return;
         const nextId = data.scheduleId ?? null;
+        // Refreshed every tick (not just on schedule change) so the content
+        // timer's session-boundary cap never goes more than ~25s stale.
+        sessionEndsInSecondsRef.current = nextId ? (data.sessionEndsInSeconds ?? null) : null;
         setActiveScheduleId((current) => {
           if (current === nextId) return current;
           if (nextId && data.playback) {
             scheduleVersionRef.current = data.playback.version;
             setScheduleContent(data.playback.content);
-            if (data.playback.content) armContentTimer(data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
-            else if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
+            armContentTimer(
+              data.playback.content ? (data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS,
+            );
             applyZonePayloadRef.current({
               track: data.playback.track,
               positionMs: data.playback.positionMs,
               isPlaying: data.playback.isPlaying,
-              at: new Date(data.playback.updatedAt).getTime(),
+              at: new Date(data.playback.startedAt ?? data.playback.updatedAt).getTime(),
             });
           } else if (!nextId) {
             setScheduleContent(null);

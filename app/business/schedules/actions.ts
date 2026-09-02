@@ -635,7 +635,13 @@ export async function setSchedulePlayback(input: {
   const { branch, schedule, admin } = ctx;
 
   const positionMs = computeFrozenPosition(
-    schedule.playback ? { positionMs: schedule.playback.positionMs, isPlaying: schedule.playback.isPlaying, updatedAt: schedule.playback.updatedAt } : null,
+    // `startedAt`, not `updatedAt` — this row's `updated_at` also moves on a
+    // content-only advance (they share one row), which would make this
+    // freeze think the track had barely played since a recent content tick
+    // and undercount the real elapsed time.
+    schedule.playback
+      ? { positionMs: schedule.playback.positionMs, isPlaying: schedule.playback.isPlaying, updatedAt: schedule.playback.startedAt ?? schedule.playback.updatedAt }
+      : null,
     input.isPlaying,
     Date.now(),
   );

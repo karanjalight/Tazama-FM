@@ -41,3 +41,21 @@ export function currentHHMMInTimezone(timezone: string, now: Date = new Date()):
     return new Intl.DateTimeFormat("en-GB", opts).format(now);
   }
 }
+
+/**
+ * How long until `session`'s own end time, in whole seconds — the boundary a
+ * kiosk/zone-room needs to know about *in addition* to whatever's currently
+ * showing's own duration. Without this, a session change (e.g. a signage
+ * block ending and handing back to the next session's playlist) only ever
+ * gets noticed whenever the *previous* content item's own `displaySeconds`
+ * timer happens to expire — which can be much later than the session's real
+ * end time if a block was resized/edited after its content's duration was
+ * set. Minute-granularity like the rest of the schedule model (session times
+ * are "HH:MM" only) — callers should add a small buffer before arming a
+ * timer from this so rounding never fires a fraction of a second early.
+ */
+export function secondsUntilSessionEnd(session: ScheduleSession, timezone: string, now: Date = new Date()): number {
+  const nowMinutes = toMinutes(currentHHMMInTimezone(timezone, now));
+  const endMinutes = toMinutes(session.endTime);
+  return Math.max(0, endMinutes - nowMinutes) * 60;
+}

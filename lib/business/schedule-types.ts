@@ -110,6 +110,13 @@ export interface ScheduleContentSnapshot {
 export interface SchedulePlaybackState {
   sessionId: string | null;
   track: RoomTrack | null;
+  /** When the *track* (not content) last actually changed — distinct from
+   * `updatedAt`, which also moves on a content-only write. A client must use
+   * this (not `updatedAt`) to compute the track's expected playback
+   * position, or a content advance a few seconds into a song would look
+   * like the song itself just restarted (see kiosk-room-player.tsx /
+   * zone-experience.tsx's `applyHostPayload` math). */
+  startedAt: string | null;
   contentItemId: string | null;
   content: ScheduleContentSnapshot | null;
   contentStartedAt: string | null;

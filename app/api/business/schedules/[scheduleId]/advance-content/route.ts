@@ -34,5 +34,6 @@ export async function POST(
     contentItemId: result.contentItemId ?? null,
     content: result.content ?? null,
     version: result.version,
+    sessionEndsInSeconds: result.sessionEndsInSeconds,
   });
 }

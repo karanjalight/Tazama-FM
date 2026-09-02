@@ -12,7 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getScheduleById } from "@/lib/business/schedule-queries";
-import { resolveCurrentSession, currentHHMMInTimezone } from "@/lib/business/schedule-session-resolver";
+import { resolveCurrentSession, currentHHMMInTimezone, secondsUntilSessionEnd } from "@/lib/business/schedule-session-resolver";
 import { nextPlaylistPosition } from "@/lib/business/playlist-position";
 import type { RoomTrack } from "@/lib/rooms/types";
 import type { ScheduleSession, ScheduleContentSnapshot } from "@/lib/business/schedule-types";
@@ -23,6 +23,14 @@ export type AdvanceScheduleResult =
       ok: true;
       noActiveSession: false;
       version: number;
+      /** Seconds until the *current* session's own end time — lets the
+       * client cap its next-cycle timer so a session boundary is noticed on
+       * time instead of only whenever the previously-showing item's own
+       * duration happens to expire. Null only if the schedule/session
+       * lookup itself failed in a way that shouldn't happen given the
+       * guards above (kept optional rather than widening the type for a
+       * case that can't occur in practice). */
+      sessionEndsInSeconds: number;
       track?: RoomTrack | null;
       contentItemId?: string | null;
       content?: ScheduleContentSnapshot | null;
@@ -31,13 +39,20 @@ export type AdvanceScheduleResult =
 
 async function loadCurrentSession(
   scheduleId: string,
-): Promise<{ session: ScheduleSession; version: number } | { session: null; version: number } | null> {
+): Promise<
+  | { session: ScheduleSession; version: number; sessionEndsInSeconds: number }
+  | { session: null; version: number; sessionEndsInSeconds: number }
+  | null
+> {
   const schedule = await getScheduleById(scheduleId);
   if (!schedule || schedule.status !== "active") return null;
   const nowHHMM = currentHHMMInTimezone(schedule.timezone);
   const session = resolveCurrentSession(schedule.sessions, nowHHMM);
   const version = schedule.playback?.version ?? 0;
-  return { session, version } as { session: ScheduleSession; version: number } | { session: null; version: number };
+  const sessionEndsInSeconds = session ? secondsUntilSessionEnd(session, schedule.timezone) : 0;
+  return { session, version, sessionEndsInSeconds } as
+    | { session: ScheduleSession; version: number; sessionEndsInSeconds: number }
+    | { session: null; version: number; sessionEndsInSeconds: number };
 }
 
 /** Advances the schedule's music track. No-op (reports `noActiveSession`)
@@ -52,7 +67,7 @@ export async function advanceScheduleTrack(
 ): Promise<AdvanceScheduleResult> {
   const loaded = await loadCurrentSession(scheduleId);
   if (!loaded) return { ok: false, error: "Schedule not active." };
-  const { session, version } = loaded;
+  const { session, version, sessionEndsInSeconds } = loaded;
   if (!session) return { ok: true, noActiveSession: true };
 
   if (version !== reportedVersion) {
@@ -61,7 +76,13 @@ export async function advanceScheduleTrack(
       .select("track, version")
       .eq("schedule_id", scheduleId)
       .maybeSingle();
-    return { ok: true, noActiveSession: false, version: current?.version ?? version, track: (current?.track as RoomTrack | null) ?? null };
+    return {
+      ok: true,
+      noActiveSession: false,
+      version: current?.version ?? version,
+      sessionEndsInSeconds,
+      track: (current?.track as RoomTrack | null) ?? null,
+    };
   }
 
   if (!session.playlistEnabled || !session.songs.length) {
@@ -70,7 +91,7 @@ export async function advanceScheduleTrack(
       .update({ session_id: session.id, track: null, is_playing: false, position_ms: 0, version: reportedVersion + 1, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
       .eq("version", reportedVersion);
-    return { ok: true, noActiveSession: false, version: reportedVersion + 1, track: null };
+    return { ok: true, noActiveSession: false, version: reportedVersion + 1, sessionEndsInSeconds, track: null };
   }
 
   const { data: current } = await admin.from("schedule_playback").select("track").eq("schedule_id", scheduleId).maybeSingle();
@@ -99,9 +120,15 @@ export async function advanceScheduleTrack(
   if (error) return { ok: false, error: "Could not advance schedule playback." };
   if (!updated) {
     const { data: latest } = await admin.from("schedule_playback").select("track, version").eq("schedule_id", scheduleId).maybeSingle();
-    return { ok: true, noActiveSession: false, version: latest?.version ?? reportedVersion, track: (latest?.track as RoomTrack | null) ?? null };
+    return {
+      ok: true,
+      noActiveSession: false,
+      version: latest?.version ?? reportedVersion,
+      sessionEndsInSeconds,
+      track: (latest?.track as RoomTrack | null) ?? null,
+    };
   }
-  return { ok: true, noActiveSession: false, version: updated.version, track: updated.track as RoomTrack | null };
+  return { ok: true, noActiveSession: false, version: updated.version, sessionEndsInSeconds, track: updated.track as RoomTrack | null };
 }
 
 /** Advances the schedule's visual content item. `once` freezes on the last
@@ -114,16 +141,31 @@ export async function advanceScheduleContent(
 ): Promise<AdvanceScheduleResult> {
   const loaded = await loadCurrentSession(scheduleId);
   if (!loaded) return { ok: false, error: "Schedule not active." };
-  const { session, version } = loaded;
+  const { session, version, sessionEndsInSeconds } = loaded;
   if (!session) return { ok: true, noActiveSession: true };
 
   if (version !== reportedVersion) {
+    // A lost race must still hand back the REAL current content, not just
+    // its id — this used to select only `content_item_id`, so the caller's
+    // `content` came back `undefined` (JSON-serialized as absent, then
+    // normalized to `null` client-side) even though the schedule was still
+    // genuinely showing something. That blanked the kiosk's visual overlay
+    // to nothing every time this call happened to race the track's own
+    // advance (which shares this same version column) — a real, frequent
+    // cause of content flickering/disappearing early.
     const { data: current } = await admin
       .from("schedule_playback")
-      .select("content_item_id, version")
+      .select("content_item_id, content, version")
       .eq("schedule_id", scheduleId)
       .maybeSingle();
-    return { ok: true, noActiveSession: false, version: current?.version ?? version, contentItemId: current?.content_item_id ?? null };
+    return {
+      ok: true,
+      noActiveSession: false,
+      version: current?.version ?? version,
+      sessionEndsInSeconds,
+      contentItemId: current?.content_item_id ?? null,
+      content: (current?.content as ScheduleContentSnapshot | null) ?? null,
+    };
   }
 
   if (!session.contentEnabled || !session.content.length) {
@@ -132,7 +174,7 @@ export async function advanceScheduleContent(
       .update({ session_id: session.id, content_item_id: null, content: null, content_started_at: null, version: reportedVersion + 1, updated_at: new Date().toISOString() })
       .eq("schedule_id", scheduleId)
       .eq("version", reportedVersion);
-    return { ok: true, noActiveSession: false, version: reportedVersion + 1, contentItemId: null, content: null };
+    return { ok: true, noActiveSession: false, version: reportedVersion + 1, sessionEndsInSeconds, contentItemId: null, content: null };
   }
 
   const { data: current } = await admin.from("schedule_playback").select("content_item_id").eq("schedule_id", scheduleId).maybeSingle();
@@ -177,6 +219,7 @@ export async function advanceScheduleContent(
       ok: true,
       noActiveSession: false,
       version: latest?.version ?? reportedVersion,
+      sessionEndsInSeconds,
       contentItemId: latest?.content_item_id ?? null,
       content: (latest?.content as ScheduleContentSnapshot | null) ?? null,
     };
@@ -185,6 +228,7 @@ export async function advanceScheduleContent(
     ok: true,
     noActiveSession: false,
     version: updated.version,
+    sessionEndsInSeconds,
     contentItemId: updated.content_item_id,
     content: updated.content as ScheduleContentSnapshot | null,
   };

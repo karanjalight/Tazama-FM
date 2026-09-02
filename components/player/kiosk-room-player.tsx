@@ -31,6 +31,21 @@ const SCHEDULE_POLL_MS = 25_000;
  * natural length (shouldn't happen — the wizard requires one for images —
  * but the kiosk must never get stuck showing something forever). */
 const FALLBACK_CONTENT_SECONDS = 30;
+/** Slack added on top of a computed "seconds until session end" before
+ * arming a timer from it — session boundaries are minute-granular
+ * ("HH:MM" start/end times), so a little buffer keeps rounding from ever
+ * firing a hair before the server itself would agree the session changed. */
+const SESSION_BOUNDARY_BUFFER_SECONDS = 2;
+/** "Recheck" duration armed when the current session has no visual content
+ * at all (a pure-music session) — deliberately huge so the *only* thing
+ * that can make this timer actually fire soon is the session-boundary cap
+ * in `armContentTimer` above. Without arming anything in this case, a
+ * session change between two content-less sessions (a different playlist
+ * kicking in, say) had no timer of its own to notice it by — it could only
+ * ever be caught by a song naturally ending or by re-polling for a
+ * schedule-level (not session-level) change, both of which can lag well
+ * past the real boundary. */
+const NO_CONTENT_RECHECK_SECONDS = 24 * 60 * 60;
 
 /** Max drift before we hard-seek to match the host (mirrors the room). */
 const DRIFT_MS = 1500;
@@ -79,6 +94,12 @@ export function KioskRoomPlayer({
   const [scheduleContent, setScheduleContent] = React.useState<ScheduleContentSnapshot | null>(null);
   const scheduleVersionRef = React.useRef(0);
   const contentTimerRef = React.useRef<number | null>(null);
+  // Freshest known "seconds until the current session ends" (from the
+  // active-schedule poll or either advance response) — lets `armContentTimer`
+  // cap a content item's own duration by the session boundary, so a session
+  // change is noticed on time instead of only whenever the previously-showing
+  // item's own duration happens to expire (see schedule-playback.ts).
+  const sessionEndsInSecondsRef = React.useRef<number | null>(null);
   // Zone-room reactions (see components/zones/zone-experience.tsx) rendered
   // on the physical screen — this kiosk never joins the zone's presence
   // roster (`joined: false` below), it only listens.
@@ -103,16 +124,77 @@ export function KioskRoomPlayer({
 
   React.useEffect(() => void (syncedRef.current = synced), [synced]);
 
+  // Declared ahead of `handleSkip` below (which calls it directly) rather
+  // than only from a forward-reference ref — `armContentTimer`'s own
+  // setTimeout still goes through `requestScheduleContentAdvanceRef` since
+  // it's a stable (`[]`-deps) callback that outlives any one render.
+  const requestScheduleContentAdvanceRef = React.useRef<((alsoRecheckTrack?: boolean) => void) | null>(null);
+
+  // Caps a content item's own display duration by the current session's
+  // real end time (+ a couple seconds of slack for minute-granularity
+  // rounding), so a session boundary always gets checked on time instead of
+  // only whenever the previously-showing item's own duration happens to run
+  // out. When the boundary is what actually triggers the timer (not the
+  // item's own duration), the fired callback also forces a track recheck —
+  // a session change can swap the music too, not just the visual content.
+  const armContentTimer = React.useCallback((seconds: number) => {
+    if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
+    const requested = Math.max(1, seconds);
+    const boundary = sessionEndsInSecondsRef.current;
+    const boundaryWithSlack = boundary != null ? boundary + SESSION_BOUNDARY_BUFFER_SECONDS : null;
+    const boundaryIsTighter = boundaryWithSlack != null && boundaryWithSlack < requested;
+    const effective = boundaryIsTighter ? boundaryWithSlack : requested;
+    contentTimerRef.current = window.setTimeout(() => {
+      requestScheduleContentAdvanceRef.current?.(boundaryIsTighter);
+    }, effective * 1000);
+  }, []);
+
+  const handleScheduleContentAdvance = React.useCallback(
+    (alsoRecheckTrack?: boolean) => {
+      if (!activeScheduleId) return;
+      const scheduleId = activeScheduleId;
+      requestScheduleContentAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
+        if (!result) return;
+        scheduleVersionRef.current = result.version;
+        sessionEndsInSecondsRef.current = result.sessionEndsInSeconds;
+        setScheduleContent(result.content);
+        armContentTimer(result.content ? (result.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS);
+      });
+      if (alsoRecheckTrack) {
+        requestScheduleAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
+          if (!result) return;
+          scheduleVersionRef.current = result.version;
+          sessionEndsInSecondsRef.current = result.sessionEndsInSeconds;
+          if (result.payload) applyHostPayloadRef.current?.(result.payload);
+        });
+      }
+    },
+    [activeScheduleId, armContentTimer],
+  );
+
+  React.useEffect(() => {
+    requestScheduleContentAdvanceRef.current = handleScheduleContentAdvance;
+  });
+
   // Shared by natural track-end (useYouTube's onEnded) and the explicit
   // Skip button / remote key below — only a branch kiosk has anything to
   // skip (no live host queue to hijack, unlike the consumer room mirror).
   const handleSkip = React.useCallback(() => {
     if (!room.isBranch) return;
     if (activeScheduleId) {
+      // A schedule currently showing visual content is what the remote's
+      // "skip" should move past — the same instinct as skipping a video ad.
+      // Only when nothing's showing does skip fall through to the schedule's
+      // own music track, unchanged from before.
+      if (scheduleContent) {
+        handleScheduleContentAdvance();
+        return;
+      }
       const scheduleId = activeScheduleId;
       requestScheduleAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
         if (!result) return;
         scheduleVersionRef.current = result.version;
+        sessionEndsInSecondsRef.current = result.sessionEndsInSeconds;
         if (result.payload) applyHostPayloadRef.current?.(result.payload);
       });
       return;
@@ -129,7 +211,7 @@ export function KioskRoomPlayer({
     requestAdvance(room.slug).then((p) => {
       if (p) applyHostPayloadRef.current?.(p);
     });
-  }, [room.isBranch, room.slug, room.zoneId, activeScheduleId]);
+  }, [room.isBranch, room.slug, room.zoneId, activeScheduleId, scheduleContent, handleScheduleContentAdvance]);
 
   const { api: yt, containerRef } = useYouTube({ onEnded: handleSkip });
 
@@ -230,39 +312,12 @@ export function KioskRoomPlayer({
     handlePlayback(p);
   });
 
-  // Highest-priority source — see the poll effect below for how
-  // `activeScheduleId` gets set/cleared. Disabling the two hooks above
-  // whenever this one is active is what makes "only one source subscribed
-  // at a time" true by construction, not by extra coordination logic.
-  const requestScheduleContentAdvanceRef = React.useRef<(() => void) | null>(null);
-
-  const armContentTimer = React.useCallback((seconds: number) => {
-    if (contentTimerRef.current) window.clearTimeout(contentTimerRef.current);
-    contentTimerRef.current = window.setTimeout(() => {
-      requestScheduleContentAdvanceRef.current?.();
-    }, Math.max(1, seconds) * 1000);
-  }, []);
-
-  const handleScheduleContentAdvance = React.useCallback(() => {
-    if (!activeScheduleId) return;
-    requestScheduleContentAdvance(activeScheduleId, scheduleVersionRef.current).then((result) => {
-      if (!result) return;
-      scheduleVersionRef.current = result.version;
-      setScheduleContent(result.content);
-      armContentTimer(result.content?.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
-    });
-  }, [activeScheduleId, armContentTimer]);
-
-  React.useEffect(() => {
-    requestScheduleContentAdvanceRef.current = handleScheduleContentAdvance;
-  });
-
   useSchedulePlayback(activeScheduleId ?? "", !!activeScheduleId, (p, content, version) => {
     scheduleVersionRef.current = version;
     handlePlayback(p);
     if (content?.contentItemId !== scheduleContent?.contentItemId) {
       setScheduleContent(content);
-      if (content) armContentTimer(content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
+      armContentTimer(content ? (content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS);
     }
   });
 
@@ -308,26 +363,33 @@ export function KioskRoomPlayer({
             isPlaying: boolean;
             positionMs: number;
             version: number;
+            // When the *track* last changed — NOT `updatedAt`, which also
+            // moves on a content-only write (see use-branch-playback.ts's
+            // identical note on `useSchedulePlayback`).
+            startedAt: string | null;
             updatedAt: string;
           } | null;
+          sessionEndsInSeconds?: number;
         };
         if (cancelled) return;
         const nextId = data.scheduleId ?? null;
+        // Refreshed every tick (not just on schedule change) so the content
+        // timer's session-boundary cap never goes more than ~25s stale even
+        // when nothing else about the schedule changed.
+        sessionEndsInSecondsRef.current = nextId ? (data.sessionEndsInSeconds ?? null) : null;
         setActiveScheduleId((current) => {
           if (current === nextId) return current;
           if (nextId && data.playback) {
             scheduleVersionRef.current = data.playback.version;
             setScheduleContent(data.playback.content);
-            if (data.playback.content) {
-              armContentTimer(data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS);
-            } else if (contentTimerRef.current) {
-              window.clearTimeout(contentTimerRef.current);
-            }
+            armContentTimer(
+              data.playback.content ? (data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS,
+            );
             applyHostPayloadRef.current?.({
               track: data.playback.track,
               positionMs: data.playback.positionMs,
               isPlaying: data.playback.isPlaying,
-              at: new Date(data.playback.updatedAt).getTime(),
+              at: new Date(data.playback.startedAt ?? data.playback.updatedAt).getTime(),
             });
           } else if (!nextId) {
             setScheduleContent(null);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { listActiveSchedulesCoveringRoom } from "@/lib/business/schedule-queries";
-import { resolveCurrentSession, currentHHMMInTimezone } from "@/lib/business/schedule-session-resolver";
+import { resolveCurrentSession, currentHHMMInTimezone, secondsUntilSessionEnd } from "@/lib/business/schedule-session-resolver";
 
 /**
  * Kiosk-facing, unauthenticated — polled by the kiosk player (~25s cadence,
@@ -35,6 +35,11 @@ export async function GET(
         // cases (both server-rendered up front; this one is discovered at
         // runtime via this very poll, so it has to carry its own snapshot).
         playback: schedule.playback,
+        // How long until THIS session's own end time — the kiosk uses this
+        // to cap its content/track advance timers so a session boundary is
+        // noticed on time instead of only whenever whatever's already
+        // showing happens to finish on its own (see schedule-playback.ts).
+        sessionEndsInSeconds: secondsUntilSessionEnd(session, schedule.timezone),
       });
     }
   }

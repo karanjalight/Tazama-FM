@@ -111,7 +111,10 @@ export function NowPlayingCard({
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center gap-3">
+      {/* Artwork + title always get their own row — a fixed, predictable
+          layout beats letting flex-wrap decide where the controls spill to
+          once the title's too long for one line to hold everything. */}
+      <div className="flex items-center gap-3">
         <Cover
           title={track?.title ?? "Nothing playing"}
           src={track?.thumbnailUrl ?? undefined}
@@ -122,45 +125,48 @@ export function NowPlayingCard({
           <p className="truncate text-sm font-semibold text-foreground">{track?.title ?? "Nothing playing yet"}</p>
           <p className="truncate text-xs text-muted-foreground">{track?.artist ?? "Waiting for a session's playlist to start"}</p>
         </div>
-
-        {canControl && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePlayPause}
-              disabled={pending || !track}
-              aria-label={isPlaying ? "Pause" : "Play"}
-              className="grid size-10 place-items-center rounded-full bg-violet-600 text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
-            >
-              {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-            </button>
-            <button
-              type="button"
-              onClick={handleSkipTrack}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <SkipForward className="size-3.5" />
-              Skip track
-            </button>
-            <button
-              type="button"
-              onClick={handleSkipContent}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <SkipForward className="size-3.5" />
-              Skip content
-            </button>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <Search className="size-3.5" />
-              Search &amp; play
-            </button>
-          </div>
-        )}
       </div>
+
+      {canControl && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handlePlayPause}
+            disabled={pending || !track}
+            aria-label={isPlaying ? "Pause" : "Play"}
+            className="grid size-10 shrink-0 place-items-center rounded-full bg-violet-600 text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+          >
+            {isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={handleSkipTrack}
+            aria-label="Skip track"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            <SkipForward className="size-3.5" />
+            <span className="hidden sm:inline">Skip track</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSkipContent}
+            aria-label="Skip content"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            <SkipForward className="size-3.5" />
+            <span className="hidden sm:inline">Skip content</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            aria-label="Search and play a song"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          >
+            <Search className="size-3.5" />
+            <span className="hidden sm:inline">Search &amp; play</span>
+          </button>
+        </div>
+      )}
 
       {(content || countdown != null) && (
         <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-border bg-muted/30 p-2.5">

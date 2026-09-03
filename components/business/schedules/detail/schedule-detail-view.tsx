@@ -67,8 +67,8 @@ function SessionCard({
   return (
     <div className="rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <p className="font-medium text-foreground">{session.label}</p>
+        <div className="min-w-0">
+          <p className="truncate font-medium text-foreground">{session.label}</p>
           <p className="text-xs text-muted-foreground">
             {session.startTime} – {session.endTime}
           </p>
@@ -76,7 +76,7 @@ function SessionCard({
         <button
           type="button"
           onClick={() => onEdit(session)}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-input px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-input px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
         >
           <Pencil className="size-3.5" />
           Edit
@@ -85,11 +85,11 @@ function SessionCard({
 
       {session.playlistEnabled && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <p className="text-sm font-semibold text-foreground">Playlist</p>
             <span
               className={cn(
-                "text-xs font-medium",
+                "shrink-0 text-xs font-medium",
                 playlist.status === "short" ? "text-rose-400" : playlist.status === "over" ? "text-amber-400" : "text-emerald-400",
               )}
             >
@@ -102,8 +102,10 @@ function SessionCard({
                 <li key={s.id} className="flex items-center gap-2.5 text-sm">
                   <span className="w-5 shrink-0 text-right text-xs text-muted-foreground">{i + 1}</span>
                   <Cover title={s.track.title} src={s.track.thumbnailUrl ?? undefined} sizes="36px" className="size-9 shrink-0 rounded-lg" />
-                  <span className="min-w-0 flex-1 truncate text-foreground">{s.track.title}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{s.track.artist ?? "Unknown"}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-foreground">{s.track.title}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{s.track.artist ?? "Unknown"}</span>
+                  </span>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">
                     {s.track.durationSeconds != null ? formatDurationSeconds(s.track.durationSeconds) : "—"}
                   </span>
@@ -118,12 +120,12 @@ function SessionCard({
 
       {session.contentEnabled && (
         <div className="mt-3 border-t border-border pt-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
             <p className="text-sm font-semibold text-foreground">Content</p>
             {content.requiredSeconds !== null && (
               <span
                 className={cn(
-                  "text-xs font-medium",
+                  "shrink-0 text-xs font-medium",
                   content.status === "short" ? "text-rose-400" : content.status === "over" ? "text-amber-400" : "text-emerald-400",
                 )}
               >
@@ -292,12 +294,12 @@ export function ScheduleDetailView({
       </nav>
 
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">{schedule.name}</h1>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">{schedule.name}</h1>
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+                "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
                 schedule.status === "active"
                   ? "bg-emerald-500/15 text-emerald-400"
                   : schedule.status === "paused"
@@ -313,7 +315,7 @@ export function ScheduleDetailView({
             {[...schedule.branchNames, ...schedule.roomNames].join(", ") || "No target selected"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
             onClick={handleDelete}
@@ -357,9 +359,6 @@ export function ScheduleDetailView({
 
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Day Schedule</h2>
-        <p className="text-xs text-muted-foreground">
-          Click or drag an empty gap below to place signage content, drag a block to move it, or drag its edge to resize it.
-        </p>
         <DayTimeline
           sessions={clientSessions}
           onSessionClick={setEditingSession}

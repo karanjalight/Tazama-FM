@@ -11,8 +11,7 @@ import { getContentItemsByIds } from "@/lib/business/content-queries";
 import { getTrackDurations, ensureGenreSeeded, upsertTracksFromYouTube, type Track } from "@/lib/tracks";
 import type { YouTubeTrack } from "@/lib/youtube/search";
 import { playlistDurationSummary, contentDurationSummary, formatDurationSeconds } from "@/lib/business/schedule-duration";
-import { advanceScheduleTrack, advanceScheduleContent, advanceScheduleTrackTo } from "@/lib/business/schedule-playback";
-import type { RoomTrack } from "@/lib/rooms/types";
+import { advanceScheduleTrack, advanceScheduleContent } from "@/lib/business/schedule-playback";
 import { computeFrozenPosition } from "@/lib/business/playback-freeze";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ActionResult } from "@/lib/business/types";
@@ -684,33 +683,6 @@ export async function skipScheduleTrack(input: { branchId: string; id: string })
   if (!schedule.playback) return { ok: false, error: "Schedule playback not initialized." };
 
   const result = await advanceScheduleTrack(admin, schedule.id, schedule.playback.version);
-  if (!result.ok) return { ok: false, error: result.error };
-
-  revalidatePath(schedulesPath(branch.id));
-  return { ok: true };
-}
-
-const playTrackSchema = z.object({
-  youtubeId: z.string().min(1),
-  title: z.string().default(""),
-  artist: z.string().nullable().default(null),
-  thumbnailUrl: z.string().nullable().default(null),
-});
-
-/** Staff picking a specific song to play right now (the Schedule Detail
- * page's "Search & play a song" picker) — jumps live playback straight to
- * it, same CAS guard as every other playback mutator here. The track need
- * not already be part of the session's own configured playlist. */
-export async function playScheduleTrack(input: { branchId: string; id: string; track: RoomTrack }): Promise<ActionResult> {
-  const ctx = await requireActiveSchedule(input.branchId, input.id);
-  if (!ctx.ok) return ctx;
-  const { branch, schedule, admin } = ctx;
-  if (!schedule.playback) return { ok: false, error: "Schedule playback not initialized." };
-
-  const parsed = playTrackSchema.safeParse(input.track);
-  if (!parsed.success) return { ok: false, error: "Invalid track." };
-
-  const result = await advanceScheduleTrackTo(admin, schedule.id, schedule.playback.version, parsed.data);
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath(schedulesPath(branch.id));

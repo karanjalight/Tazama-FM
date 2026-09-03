@@ -6,7 +6,6 @@ import { getBranchByIdOrSlug } from "@/lib/business/queries";
 import { getSchedule } from "@/lib/business/schedule-queries";
 import { listContentItems, listPlaylists } from "@/lib/business/content-queries";
 import { ScheduleDetailView } from "@/components/business/schedules/detail/schedule-detail-view";
-import { initialContentRecheckSecondsForSchedule } from "@/lib/business/schedule-playback";
 
 export const metadata: Metadata = { title: "Schedule — Business Dashboard" };
 
@@ -31,12 +30,6 @@ export default async function ScheduleDetailPage({
     listPlaylists(viewer.businessId),
   ]);
 
-  // Seeds the Now Playing card's "next content in mm:ss" countdown for a
-  // `periodic` session currently showing nothing (waiting between
-  // occurrences) — see the helper's own doc comment for why this lives in
-  // a plain function rather than inline here.
-  const initialContentRecheckInSeconds = initialContentRecheckSecondsForSchedule(schedule);
-
   return (
     <ScheduleDetailView
       branchId={branch.id}
@@ -45,7 +38,6 @@ export default async function ScheduleDetailPage({
       businessContent={content}
       businessAds={ads}
       businessPlaylists={playlists}
-      initialContentRecheckInSeconds={initialContentRecheckInSeconds}
     />
   );
 }

@@ -20,7 +20,7 @@ import {
 } from "@/lib/business/schedule-session-resolver";
 import { nextPlaylistPosition } from "@/lib/business/playlist-position";
 import type { RoomTrack } from "@/lib/rooms/types";
-import type { Schedule, ScheduleSession, ScheduleSessionContentItem, ScheduleContentSnapshot, ContentRepeat } from "@/lib/business/schedule-types";
+import type { ScheduleSession, ScheduleSessionContentItem, ScheduleContentSnapshot, ContentRepeat } from "@/lib/business/schedule-types";
 
 /** Fallback for a content item with neither an explicit display duration nor
  * its own natural length — mirrors the kiosk's own `FALLBACK_CONTENT_SECONDS`
@@ -137,27 +137,6 @@ export function resolvePeriodicContent(
   return { item: null, recheckInSeconds: 1 };
 }
 
-/**
- * Seeds the Schedule Detail page's "next content in mm:ss" countdown for a
- * `periodic` session currently showing nothing (waiting between
- * occurrences) — `schedule_playback.content` carries no such hint for
- * itself in that state (only while content IS showing, via its own
- * `displaySeconds`), so the page computes it once, server-side, from this
- * same stateless resolver. A plain (non-component) function so calling
- * `Date.now()` here doesn't trip the "components must be pure" lint rule
- * the way inlining this directly in a page component's body would.
- */
-export function initialContentRecheckSecondsForSchedule(schedule: Schedule): number | null {
-  const nowHHMM = currentHHMMInTimezone(schedule.timezone);
-  const session = resolveCurrentSession(schedule.sessions, nowHHMM);
-  if (!session?.contentEnabled || session.contentFrequencyMode !== "periodic" || schedule.playback?.content) {
-    return null;
-  }
-  const ordered = [...session.content].sort((a, b) => a.position - b.position);
-  const elapsedMs = Date.now() - sessionStartInstantMs(session, schedule.timezone);
-  return resolvePeriodicContent(ordered, session.contentRepeat, session.contentFrequencyIntervalMinutes ?? 30, elapsedMs).recheckInSeconds;
-}
-
 /** Advances the schedule's music track. No-op (reports `noActiveSession`)
  * when the schedule isn't active or no session covers this moment — the
  * kiosk's own poll (Part 8) is what decides whether to keep following the
@@ -221,70 +200,6 @@ export async function advanceScheduleTrack(
     .select("track, version")
     .maybeSingle();
   if (error) return { ok: false, error: "Could not advance schedule playback." };
-  if (!updated) {
-    const { data: latest } = await admin.from("schedule_playback").select("track, version").eq("schedule_id", scheduleId).maybeSingle();
-    return {
-      ok: true,
-      noActiveSession: false,
-      version: latest?.version ?? reportedVersion,
-      sessionEndsInSeconds,
-      track: (latest?.track as RoomTrack | null) ?? null,
-    };
-  }
-  return { ok: true, noActiveSession: false, version: updated.version, sessionEndsInSeconds, track: updated.track as RoomTrack | null };
-}
-
-/**
- * Jumps live playback straight to a specific track — staff picking a song
- * to play right now, rather than the automatic "whatever's next in the
- * playlist" `advanceScheduleTrack` resolves. Same CAS shape (and the same
- * "schedule must have a session covering this moment" guard, via
- * `loadCurrentSession`) — the only difference is the track comes from the
- * caller instead of being computed, and it doesn't need to already be part
- * of the session's own configured playlist.
- */
-export async function advanceScheduleTrackTo(
-  admin: SupabaseClient,
-  scheduleId: string,
-  reportedVersion: number,
-  track: RoomTrack,
-): Promise<AdvanceScheduleResult> {
-  const loaded = await loadCurrentSession(scheduleId);
-  if (!loaded) return { ok: false, error: "Schedule not active." };
-  const { session, version, sessionEndsInSeconds } = loaded;
-  if (!session) return { ok: true, noActiveSession: true };
-
-  if (version !== reportedVersion) {
-    const { data: current } = await admin
-      .from("schedule_playback")
-      .select("track, version")
-      .eq("schedule_id", scheduleId)
-      .maybeSingle();
-    return {
-      ok: true,
-      noActiveSession: false,
-      version: current?.version ?? version,
-      sessionEndsInSeconds,
-      track: (current?.track as RoomTrack | null) ?? null,
-    };
-  }
-
-  const { data: updated, error } = await admin
-    .from("schedule_playback")
-    .update({
-      session_id: session.id,
-      track,
-      is_playing: true,
-      position_ms: 0,
-      started_at: new Date().toISOString(),
-      version: reportedVersion + 1,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("schedule_id", scheduleId)
-    .eq("version", reportedVersion)
-    .select("track, version")
-    .maybeSingle();
-  if (error) return { ok: false, error: "Could not play the selected track." };
   if (!updated) {
     const { data: latest } = await admin.from("schedule_playback").select("track, version").eq("schedule_id", scheduleId).maybeSingle();
     return {

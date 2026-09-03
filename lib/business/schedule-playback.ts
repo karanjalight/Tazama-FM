@@ -12,10 +12,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getScheduleById } from "@/lib/business/schedule-queries";
-import { resolveCurrentSession, currentHHMMInTimezone, secondsUntilSessionEnd } from "@/lib/business/schedule-session-resolver";
+import {
+  resolveCurrentSession,
+  currentHHMMInTimezone,
+  secondsUntilSessionEnd,
+  sessionStartInstantMs,
+} from "@/lib/business/schedule-session-resolver";
 import { nextPlaylistPosition } from "@/lib/business/playlist-position";
 import type { RoomTrack } from "@/lib/rooms/types";
-import type { ScheduleSession, ScheduleContentSnapshot } from "@/lib/business/schedule-types";
+import type { ScheduleSession, ScheduleSessionContentItem, ScheduleContentSnapshot, ContentRepeat } from "@/lib/business/schedule-types";
+
+/** Fallback for a content item with neither an explicit display duration nor
+ * its own natural length — mirrors the kiosk's own `FALLBACK_CONTENT_SECONDS`
+ * (shouldn't happen; the wizard requires a duration for anything without a
+ * natural one) so periodic mode's cumulative-duration math never divides by
+ * zero or stalls on an item that "lasts" 0 seconds. */
+const DEFAULT_ITEM_SECONDS = 30;
 
 export type AdvanceScheduleResult =
   | { ok: true; noActiveSession: true }
@@ -31,17 +43,23 @@ export type AdvanceScheduleResult =
        * guards above (kept optional rather than widening the type for a
        * case that can't occur in practice). */
       sessionEndsInSeconds: number;
+      /** Only ever meaningful for a content-advance result on a `periodic`
+       * session — how long until the NEXT thing worth checking for (a
+       * cycle's interruption starting, an item inside one ending, or the
+       * session boundary if the interruption is now permanently done under
+       * `contentRepeat: "once"`). `content?.displaySeconds` already carries
+       * the equivalent for a `continuous` session, so this stays absent
+       * there rather than duplicating it. */
+      contentRecheckInSeconds?: number | null;
       track?: RoomTrack | null;
       contentItemId?: string | null;
       content?: ScheduleContentSnapshot | null;
     }
   | { ok: false; error: string };
 
-async function loadCurrentSession(
-  scheduleId: string,
-): Promise<
-  | { session: ScheduleSession; version: number; sessionEndsInSeconds: number }
-  | { session: null; version: number; sessionEndsInSeconds: number }
+async function loadCurrentSession(scheduleId: string): Promise<
+  | { session: ScheduleSession; version: number; sessionEndsInSeconds: number; timezone: string }
+  | { session: null; version: number; sessionEndsInSeconds: number; timezone: string }
   | null
 > {
   const schedule = await getScheduleById(scheduleId);
@@ -50,9 +68,66 @@ async function loadCurrentSession(
   const session = resolveCurrentSession(schedule.sessions, nowHHMM);
   const version = schedule.playback?.version ?? 0;
   const sessionEndsInSeconds = session ? secondsUntilSessionEnd(session, schedule.timezone) : 0;
-  return { session, version, sessionEndsInSeconds } as
-    | { session: ScheduleSession; version: number; sessionEndsInSeconds: number }
-    | { session: null; version: number; sessionEndsInSeconds: number };
+  return { session, version, sessionEndsInSeconds, timezone: schedule.timezone } as
+    | { session: ScheduleSession; version: number; sessionEndsInSeconds: number; timezone: string }
+    | { session: null; version: number; sessionEndsInSeconds: number; timezone: string };
+}
+
+/**
+ * Which content item (if any) should be showing right now on a `periodic`
+ * session, purely as a function of elapsed time since the session started —
+ * unlike `continuous` mode's "advance one step from wherever we were", this
+ * needs no memory of prior state at all, so it's naturally self-healing
+ * (every call recomputes fresh from `elapsedMs`, the same way
+ * `resolveCurrentSession` itself recomputes fresh from wall-clock time).
+ *
+ * Model: music plays for the first `intervalMinutes`, then content
+ * interrupts (playing the full ordered list through once) for as long as
+ * the list's own total duration takes, then hands back to music.
+ * `contentRepeat: "loop"` repeats that same cycle for as long as the
+ * session runs; `"once"` means that first interruption is the only one that
+ * ever happens for this session's current run.
+ */
+export function resolvePeriodicContent(
+  ordered: ScheduleSessionContentItem[],
+  contentRepeat: ContentRepeat,
+  intervalMinutes: number,
+  elapsedMs: number,
+): { item: ScheduleSessionContentItem | null; recheckInSeconds: number | null } {
+  const itemDurationsMs = ordered.map((c) => (c.displaySeconds ?? c.item.durationSeconds ?? DEFAULT_ITEM_SECONDS) * 1000);
+  const totalMs = itemDurationsMs.reduce((a, b) => a + b, 0);
+  const intervalMs = Math.max(1, intervalMinutes) * 60_000;
+  const clampedElapsedMs = Math.max(0, elapsedMs);
+
+  if (totalMs <= 0) return { item: null, recheckInSeconds: Math.ceil(intervalMs / 1000) };
+
+  const inFirstOccurrence = clampedElapsedMs >= intervalMs && clampedElapsedMs < intervalMs + totalMs;
+  const cyclePos = clampedElapsedMs % intervalMs;
+  const inWindow = contentRepeat === "once" ? inFirstOccurrence : clampedElapsedMs >= intervalMs && cyclePos < totalMs;
+  const withinPlaythroughMs = contentRepeat === "once" ? clampedElapsedMs - intervalMs : cyclePos;
+
+  if (!inWindow) {
+    if (contentRepeat === "once" && clampedElapsedMs >= intervalMs + totalMs) {
+      // Already played its one-and-only interruption — nothing left to ever
+      // schedule again this run; let the caller fall back to its own
+      // session-boundary-only default instead of a bogus short recheck.
+      return { item: null, recheckInSeconds: null };
+    }
+    const recheckMs = clampedElapsedMs < intervalMs ? intervalMs - clampedElapsedMs : intervalMs - cyclePos;
+    return { item: null, recheckInSeconds: Math.max(1, Math.ceil(recheckMs / 1000)) };
+  }
+
+  let acc = 0;
+  for (let i = 0; i < ordered.length; i++) {
+    const dur = itemDurationsMs[i];
+    if (withinPlaythroughMs < acc + dur) {
+      return { item: ordered[i], recheckInSeconds: Math.max(1, Math.ceil((acc + dur - withinPlaythroughMs) / 1000)) };
+    }
+    acc += dur;
+  }
+  // Rounding landed exactly on the tail boundary — nothing left to show
+  // this occurrence; recheck at the next cycle (or never again, for "once").
+  return { item: null, recheckInSeconds: contentRepeat === "once" ? null : Math.max(1, Math.ceil((intervalMs - cyclePos) / 1000)) };
 }
 
 /** Advances the schedule's music track. No-op (reports `noActiveSession`)
@@ -141,7 +216,7 @@ export async function advanceScheduleContent(
 ): Promise<AdvanceScheduleResult> {
   const loaded = await loadCurrentSession(scheduleId);
   if (!loaded) return { ok: false, error: "Schedule not active." };
-  const { session, version, sessionEndsInSeconds } = loaded;
+  const { session, version, sessionEndsInSeconds, timezone } = loaded;
   if (!session) return { ok: true, noActiveSession: true };
 
   if (version !== reportedVersion) {
@@ -177,9 +252,90 @@ export async function advanceScheduleContent(
     return { ok: true, noActiveSession: false, version: reportedVersion + 1, sessionEndsInSeconds, contentItemId: null, content: null };
   }
 
+  const ordered = [...session.content].sort((a, b) => a.position - b.position);
+
+  if (session.contentFrequencyMode === "periodic") {
+    // Music plays as the base state; content only interrupts every
+    // `contentFrequencyIntervalMinutes` — a fundamentally different model
+    // from continuous mode's "always cycling", so it gets its own
+    // stateless, time-driven resolution instead (see the helper's doc
+    // comment) rather than reusing the advance-by-one machinery below.
+    const elapsedMs = Date.now() - sessionStartInstantMs(session, timezone);
+    const { item, recheckInSeconds } = resolvePeriodicContent(
+      ordered,
+      session.contentRepeat,
+      session.contentFrequencyIntervalMinutes ?? 30,
+      elapsedMs,
+    );
+
+    if (!item) {
+      await admin
+        .from("schedule_playback")
+        .update({ session_id: session.id, content_item_id: null, content: null, content_started_at: null, version: reportedVersion + 1, updated_at: new Date().toISOString() })
+        .eq("schedule_id", scheduleId)
+        .eq("version", reportedVersion);
+      return {
+        ok: true,
+        noActiveSession: false,
+        version: reportedVersion + 1,
+        sessionEndsInSeconds,
+        contentRecheckInSeconds: recheckInSeconds,
+        contentItemId: null,
+        content: null,
+      };
+    }
+
+    // The snapshot's `displaySeconds` carries how long is left on THIS item
+    // right now (not its full configured duration) — a realtime subscriber
+    // that only ever reads the persisted row (never calls this function
+    // itself) needs that countdown to arm its own timer correctly too.
+    const periodicSnapshot: ScheduleContentSnapshot = {
+      contentItemId: item.contentItemId,
+      title: item.item.title,
+      contentType: item.item.contentType,
+      url: item.item.url,
+      previewUrl: item.item.previewUrl,
+      displaySeconds: recheckInSeconds,
+    };
+
+    const { data: updated, error } = await admin
+      .from("schedule_playback")
+      .update({
+        session_id: session.id,
+        content_item_id: item.contentItemId,
+        content: periodicSnapshot,
+        content_started_at: new Date().toISOString(),
+        version: reportedVersion + 1,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("schedule_id", scheduleId)
+      .eq("version", reportedVersion)
+      .select("content_item_id, content, version")
+      .maybeSingle();
+    if (error) return { ok: false, error: "Could not advance schedule content." };
+    if (!updated) {
+      const { data: latest } = await admin.from("schedule_playback").select("content_item_id, content, version").eq("schedule_id", scheduleId).maybeSingle();
+      return {
+        ok: true,
+        noActiveSession: false,
+        version: latest?.version ?? reportedVersion,
+        sessionEndsInSeconds,
+        contentItemId: latest?.content_item_id ?? null,
+        content: (latest?.content as ScheduleContentSnapshot | null) ?? null,
+      };
+    }
+    return {
+      ok: true,
+      noActiveSession: false,
+      version: updated.version,
+      sessionEndsInSeconds,
+      contentItemId: updated.content_item_id,
+      content: updated.content as ScheduleContentSnapshot | null,
+    };
+  }
+
   const { data: current } = await admin.from("schedule_playback").select("content_item_id").eq("schedule_id", scheduleId).maybeSingle();
   const currentContentItemId = (current?.content_item_id as string | null) ?? null;
-  const ordered = [...session.content].sort((a, b) => a.position - b.position);
   const currentIndex = currentContentItemId ? ordered.findIndex((c) => c.contentItemId === currentContentItemId) : -1;
 
   let nextIndex: number;

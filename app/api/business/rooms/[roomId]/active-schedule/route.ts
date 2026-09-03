@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 
 import { listActiveSchedulesCoveringRoom } from "@/lib/business/schedule-queries";
-import { resolveCurrentSession, currentHHMMInTimezone, secondsUntilSessionEnd } from "@/lib/business/schedule-session-resolver";
+import {
+  resolveCurrentSession,
+  currentHHMMInTimezone,
+  secondsUntilSessionEnd,
+  sessionStartInstantMs,
+} from "@/lib/business/schedule-session-resolver";
+import { resolvePeriodicContent } from "@/lib/business/schedule-playback";
 
 /**
  * Kiosk-facing, unauthenticated — polled by the kiosk player (~25s cadence,
@@ -24,6 +30,25 @@ export async function GET(
     const nowHHMM = currentHHMMInTimezone(schedule.timezone);
     const session = resolveCurrentSession(schedule.sessions, nowHHMM);
     if (session) {
+      // A `periodic` session's stored `schedule_playback.content` can be
+      // stale (or null, mid-"waiting for the next interruption") by the time
+      // a fresh client discovers it here — this is a read-only discovery
+      // poll, not an advance, so it doesn't correct that stored row itself,
+      // but it CAN tell the client when to next call advance-content so
+      // that call lands at the right moment instead of only ever being
+      // driven by the (in this case wrong) session-boundary fallback.
+      let contentRecheckInSeconds: number | null = null;
+      if (session.contentFrequencyMode === "periodic") {
+        const ordered = [...session.content].sort((a, b) => a.position - b.position);
+        const elapsedMs = Date.now() - sessionStartInstantMs(session, schedule.timezone);
+        contentRecheckInSeconds = resolvePeriodicContent(
+          ordered,
+          session.contentRepeat,
+          session.contentFrequencyIntervalMinutes ?? 30,
+          elapsedMs,
+        ).recheckInSeconds;
+      }
+
       return NextResponse.json({
         scheduleId: schedule.id,
         sessionId: session.id,
@@ -40,6 +65,7 @@ export async function GET(
         // noticed on time instead of only whenever whatever's already
         // showing happens to finish on its own (see schedule-playback.ts).
         sessionEndsInSeconds: secondsUntilSessionEnd(session, schedule.timezone),
+        contentRecheckInSeconds,
       });
     }
   }

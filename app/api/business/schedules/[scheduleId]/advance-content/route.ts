@@ -35,5 +35,6 @@ export async function POST(
     content: result.content ?? null,
     version: result.version,
     sessionEndsInSeconds: result.sessionEndsInSeconds,
+    contentRecheckInSeconds: result.contentRecheckInSeconds ?? null,
   });
 }

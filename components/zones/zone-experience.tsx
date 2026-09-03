@@ -221,7 +221,9 @@ export function ZoneExperience({
         scheduleVersionRef.current = result.version;
         sessionEndsInSecondsRef.current = result.sessionEndsInSeconds;
         setScheduleContent(result.content);
-        armContentTimer(result.content ? (result.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS);
+        armContentTimer(
+          result.contentRecheckInSeconds ?? (result.content ? (result.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS),
+        );
       });
       if (alsoRecheckTrack) {
         requestScheduleAdvance(scheduleId, scheduleVersionRef.current).then((result) => {
@@ -270,6 +272,7 @@ export function ZoneExperience({
             updatedAt: string;
           } | null;
           sessionEndsInSeconds?: number;
+          contentRecheckInSeconds?: number | null;
         };
         if (cancelled) return;
         const nextId = data.scheduleId ?? null;
@@ -282,7 +285,8 @@ export function ZoneExperience({
             scheduleVersionRef.current = data.playback.version;
             setScheduleContent(data.playback.content);
             armContentTimer(
-              data.playback.content ? (data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS,
+              data.contentRecheckInSeconds ??
+                (data.playback.content ? (data.playback.content.displaySeconds ?? FALLBACK_CONTENT_SECONDS) : NO_CONTENT_RECHECK_SECONDS),
             );
             applyZonePayloadRef.current({
               track: data.playback.track,

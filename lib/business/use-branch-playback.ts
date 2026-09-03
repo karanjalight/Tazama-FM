@@ -335,16 +335,36 @@ export async function requestScheduleAdvance(
 export async function requestScheduleContentAdvance(
   scheduleId: string,
   reportedVersion: number,
-): Promise<{ content: ScheduleContentSnapshot | null; version: number; sessionEndsInSeconds: number | null } | null> {
+): Promise<{
+  content: ScheduleContentSnapshot | null;
+  version: number;
+  sessionEndsInSeconds: number | null;
+  /** Only ever set for a `periodic` session — overrides the usual
+   * `content?.displaySeconds ?? NO_CONTENT_RECHECK_SECONDS` arming logic so
+   * the "waiting for the next interruption" phase (content: null) still
+   * gets checked on time instead of falling all the way back to the
+   * 24-hour default. See `resolvePeriodicContent`'s doc comment. */
+  contentRecheckInSeconds: number | null;
+} | null> {
   try {
     const res = await fetch(`/api/business/schedules/${scheduleId}/advance-content`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reportedVersion }),
     });
-    const data = (await res.json()) as { content?: ScheduleContentSnapshot | null; version?: number; sessionEndsInSeconds?: number };
+    const data = (await res.json()) as {
+      content?: ScheduleContentSnapshot | null;
+      version?: number;
+      sessionEndsInSeconds?: number;
+      contentRecheckInSeconds?: number | null;
+    };
     if (typeof data.version !== "number") return null;
-    return { content: data.content ?? null, version: data.version, sessionEndsInSeconds: data.sessionEndsInSeconds ?? null };
+    return {
+      content: data.content ?? null,
+      version: data.version,
+      sessionEndsInSeconds: data.sessionEndsInSeconds ?? null,
+      contentRecheckInSeconds: data.contentRecheckInSeconds ?? null,
+    };
   } catch {
     return null;
   }

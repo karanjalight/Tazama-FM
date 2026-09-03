@@ -163,11 +163,11 @@ export function describeSessionBehavior(session: ScheduleSession): string {
     base = `Content plays ${session.contentRepeat === "loop" ? "on a loop" : "once"} and pauses the playlist while it's on screen.`;
   } else if (session.contentFrequencyMode === "periodic") {
     const minutes = session.contentFrequencyIntervalMinutes ?? 30;
-    const cadence = `every ${minutes} minute${minutes === 1 ? "" : "s"}`;
+    const gap = `${minutes} minute${minutes === 1 ? "" : "s"}`;
     base =
       session.contentRepeat === "loop"
-        ? `Playlist music plays continuously; content interrupts ${cadence}, hands back to music, and keeps repeating for as long as this session runs.`
-        : `Playlist music plays continuously; content interrupts once, ${cadence} after this session starts, then hands back to music for good.`;
+        ? `Music plays for ${gap}, content interrupts and plays through once, then it's music again for ${gap} — repeating for as long as this session runs.`
+        : `Music plays for ${gap}, content interrupts and plays through once, then it's music for good — that one interruption is the only one this session.`;
   } else {
     base = `Content plays ${session.contentRepeat === "loop" ? "on a loop" : "once"} while playlist music continues in the background.`;
   }

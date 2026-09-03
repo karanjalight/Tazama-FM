@@ -81,12 +81,15 @@ async function loadCurrentSession(scheduleId: string): Promise<
  * (every call recomputes fresh from `elapsedMs`, the same way
  * `resolveCurrentSession` itself recomputes fresh from wall-clock time).
  *
- * Model: music plays for the first `intervalMinutes`, then content
- * interrupts (playing the full ordered list through once) for as long as
- * the list's own total duration takes, then hands back to music.
- * `contentRepeat: "loop"` repeats that same cycle for as long as the
- * session runs; `"once"` means that first interruption is the only one that
- * ever happens for this session's current run.
+ * Model: music plays for `intervalMinutes`, then content plays the full
+ * ordered list through once (however long the list's own total duration
+ * is), then hands back to music for another full `intervalMinutes` before
+ * the next occurrence — `intervalMinutes` is always the MUSIC gap's own
+ * length, not a fixed clock tick from session start, so a longer content
+ * list never eats into the gap that follows it. `contentRepeat: "loop"`
+ * repeats that (interval-music, content) cycle for as long as the session
+ * runs; `"once"` means content plays through exactly once, after the very
+ * first interval-music gap, and never again for the rest of this run.
  */
 export function resolvePeriodicContent(
   ordered: ScheduleSessionContentItem[],
@@ -101,20 +104,27 @@ export function resolvePeriodicContent(
 
   if (totalMs <= 0) return { item: null, recheckInSeconds: Math.ceil(intervalMs / 1000) };
 
-  const inFirstOccurrence = clampedElapsedMs >= intervalMs && clampedElapsedMs < intervalMs + totalMs;
-  const cyclePos = clampedElapsedMs % intervalMs;
-  const inWindow = contentRepeat === "once" ? inFirstOccurrence : clampedElapsedMs >= intervalMs && cyclePos < totalMs;
-  const withinPlaythroughMs = contentRepeat === "once" ? clampedElapsedMs - intervalMs : cyclePos;
+  // Every occurrence (loop or once) starts with one full interval of music.
+  if (clampedElapsedMs < intervalMs) {
+    return { item: null, recheckInSeconds: Math.max(1, Math.ceil((intervalMs - clampedElapsedMs) / 1000)) };
+  }
 
-  if (!inWindow) {
-    if (contentRepeat === "once" && clampedElapsedMs >= intervalMs + totalMs) {
-      // Already played its one-and-only interruption — nothing left to ever
-      // schedule again this run; let the caller fall back to its own
-      // session-boundary-only default instead of a bogus short recheck.
+  let withinPlaythroughMs: number;
+  if (contentRepeat === "once") {
+    withinPlaythroughMs = clampedElapsedMs - intervalMs;
+    if (withinPlaythroughMs >= totalMs) {
+      // Already played its one-and-only interruption — music forever after;
+      // let the caller fall back to its own session-boundary-only default
+      // instead of a bogus short recheck.
       return { item: null, recheckInSeconds: null };
     }
-    const recheckMs = clampedElapsedMs < intervalMs ? intervalMs - clampedElapsedMs : intervalMs - cyclePos;
-    return { item: null, recheckInSeconds: Math.max(1, Math.ceil(recheckMs / 1000)) };
+  } else {
+    const cycleMs = totalMs + intervalMs;
+    const cyclePos = (clampedElapsedMs - intervalMs) % cycleMs;
+    if (cyclePos >= totalMs) {
+      return { item: null, recheckInSeconds: Math.max(1, Math.ceil((cycleMs - cyclePos) / 1000)) };
+    }
+    withinPlaythroughMs = cyclePos;
   }
 
   let acc = 0;
@@ -126,8 +136,11 @@ export function resolvePeriodicContent(
     acc += dur;
   }
   // Rounding landed exactly on the tail boundary — nothing left to show
-  // this occurrence; recheck at the next cycle (or never again, for "once").
-  return { item: null, recheckInSeconds: contentRepeat === "once" ? null : Math.max(1, Math.ceil((intervalMs - cyclePos) / 1000)) };
+  // this occurrence right now; recheck almost immediately rather than
+  // guessing at the next boundary (the `once` case is already handled
+  // above; `loop` will resolve correctly into the music gap on the very
+  // next call, a negligible one-tick delay).
+  return { item: null, recheckInSeconds: 1 };
 }
 
 /** Advances the schedule's music track. No-op (reports `noActiveSession`)

@@ -8,9 +8,6 @@ import { toast } from "sonner";
 import Image from "next/image";
 import {
   ChevronRight,
-  Pause,
-  Play,
-  SkipForward,
   Trash2,
   Pencil,
   Music,
@@ -24,13 +21,11 @@ import type { ContentItem, Playlist } from "@/lib/business/content-queries";
 import { createSession, type ScheduleSession as ClientSession } from "@/components/business/schedules/new/schedule-state";
 import { toClientSession, toSessionInput } from "./session-convert";
 import { ContentPreviewDialog } from "./content-preview-dialog";
+import { NowPlayingCard } from "./now-playing-card";
 import {
   deleteSchedule,
   setScheduleStatus,
   updateSchedule,
-  setSchedulePlayback,
-  skipScheduleTrack,
-  skipScheduleContent,
   replaceScheduleSessions,
 } from "@/app/business/schedules/actions";
 import { playlistDurationSummary, contentDurationSummary, formatDurationSeconds } from "@/lib/business/schedule-duration";
@@ -38,6 +33,7 @@ import { SessionContentDialog } from "@/components/business/schedules/new/steps/
 import { DayTimeline } from "@/components/business/schedules/new/steps/day-timeline";
 import { formatTimeLabel } from "@/components/business/schedules/new/steps/session-utils";
 import { Switch } from "@/components/ui/switch";
+import { Cover } from "@/components/cover";
 import { cn } from "@/lib/utils";
 
 const TYPE_ICON = { video: Video, image: ImageIcon, audio: Music, document: FileText } as const;
@@ -103,8 +99,9 @@ function SessionCard({
           {session.songs.length > 0 ? (
             <ol className="mt-2 space-y-1">
               {session.songs.map((s, i) => (
-                <li key={s.id} className="flex items-center gap-2 text-sm">
+                <li key={s.id} className="flex items-center gap-2.5 text-sm">
                   <span className="w-5 shrink-0 text-right text-xs text-muted-foreground">{i + 1}</span>
+                  <Cover title={s.track.title} src={s.track.thumbnailUrl ?? undefined} sizes="36px" className="size-9 shrink-0 rounded-lg" />
                   <span className="min-w-0 flex-1 truncate text-foreground">{s.track.title}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">{s.track.artist ?? "Unknown"}</span>
                   <span className="shrink-0 font-mono text-xs text-muted-foreground">
@@ -183,6 +180,7 @@ export function ScheduleDetailView({
   businessContent,
   businessAds,
   businessPlaylists,
+  initialContentRecheckInSeconds,
 }: {
   branchId: string;
   branchSlugOrId: string;
@@ -190,6 +188,7 @@ export function ScheduleDetailView({
   businessContent: ContentItem[];
   businessAds: ContentItem[];
   businessPlaylists: Playlist[];
+  initialContentRecheckInSeconds: number | null;
 }) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
@@ -229,25 +228,6 @@ export function ScheduleDetailView({
     }
     toast.success("Schedule deleted");
     router.push(schedulesHref);
-  }
-
-  async function handlePlayPause() {
-    if (!schedule.playback) return;
-    const res = await setSchedulePlayback({ branchId, id: schedule.id, isPlaying: !schedule.playback.isPlaying });
-    if (!res.ok) toast.error(res.error);
-    else router.refresh();
-  }
-
-  async function handleSkipTrack() {
-    const res = await skipScheduleTrack({ branchId, id: schedule.id });
-    if (!res.ok) toast.error(res.error);
-    else router.refresh();
-  }
-
-  async function handleSkipContent() {
-    const res = await skipScheduleContent({ branchId, id: schedule.id });
-    if (!res.ok) toast.error(res.error);
-    else router.refresh();
   }
 
   async function saveSession(updated: ClientSession) {
@@ -356,47 +336,24 @@ export function ScheduleDetailView({
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-4">
-        <label
-          className="flex items-center gap-2.5"
-          style={{ "--switch-accent": "var(--color-violet-600)" } as ReactType.CSSProperties}
-        >
-          <Switch checked={schedule.synchronizedPlayback} onCheckedChange={toggleSync} />
-          <span className="text-sm text-foreground">Synchronized playback</span>
-        </label>
+      <label
+        className="flex w-fit items-center gap-2.5 rounded-2xl border border-border bg-card px-4 py-3"
+        style={{ "--switch-accent": "var(--color-violet-600)" } as ReactType.CSSProperties}
+      >
+        <Switch checked={schedule.synchronizedPlayback} onCheckedChange={toggleSync} />
+        <span className="text-sm text-foreground">Synchronized playback</span>
+      </label>
 
-        {canControlLive && (
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePlayPause}
-              className="grid size-10 place-items-center rounded-full bg-violet-600 text-white transition-colors hover:bg-violet-500"
-              aria-label={schedule.playback?.isPlaying ? "Pause" : "Play"}
-            >
-              {schedule.playback?.isPlaying ? <Pause className="size-4" /> : <Play className="size-4" />}
-            </button>
-            <button
-              type="button"
-              onClick={handleSkipTrack}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <SkipForward className="size-3.5" />
-              Skip track
-            </button>
-            <button
-              type="button"
-              onClick={handleSkipContent}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
-            >
-              <SkipForward className="size-3.5" />
-              Skip content
-            </button>
-            {schedule.playback?.track && (
-              <span className="truncate text-xs text-muted-foreground">Now: {schedule.playback.track.title}</span>
-            )}
-          </div>
-        )}
-      </div>
+      <NowPlayingCard
+        branchId={branchId}
+        scheduleId={schedule.id}
+        scheduleActive={schedule.status === "active"}
+        canControl={canControlLive}
+        initialTrack={schedule.playback?.track ?? null}
+        initialIsPlaying={schedule.playback?.isPlaying ?? false}
+        initialContent={schedule.playback?.content ?? null}
+        initialContentRecheckInSeconds={initialContentRecheckInSeconds}
+      />
 
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-foreground">Day Schedule</h2>

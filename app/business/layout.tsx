@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Bell, ChevronDown, HelpCircle, Store } from "lucide-react";
+import { Bell, ChevronDown, HelpCircle } from "lucide-react";
 
 import { Logo } from "@/components/brand/logo";
 import { BusinessSidebarNav } from "@/components/business/business-sidebar-nav";
+import { BusinessBottomNav } from "@/components/business/business-bottom-nav";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
@@ -91,7 +92,9 @@ export default async function BusinessLayout({
         </div>
       </aside>
 
-      {/* Mobile top bar + horizontal nav */}
+      {/* Mobile top bar — just identity now; BusinessBottomNav (below) owns
+          primary navigation on mobile, replacing what used to be a
+          horizontally-scrolling row of all ~20 nav items here. */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur-xl sm:hidden">
         <div className="flex items-center justify-between px-4 py-3">
           <Link href="/business/dashboard" aria-label="Tazama Business, overview">
@@ -108,14 +111,9 @@ export default async function BusinessLayout({
             </Avatar>
           </div>
         </div>
-        <div className="mask-fade-x px-4 pb-3">
-          <BusinessSidebarNav
-            showStaff={showStaff}
-            defaultBranchSlug={defaultBranch?.slug ?? null}
-            orientation="horizontal"
-          />
-        </div>
       </header>
+
+      <BusinessBottomNav showStaff={showStaff} defaultBranchSlug={defaultBranch?.slug ?? null} />
 
       <main className="sm:pl-72">
         <div className="sticky top-0 z-10 hidden items-center justify-end gap-3 border-b border-border bg-background/85 px-6 py-3 backdrop-blur-xl sm:flex lg:px-10">
@@ -157,7 +155,9 @@ export default async function BusinessLayout({
             </button>
           </div>
         </div>
-        <div className="p-6 sm:p-10">{children}</div>
+        {/* pb-24 clears the fixed h-16 BusinessBottomNav (plus its own
+            safe-area margin) on mobile; sm: and up have no bottom bar. */}
+        <div className="p-6 pb-24 sm:p-10">{children}</div>
       </main>
     </div>
   );

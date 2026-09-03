@@ -41,26 +41,43 @@ export function ScreenHealthReportView({ snapshot, dateRangeLabel }: { snapshot:
       />
 
       <ReportSection title="Device Performance">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-              <th className="py-1.5 pr-3 font-medium">Screen</th>
-              <th className="px-3 py-1.5 font-medium">Location</th>
-              <th className="px-3 py-1.5 text-right font-medium">Uptime</th>
-              <th className="py-1.5 pl-3 text-right font-medium">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {snapshot.screens.map((s) => (
-              <tr key={s.id} className="border-b border-border/60 last:border-b-0">
-                <td className="py-2 pr-3 text-foreground">{s.name}</td>
-                <td className="px-3 py-2 text-muted-foreground">{s.location}</td>
-                <td className="px-3 py-2 text-right font-mono text-muted-foreground">{s.uptimePct != null ? `${s.uptimePct}%` : "—"}</td>
-                <td className={cn("py-2 pl-3 text-right font-medium", STATUS_META[s.status].text)}>{STATUS_META[s.status].label}</td>
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="py-1.5 pr-3 font-medium">Screen</th>
+                <th className="px-3 py-1.5 font-medium">Location</th>
+                <th className="px-3 py-1.5 text-right font-medium">Uptime</th>
+                <th className="py-1.5 pl-3 text-right font-medium">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {snapshot.screens.map((s) => (
+                <tr key={s.id} className="border-b border-border/60 last:border-b-0">
+                  <td className="py-2 pr-3 text-foreground">{s.name}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{s.location}</td>
+                  <td className="px-3 py-2 text-right font-mono text-muted-foreground">{s.uptimePct != null ? `${s.uptimePct}%` : "—"}</td>
+                  <td className={cn("py-2 pl-3 text-right font-medium", STATUS_META[s.status].text)}>{STATUS_META[s.status].label}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="space-y-3 sm:hidden">
+          {snapshot.screens.map((s) => (
+            <div key={s.id} className="rounded-xl border border-border/60 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-foreground">{s.name}</p>
+                <span className={cn("text-xs font-semibold", STATUS_META[s.status].text)}>{STATUS_META[s.status].label}</span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{s.location}</span>
+                <span className="font-mono">{s.uptimePct != null ? `${s.uptimePct}%` : "—"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </ReportSection>
 
       <ReportSection title="Key Insights">

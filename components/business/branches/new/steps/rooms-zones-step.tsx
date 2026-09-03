@@ -12,6 +12,118 @@ import { AddRoomDialog, type NewRoomInput } from "../modals/add-room-dialog";
 import { EditZoneDialog, type UpdateZoneInput } from "../modals/edit-zone-dialog";
 import { EditRoomDialog, type UpdateRoomInput } from "../modals/edit-room-dialog";
 
+/** The room row's kebab dropdown (edit/delete) — open/close state lives in
+ * the parent (`openRoomMenuId`), not here, so the table row and the mobile
+ * card can share one instance of the exact same interaction. */
+function RoomActionsMenu({
+  isOpen,
+  onToggle,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="relative inline-block">
+      <button
+        type="button"
+        aria-label="Room actions"
+        onClick={onToggle}
+        className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <MoreVertical className="size-4" />
+      </button>
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <div className="absolute top-full right-0 z-50 mt-1.5 w-36 overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-lift">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
+            >
+              <Pencil className="size-3.5 text-muted-foreground" />
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-rose-400 hover:bg-rose-500/10"
+            >
+              <Trash2 className="size-3.5" />
+              Delete
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Mobile card — identity (icon + name + tag) and type up top, capacity and
+ * description as a compact grid beneath, same actions menu as the table.
+ * `Icon` is resolved by the caller (same as the table's row map) and passed
+ * in as a prop rather than looked up here, so the dynamic icon-by-type
+ * lookup — a plain function call, not a statically analyzable literal —
+ * never sits directly in a component body next to its own JSX usage. */
+function RoomCard({
+  room,
+  Icon,
+  isMenuOpen,
+  onToggleMenu,
+  onCloseMenu,
+  onEdit,
+  onDelete,
+}: {
+  room: WizardRoom;
+  Icon: ReturnType<typeof iconForRoomType>;
+  isMenuOpen: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-linear-to-br from-violet-500/25 to-indigo-500/25 text-foreground">
+          <Store className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate font-medium text-foreground">{room.name}</p>
+            {room.tag && (
+              <span className="shrink-0 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
+                {room.tag}
+              </span>
+            )}
+          </div>
+          <p className="mt-0.5 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Icon className="size-3.5" />
+            {room.type}
+          </p>
+        </div>
+        <RoomActionsMenu isOpen={isMenuOpen} onToggle={onToggleMenu} onClose={onCloseMenu} onEdit={onEdit} onDelete={onDelete} />
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t border-border pt-3 text-xs">
+        <div>
+          <p className="text-muted-foreground">Capacity</p>
+          <p className="mt-0.5 text-foreground">{room.capacity}</p>
+        </div>
+        <div className="col-span-2">
+          <p className="text-muted-foreground">Description</p>
+          <p className="mt-0.5 text-foreground">{room.description}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RoomsZonesStep({
   zones,
   rooms,
@@ -190,95 +302,91 @@ export function RoomsZonesStep({
 
               <div className="mt-3 overflow-hidden rounded-xl border border-border">
                 {zoneRooms.length > 0 && (
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-                        <th className="px-3 py-2.5 font-medium">Room Name</th>
-                        <th className="px-3 py-2.5 font-medium">Room Type</th>
-                        <th className="px-3 py-2.5 font-medium">Capacity</th>
-                        <th className="px-3 py-2.5 font-medium">Description</th>
-                        <th className="px-3 py-2.5 text-right font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {zoneRooms.map((room) => {
-                        const Icon = iconForRoomType(room.type);
-                        return (
-                          <tr key={room.id} className="border-b border-border last:border-b-0">
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center gap-2.5">
-                                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-linear-to-br from-violet-500/25 to-indigo-500/25 text-foreground">
-                                  <Store className="size-4" />
-                                </span>
-                                <span className="flex items-center gap-1.5">
-                                  <span className="font-medium text-foreground">{room.name}</span>
-                                  {room.tag && (
-                                    <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
-                                      {room.tag}
-                                    </span>
-                                  )}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2.5">
-                              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                                <Icon className="size-3.5" />
-                                {room.type}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2.5 text-foreground">{room.capacity}</td>
-                            <td className="px-3 py-2.5 text-muted-foreground">{room.description}</td>
-                            <td className="px-3 py-2.5 text-right">
-                              <div className="relative inline-block">
-                                <button
-                                  type="button"
-                                  aria-label="Room actions"
-                                  onClick={() =>
-                                    setOpenRoomMenuId((id) => (id === room.id ? null : room.id))
-                                  }
-                                  className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                                >
-                                  <MoreVertical className="size-4" />
-                                </button>
-                                {openRoomMenuId === room.id && (
-                                  <>
-                                    <div
-                                      className="fixed inset-0 z-40"
-                                      onClick={() => setOpenRoomMenuId(null)}
-                                    />
-                                    <div className="absolute top-full right-0 z-50 mt-1.5 w-36 overflow-hidden rounded-xl border border-border bg-popover p-1.5 shadow-lift">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenRoomMenuId(null);
-                                          setEditingRoom(room);
-                                        }}
-                                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-foreground hover:bg-muted"
-                                      >
-                                        <Pencil className="size-3.5 text-muted-foreground" />
-                                        Edit
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setOpenRoomMenuId(null);
-                                          onDeleteRoom(room.id);
-                                        }}
-                                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-rose-400 hover:bg-rose-500/10"
-                                      >
-                                        <Trash2 className="size-3.5" />
-                                        Delete
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </td>
+                  <>
+                    {/* Table — sm and up */}
+                    <div className="hidden sm:block">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+                            <th className="px-3 py-2.5 font-medium">Room Name</th>
+                            <th className="px-3 py-2.5 font-medium">Room Type</th>
+                            <th className="px-3 py-2.5 font-medium">Capacity</th>
+                            <th className="px-3 py-2.5 font-medium">Description</th>
+                            <th className="px-3 py-2.5 text-right font-medium">Actions</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        </thead>
+                        <tbody>
+                          {zoneRooms.map((room) => {
+                            const Icon = iconForRoomType(room.type);
+                            return (
+                              <tr key={room.id} className="border-b border-border last:border-b-0">
+                                <td className="px-3 py-2.5">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-linear-to-br from-violet-500/25 to-indigo-500/25 text-foreground">
+                                      <Store className="size-4" />
+                                    </span>
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="font-medium text-foreground">{room.name}</span>
+                                      {room.tag && (
+                                        <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-400">
+                                          {room.tag}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                    <Icon className="size-3.5" />
+                                    {room.type}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 text-foreground">{room.capacity}</td>
+                                <td className="px-3 py-2.5 text-muted-foreground">{room.description}</td>
+                                <td className="px-3 py-2.5 text-right">
+                                  <RoomActionsMenu
+                                    isOpen={openRoomMenuId === room.id}
+                                    onToggle={() => setOpenRoomMenuId((id) => (id === room.id ? null : room.id))}
+                                    onClose={() => setOpenRoomMenuId(null)}
+                                    onEdit={() => {
+                                      setOpenRoomMenuId(null);
+                                      setEditingRoom(room);
+                                    }}
+                                    onDelete={() => {
+                                      setOpenRoomMenuId(null);
+                                      onDeleteRoom(room.id);
+                                    }}
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Stacked cards — below sm */}
+                    <div className="space-y-3 p-3 sm:hidden">
+                      {zoneRooms.map((room) => (
+                        <RoomCard
+                          key={room.id}
+                          room={room}
+                          Icon={iconForRoomType(room.type)}
+                          isMenuOpen={openRoomMenuId === room.id}
+                          onToggleMenu={() => setOpenRoomMenuId((id) => (id === room.id ? null : room.id))}
+                          onCloseMenu={() => setOpenRoomMenuId(null)}
+                          onEdit={() => {
+                            setOpenRoomMenuId(null);
+                            setEditingRoom(room);
+                          }}
+                          onDelete={() => {
+                            setOpenRoomMenuId(null);
+                            onDeleteRoom(room.id);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </>
                 )}
 
                 <button

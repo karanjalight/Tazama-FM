@@ -327,7 +327,7 @@ export function RoomsZonesWorkspace({
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          <div>
             <ZoneRoomTable
               view={view}
               tab={tab}

@@ -23,7 +23,7 @@ export function ScreenHealth({
         <ScreenHealthRing {...summary} />
       </div>
 
-      <div className="mt-5 overflow-x-auto border-t border-border pt-4">
+      <div className="mt-5 hidden overflow-x-auto border-t border-border pt-4 sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -52,6 +52,27 @@ export function ScreenHealth({
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-5 space-y-3 border-t border-border pt-4 sm:hidden">
+        {screens.map((s) => {
+          const meta = STATUS_META[s.status];
+          return (
+            <div key={s.id} className="rounded-xl border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium text-foreground">{s.name}</p>
+                <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", meta.text)}>
+                  <span className={cn("size-1.5 rounded-full", meta.dot)} aria-hidden="true" />
+                  {meta.label}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{s.location}</span>
+                <span className="font-mono">{s.uptimePct != null ? `${s.uptimePct}%` : "—"}</span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

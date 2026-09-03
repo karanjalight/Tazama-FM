@@ -91,6 +91,77 @@ function DeviceRow({
   );
 }
 
+/** Card used both by the "grid" view (every screen size) and as the
+ * mobile fallback for the "list" view (< sm:). `showZone`/`showActions`
+ * are only turned on for the list-view mobile fallback so the fields the
+ * table exposes that the plain grid card doesn't (the zone badge, the
+ * actions kebab) aren't silently dropped there, without changing the
+ * grid view's own appearance. */
+function DeviceCard({
+  device,
+  selected,
+  onSelect,
+  showZone = false,
+  showActions = false,
+}: {
+  device: ManagedDevice;
+  selected: boolean;
+  onSelect: () => void;
+  showZone?: boolean;
+  showActions?: boolean;
+}) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={cn(
+        "cursor-pointer rounded-xl border p-4 text-left transition-colors",
+        selected ? "border-violet-500/50 bg-violet-500/8" : "border-border hover:bg-muted/40",
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <DeviceIcon kind={device.kind} />
+        <div className="flex items-center gap-1">
+          <StatusPill status={device.status} />
+          {showActions && (
+            <button
+              type="button"
+              aria-label="Device actions"
+              onClick={(e) => e.stopPropagation()}
+              className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <MoreVertical className="size-4" />
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="mt-2.5 font-medium text-foreground">{device.name}</p>
+      <p className="text-xs text-muted-foreground">{device.deviceModel || "Unknown model"}</p>
+      <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <span>{device.roomName ?? "Unassigned"}</span>
+        {showZone && device.zoneName && (
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {device.zoneName}
+          </span>
+        )}
+        <span>{device.lastSeenAt ? formatRelativeTime(device.lastSeenAt) : "Never connected"}</span>
+      </div>
+      {device.status === "pending" && device.pairingCode && (
+        <p className="mt-2 rounded-lg bg-amber-500/15 px-2 py-1 text-center font-mono text-sm font-semibold tracking-[0.2em] text-amber-400">
+          {device.pairingCode}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function DeviceTable({
   view,
   devices,
@@ -105,62 +176,60 @@ export function DeviceTable({
   if (view === "grid") {
     return (
       <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-        {devices.map((device) => {
-          const selected = device.id === selectedId;
-          return (
-            <button
-              key={device.id}
-              type="button"
-              onClick={() => onSelect(device.id)}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-colors",
-                selected ? "border-violet-500/50 bg-violet-500/8" : "border-border hover:bg-muted/40",
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <DeviceIcon kind={device.kind} />
-                <StatusPill status={device.status} />
-              </div>
-              <p className="mt-2.5 font-medium text-foreground">{device.name}</p>
-              <p className="text-xs text-muted-foreground">{device.deviceModel || "Unknown model"}</p>
-              <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{device.roomName ?? "Unassigned"}</span>
-                <span>{device.lastSeenAt ? formatRelativeTime(device.lastSeenAt) : "Never connected"}</span>
-              </div>
-              {device.status === "pending" && device.pairingCode && (
-                <p className="mt-2 rounded-lg bg-amber-500/15 px-2 py-1 text-center font-mono text-sm font-semibold tracking-[0.2em] text-amber-400">
-                  {device.pairingCode}
-                </p>
-              )}
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
-  return (
-    <table className="w-full text-sm">
-      <thead>
-        <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-          <th className="px-3 py-2.5 font-medium">Name</th>
-          <th className="px-3 py-2.5 font-medium">Type</th>
-          <th className="px-3 py-2.5 font-medium">Room / Zone</th>
-          <th className="px-3 py-2.5 font-medium">Status</th>
-          <th className="px-3 py-2.5 font-medium">Last Seen</th>
-          <th className="px-3 py-2.5 text-right font-medium">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
         {devices.map((device) => (
-          <DeviceRow
+          <DeviceCard
             key={device.id}
             device={device}
             selected={device.id === selectedId}
             onSelect={() => onSelect(device.id)}
           />
         ))}
-      </tbody>
-    </table>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Table on sm: and up; a card per device below sm: (same extracted
+          DeviceCard the grid view uses, with the fields the table exposes
+          that the plain card doesn't — zone badge, actions kebab —
+          switched on) so mobile never needs horizontal scrolling. */}
+      <div className="hidden sm:block">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+              <th className="px-3 py-2.5 font-medium">Name</th>
+              <th className="px-3 py-2.5 font-medium">Type</th>
+              <th className="px-3 py-2.5 font-medium">Room / Zone</th>
+              <th className="px-3 py-2.5 font-medium">Status</th>
+              <th className="px-3 py-2.5 font-medium">Last Seen</th>
+              <th className="px-3 py-2.5 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {devices.map((device) => (
+              <DeviceRow
+                key={device.id}
+                device={device}
+                selected={device.id === selectedId}
+                onSelect={() => onSelect(device.id)}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="space-y-3 p-4 sm:hidden">
+        {devices.map((device) => (
+          <DeviceCard
+            key={device.id}
+            device={device}
+            selected={device.id === selectedId}
+            onSelect={() => onSelect(device.id)}
+            showZone
+            showActions
+          />
+        ))}
+      </div>
+    </>
   );
 }

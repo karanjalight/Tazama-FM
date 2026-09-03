@@ -10,6 +10,67 @@ import { useDialogTrigger } from "../use-dialog-trigger";
 import { AddRoomDialog, type NewRoomInput } from "../modals/add-room-dialog";
 import { AddScreenDialog, type NewScreenInput } from "../modals/add-screen-dialog";
 
+function ScreenStatusPill({ status }: { status: WizardScreen["status"] }) {
+  const online = status === "online";
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", online ? "text-emerald-400" : "text-rose-400")}>
+      <span className={cn("size-1.5 rounded-full", online ? "bg-emerald-500" : "bg-rose-500")} />
+      {online ? "Online" : "Offline"}
+    </span>
+  );
+}
+
+/** Mobile card — same info as the table row, at a glance: identity (icon +
+ * name + Primary badge + device model) up top, the remaining fields as a
+ * compact grid beneath. The kebab button is inert in the table today
+ * (no dropdown wired up), so the card's is equally inert — nothing to
+ * replicate beyond the aria-label. */
+function ScreenCard({ screen }: { screen: WizardScreen }) {
+  return (
+    <div className="rounded-xl border border-border p-3">
+      <div className="flex items-start gap-2.5">
+        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-linear-to-br from-blue-500/25 to-indigo-500/25 text-foreground">
+          <Tv className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate font-medium text-foreground">{screen.name}</p>
+            {screen.isPrimary && (
+              <span className="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                Primary
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{screen.deviceModel}</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Screen actions"
+          className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <MoreVertical className="size-4" />
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t border-border pt-3 text-xs">
+        <div>
+          <p className="text-muted-foreground">Device ID</p>
+          <p className="mt-0.5 font-mono text-muted-foreground italic">Generated on creation</p>
+        </div>
+        <div>
+          <p className="text-muted-foreground">Type</p>
+          <p className="mt-0.5 text-foreground">{screen.type}</p>
+        </div>
+        <div className="col-span-2">
+          <p className="text-muted-foreground">Status</p>
+          <div className="mt-0.5">
+            <ScreenStatusPill status={screen.status} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ScreensDevicesStep({
   zones,
   rooms,
@@ -162,74 +223,72 @@ export function ScreensDevicesStep({
 
               {roomScreens.length > 0 ? (
                 <div className="mt-3 overflow-hidden rounded-xl border border-border">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
-                        <th className="px-3 py-2.5 font-medium">Screen Name</th>
-                        <th className="px-3 py-2.5 font-medium">Device ID</th>
-                        <th className="px-3 py-2.5 font-medium">Type</th>
-                        <th className="px-3 py-2.5 font-medium">Status</th>
-                        <th className="px-3 py-2.5 text-right font-medium">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {roomScreens.map((screen) => (
-                        <tr key={screen.id} className="border-b border-border last:border-b-0">
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-2.5">
-                              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-linear-to-br from-blue-500/25 to-indigo-500/25 text-foreground">
-                                <Tv className="size-4" />
-                              </span>
-                              <span>
-                                <span className="flex items-center gap-1.5">
-                                  <span className="font-medium text-foreground">{screen.name}</span>
-                                  {screen.isPrimary && (
-                                    <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
-                                      Primary
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="block text-xs text-muted-foreground">
-                                  {screen.deviceModel}
-                                </span>
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span className="font-mono text-xs text-muted-foreground italic">
-                              Generated on creation
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-muted-foreground">{screen.type}</td>
-                          <td className="px-3 py-2.5">
-                            <span
-                              className={cn(
-                                "inline-flex items-center gap-1.5 text-xs font-medium",
-                                screen.status === "online" ? "text-emerald-400" : "text-rose-400",
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "size-1.5 rounded-full",
-                                  screen.status === "online" ? "bg-emerald-500" : "bg-rose-500",
-                                )}
-                              />
-                              {screen.status === "online" ? "Online" : "Offline"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-right">
-                            <button
-                              type="button"
-                              aria-label="Screen actions"
-                              className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            >
-                              <MoreVertical className="size-4" />
-                            </button>
-                          </td>
+                  {/* Table — sm and up */}
+                  <div className="hidden sm:block">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+                          <th className="px-3 py-2.5 font-medium">Screen Name</th>
+                          <th className="px-3 py-2.5 font-medium">Device ID</th>
+                          <th className="px-3 py-2.5 font-medium">Type</th>
+                          <th className="px-3 py-2.5 font-medium">Status</th>
+                          <th className="px-3 py-2.5 text-right font-medium">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {roomScreens.map((screen) => (
+                          <tr key={screen.id} className="border-b border-border last:border-b-0">
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2.5">
+                                <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-linear-to-br from-blue-500/25 to-indigo-500/25 text-foreground">
+                                  <Tv className="size-4" />
+                                </span>
+                                <span>
+                                  <span className="flex items-center gap-1.5">
+                                    <span className="font-medium text-foreground">{screen.name}</span>
+                                    {screen.isPrimary && (
+                                      <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-400">
+                                        Primary
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {screen.deviceModel}
+                                  </span>
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <span className="font-mono text-xs text-muted-foreground italic">
+                                Generated on creation
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-muted-foreground">{screen.type}</td>
+                            <td className="px-3 py-2.5">
+                              <ScreenStatusPill status={screen.status} />
+                            </td>
+                            <td className="px-3 py-2.5 text-right">
+                              <button
+                                type="button"
+                                aria-label="Screen actions"
+                                className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              >
+                                <MoreVertical className="size-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Stacked cards — below sm */}
+                  <div className="space-y-3 p-3 sm:hidden">
+                    {roomScreens.map((screen) => (
+                      <ScreenCard key={screen.id} screen={screen} />
+                    ))}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => screenDialog.show()}

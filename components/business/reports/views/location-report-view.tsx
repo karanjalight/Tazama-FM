@@ -20,28 +20,56 @@ export function LocationReportView({ snapshot, dateRangeLabel }: { snapshot: Ana
       <ReportTwoColumn
         left={
           <ReportSection title="Location Performance" first>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="py-1.5 pr-3 font-medium">Location</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Screens</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Uptime</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Plays</th>
-                  <th className="py-1.5 pl-3 text-right font-medium">Ad Plays</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.locationPerformance.map((l) => (
-                  <tr key={l.id} className="border-b border-border/60 last:border-b-0">
-                    <td className="py-2 pr-3 text-foreground">{l.name}</td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">{l.screens}</td>
-                    <td className="px-3 py-2 text-right font-mono text-emerald-400">{l.uptimePct}%</td>
-                    <td className="px-3 py-2 text-right font-mono text-foreground">{l.plays.toLocaleString()}</td>
-                    <td className="py-2 pl-3 text-right font-mono text-muted-foreground">{l.adPlays.toLocaleString()}</td>
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="py-1.5 pr-3 font-medium">Location</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Screens</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Uptime</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Plays</th>
+                    <th className="py-1.5 pl-3 text-right font-medium">Ad Plays</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {snapshot.locationPerformance.map((l) => (
+                    <tr key={l.id} className="border-b border-border/60 last:border-b-0">
+                      <td className="py-2 pr-3 text-foreground">{l.name}</td>
+                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">{l.screens}</td>
+                      <td className="px-3 py-2 text-right font-mono text-emerald-400">{l.uptimePct}%</td>
+                      <td className="px-3 py-2 text-right font-mono text-foreground">{l.plays.toLocaleString()}</td>
+                      <td className="py-2 pl-3 text-right font-mono text-muted-foreground">{l.adPlays.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-3 sm:hidden">
+              {snapshot.locationPerformance.map((l) => (
+                <div key={l.id} className="rounded-xl border border-border/60 p-3">
+                  <p className="font-medium text-foreground">{l.name}</p>
+                  <div className="mt-3 grid grid-cols-2 gap-x-2 gap-y-3 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Screens</p>
+                      <p className="font-mono text-muted-foreground">{l.screens}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Uptime</p>
+                      <p className="font-mono text-emerald-400">{l.uptimePct}%</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Plays</p>
+                      <p className="font-mono text-foreground">{l.plays.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Ad Plays</p>
+                      <p className="font-mono text-muted-foreground">{l.adPlays.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </ReportSection>
         }
         right={

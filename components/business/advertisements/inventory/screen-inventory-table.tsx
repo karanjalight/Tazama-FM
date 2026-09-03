@@ -42,7 +42,7 @@ export function ScreenInventoryTable() {
         />
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -68,6 +68,24 @@ export function ScreenInventoryTable() {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-3 sm:hidden">
+        {pageItems.map((s) => (
+          <div key={s.id} className="rounded-xl border border-border bg-card p-3">
+            <p className="font-medium text-foreground">{s.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {s.location} <span className="text-xs">· {s.zone}</span>
+            </p>
+            <div className="mt-2 flex items-center justify-between">
+              <span className={cn("text-xs font-medium", AVAILABILITY_META[s.availability])}>{s.availability}</span>
+              <span>
+                <span className="font-mono text-xs text-muted-foreground">KES {s.indicativeCpm}</span>
+                <span className="ml-1.5 text-[10px] text-muted-foreground/70">Indicative</span>
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">

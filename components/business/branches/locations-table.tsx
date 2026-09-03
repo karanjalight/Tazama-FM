@@ -49,12 +49,12 @@ export function LocationsTable({
         <h2 className="text-base font-semibold text-foreground">
           All Locations <span className="text-muted-foreground">({total})</span>
         </h2>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
           <Input
             value={query}
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Search locations..."
-            className="h-9 w-48 rounded-lg text-sm"
+            className="h-9 w-full rounded-lg text-sm sm:w-48"
           />
           <Select
             value={status}
@@ -72,7 +72,8 @@ export function LocationsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Table on sm: and up; a card per location below sm:. */}
+      <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-muted-foreground">
@@ -141,6 +142,55 @@ export function LocationsTable({
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="space-y-3 border-t border-border p-4 sm:hidden">
+        {locations.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">No locations match your filters.</p>
+        ) : (
+          locations.map((loc) => {
+            const selected = loc.id === selectedId;
+            return (
+              <div
+                key={loc.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelect(loc.id)}
+                onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onSelect(loc.id)}
+                className={cn(
+                  "rounded-2xl border p-4 transition-colors",
+                  selected ? "border-violet-500 bg-violet-500/8" : "border-border hover:bg-muted/40",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-linear-to-br from-violet-500/25 to-indigo-500/25 text-foreground">
+                    <Store className="size-4.5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground">{loc.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{loc.address ?? "No address set"}</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Row actions"
+                    onClick={(e) => e.stopPropagation()}
+                    className="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs">
+                  <span className="text-muted-foreground">{loc.rooms} rooms</span>
+                  <span className="text-muted-foreground">
+                    {loc.screens} screens · <span className="text-emerald-400">{loc.screensOnline} online</span>
+                  </span>
+                  <StatusPill status={loc.status} />
+                  <span className="text-muted-foreground">{loc.lastSeenAt ? formatRelativeTime(loc.lastSeenAt) : "Never"}</span>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-muted-foreground">

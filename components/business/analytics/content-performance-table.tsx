@@ -23,7 +23,7 @@ export function ContentPerformanceTable({ rows }: { rows: ContentPerformanceRow[
     <div className="rounded-2xl border border-border bg-card p-5">
       <h2 className="text-base font-semibold text-foreground">Content Performance</h2>
 
-      <div className="mt-3 overflow-x-auto">
+      <div className="mt-3 hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -84,6 +84,65 @@ export function ContentPerformanceTable({ rows }: { rows: ContentPerformanceRow[
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Stacked cards — below sm */}
+      <div className="mt-3 space-y-3 sm:hidden">
+        {rows.map((row) => {
+          const Icon = TYPE_ICON[row.type];
+          const isUp = row.trendPct >= 0;
+          const TrendIcon = isUp ? TrendingUp : TrendingDown;
+          return (
+            <div
+              key={row.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`View details for ${row.title}`}
+              onClick={() => setSelected(row)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setSelected(row);
+                }
+              }}
+              className="cursor-pointer rounded-xl border border-border/60 p-3 transition-colors hover:bg-muted/40 focus-visible:bg-muted/50 focus-visible:outline-none"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-muted">
+                  {row.thumbnail ? (
+                    <Image src={row.thumbnail} alt="" fill sizes="36px" className="object-cover" unoptimized />
+                  ) : (
+                    <div className="grid h-full place-items-center text-muted-foreground">
+                      <Icon className="size-4" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">{row.title}</p>
+                  <p className="text-xs text-muted-foreground">{row.type}</p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-xs">
+                <div>
+                  <p className="text-muted-foreground">Plays</p>
+                  <p className="font-mono text-foreground">{row.plays.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Reach</p>
+                  <p className="font-mono text-foreground">{row.reach.toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Trend</p>
+                  <span className={cn("inline-flex items-center gap-1 font-mono font-medium", isUp ? "text-emerald-400" : "text-rose-400")}>
+                    <TrendIcon className="size-3.5" aria-hidden="true" />
+                    {isUp ? "+" : ""}
+                    {row.trendPct}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <Sheet open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>

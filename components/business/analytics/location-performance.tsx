@@ -5,7 +5,7 @@ export function LocationPerformance({ rows }: { rows: LocationPerformanceRow[] }
     <div className="rounded-2xl border border-border bg-card p-5">
       <h2 className="text-base font-semibold text-foreground">Location Performance</h2>
 
-      <div className="mt-3 overflow-x-auto">
+      <div className="mt-3 hidden overflow-x-auto sm:block">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs text-muted-foreground">
@@ -30,6 +30,37 @@ export function LocationPerformance({ rows }: { rows: LocationPerformanceRow[] }
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Stacked cards — below sm */}
+      <div className="mt-3 space-y-3 sm:hidden">
+        {rows.map((row) => (
+          <div key={row.id} className="rounded-xl border border-border/60 p-3">
+            <p className="font-medium text-foreground">{row.name}</p>
+            <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-3 text-xs">
+              <div>
+                <p className="text-muted-foreground">Screens</p>
+                <p className="font-mono text-muted-foreground">{row.screens}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Uptime</p>
+                <p className="font-mono text-emerald-400">{row.uptimePct}%</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Plays</p>
+                <p className="font-mono text-foreground">{row.plays.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Reach</p>
+                <p className="font-mono text-muted-foreground">{row.reach.toLocaleString()}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Ad Plays</p>
+                <p className="font-mono text-muted-foreground">{row.adPlays.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

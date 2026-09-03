@@ -20,26 +20,50 @@ export function AdvertisingReportView({ snapshot, dateRangeLabel }: { snapshot: 
       <ReportTwoColumn
         left={
           <ReportSection title="Campaign Performance" first>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="py-1.5 pr-3 font-medium">Campaign</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Plays</th>
-                  <th className="px-3 py-1.5 text-right font-medium">Reach</th>
-                  <th className="py-1.5 pl-3 text-right font-medium">Completion</th>
-                </tr>
-              </thead>
-              <tbody>
-                {advertising.campaigns.map((c) => (
-                  <tr key={c.id} className="border-b border-border/60 last:border-b-0">
-                    <td className="py-2 pr-3 text-foreground">{c.name}</td>
-                    <td className="px-3 py-2 text-right font-mono text-foreground">{c.plays.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right font-mono text-muted-foreground">{c.reach.toLocaleString()}</td>
-                    <td className="py-2 pl-3 text-right font-mono text-emerald-400">{c.completionPct}%</td>
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="py-1.5 pr-3 font-medium">Campaign</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Plays</th>
+                    <th className="px-3 py-1.5 text-right font-medium">Reach</th>
+                    <th className="py-1.5 pl-3 text-right font-medium">Completion</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {advertising.campaigns.map((c) => (
+                    <tr key={c.id} className="border-b border-border/60 last:border-b-0">
+                      <td className="py-2 pr-3 text-foreground">{c.name}</td>
+                      <td className="px-3 py-2 text-right font-mono text-foreground">{c.plays.toLocaleString()}</td>
+                      <td className="px-3 py-2 text-right font-mono text-muted-foreground">{c.reach.toLocaleString()}</td>
+                      <td className="py-2 pl-3 text-right font-mono text-emerald-400">{c.completionPct}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="space-y-3 sm:hidden">
+              {advertising.campaigns.map((c) => (
+                <div key={c.id} className="rounded-xl border border-border/60 p-3">
+                  <p className="font-medium text-foreground">{c.name}</p>
+                  <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-3 text-xs">
+                    <div>
+                      <p className="text-muted-foreground">Plays</p>
+                      <p className="font-mono text-foreground">{c.plays.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Reach</p>
+                      <p className="font-mono text-muted-foreground">{c.reach.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Completion</p>
+                      <p className="font-mono text-emerald-400">{c.completionPct}%</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </ReportSection>
         }
         right={

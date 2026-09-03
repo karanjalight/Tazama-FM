@@ -139,7 +139,7 @@ export function AudioZonesWorkspace({
               </div>
             </div>
 
-            <div className="overflow-x-auto border-t border-border">
+            <div className="border-t border-border">
               <AudioZoneTable view={view} zones={filtered} selectedId={selectedId} onSelect={setSelectedId} />
               {filtered.length === 0 && (
                 <p className="px-4 py-10 text-center text-sm text-muted-foreground">

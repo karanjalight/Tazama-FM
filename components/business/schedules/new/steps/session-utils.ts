@@ -166,8 +166,8 @@ export function describeSessionBehavior(session: ScheduleSession): string {
     const gap = `${minutes} minute${minutes === 1 ? "" : "s"}`;
     base =
       session.contentRepeat === "loop"
-        ? `Music plays for ${gap}, content interrupts and plays through once, then it's music again for ${gap} — repeating for as long as this session runs.`
-        : `Music plays for ${gap}, content interrupts and plays through once, then it's music for good — that one interruption is the only one this session.`;
+        ? `Content plays through once right away, then it's music for ${gap}, then content again — repeating for as long as this session runs.`
+        : `Content plays through once right away, then it's music for good — that one playthrough is the only one this session.`;
   } else {
     base = `Content plays ${session.contentRepeat === "loop" ? "on a loop" : "once"} while playlist music continues in the background.`;
   }

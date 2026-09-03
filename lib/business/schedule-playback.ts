@@ -81,15 +81,14 @@ async function loadCurrentSession(scheduleId: string): Promise<
  * (every call recomputes fresh from `elapsedMs`, the same way
  * `resolveCurrentSession` itself recomputes fresh from wall-clock time).
  *
- * Model: music plays for `intervalMinutes`, then content plays the full
- * ordered list through once (however long the list's own total duration
- * is), then hands back to music for another full `intervalMinutes` before
- * the next occurrence — `intervalMinutes` is always the MUSIC gap's own
- * length, not a fixed clock tick from session start, so a longer content
- * list never eats into the gap that follows it. `contentRepeat: "loop"`
- * repeats that (interval-music, content) cycle for as long as the session
- * runs; `"once"` means content plays through exactly once, after the very
- * first interval-music gap, and never again for the rest of this run.
+ * Model: content plays immediately (the full ordered list through once,
+ * however long that takes), then hands back to music for a full
+ * `intervalMinutes` before the next occurrence — `intervalMinutes` is
+ * always the MUSIC gap's own length, not a fixed clock tick from session
+ * start, so a longer content list never eats into the gap that follows it.
+ * `contentRepeat: "loop"` repeats that (content, interval-music) cycle for
+ * as long as the session runs; `"once"` means that very first playthrough
+ * is the only one that ever happens — music plays for good once it ends.
  */
 export function resolvePeriodicContent(
   ordered: ScheduleSessionContentItem[],
@@ -104,23 +103,18 @@ export function resolvePeriodicContent(
 
   if (totalMs <= 0) return { item: null, recheckInSeconds: Math.ceil(intervalMs / 1000) };
 
-  // Every occurrence (loop or once) starts with one full interval of music.
-  if (clampedElapsedMs < intervalMs) {
-    return { item: null, recheckInSeconds: Math.max(1, Math.ceil((intervalMs - clampedElapsedMs) / 1000)) };
-  }
-
   let withinPlaythroughMs: number;
   if (contentRepeat === "once") {
-    withinPlaythroughMs = clampedElapsedMs - intervalMs;
-    if (withinPlaythroughMs >= totalMs) {
-      // Already played its one-and-only interruption — music forever after;
+    if (clampedElapsedMs >= totalMs) {
+      // Already played its one-and-only occurrence — music forever after;
       // let the caller fall back to its own session-boundary-only default
       // instead of a bogus short recheck.
       return { item: null, recheckInSeconds: null };
     }
+    withinPlaythroughMs = clampedElapsedMs;
   } else {
     const cycleMs = totalMs + intervalMs;
-    const cyclePos = (clampedElapsedMs - intervalMs) % cycleMs;
+    const cyclePos = clampedElapsedMs % cycleMs;
     if (cyclePos >= totalMs) {
       return { item: null, recheckInSeconds: Math.max(1, Math.ceil((cycleMs - cyclePos) / 1000)) };
     }

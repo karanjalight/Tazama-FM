@@ -31,10 +31,12 @@ export interface ManagedDevice {
    * — a real, meaningful third state now that screens can be registered
    * from the dashboard before a physical device pairs to them. */
   status: DeviceStatus;
-  /** The real 4-digit code to enter on /pair, if this device still has an
-   * unredeemed dashboard-initiated pairing row (see registerDevice()) — null
-   * once claimed (the row is deleted on redemption) or if it was never
-   * registered this way to begin with. */
+  /** The real 4-digit code to enter on /pair, if this device has an
+   * unredeemed dashboard-initiated pairing row (see registerDevice() and
+   * regenerateDevicePairingCode()) — null once claimed (the row is deleted
+   * on redemption), expired, or if none was ever issued. Populated for any
+   * device, not just never-connected ones, so a code regenerated for a
+   * device that has since gone offline still shows up after a refresh. */
   pairingCode: string | null;
   pairingCodeExpiresAt: string | null;
 }
@@ -55,7 +57,8 @@ interface DeviceRow {
 }
 
 /** Live (unredeemed, unexpired) dashboard-initiated pairing codes, keyed by
- * device_token — only ever looked up for devices with no heartbeat yet. */
+ * device_token — looked up for every device on the branch, since a code can
+ * now be regenerated for a device that has already connected before. */
 async function pairingCodesByToken(
   admin: SupabaseClient,
   deviceTokens: string[],
@@ -151,8 +154,10 @@ export async function listBranchDevicesDetailed(branchId: string): Promise<Manag
   const zoneById = new Map(zones.map((z) => [z.id, z]));
 
   const rows = (data ?? []) as DeviceRow[];
-  const pendingTokens = rows.filter((r) => !r.last_seen_at).map((r) => r.device_token);
-  const pairingCodes = await pairingCodesByToken(admin, pendingTokens);
+  const pairingCodes = await pairingCodesByToken(
+    admin,
+    rows.map((r) => r.device_token),
+  );
 
   return rows.map((row) => {
     const room = row.room_id ? roomById.get(row.room_id) : undefined;

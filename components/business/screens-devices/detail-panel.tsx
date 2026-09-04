@@ -9,6 +9,7 @@ import {
   MonitorPlay,
   Pencil,
   Power,
+  RefreshCw,
   RotateCw,
   Trash2,
   Volume2,
@@ -17,7 +18,7 @@ import {
 } from "lucide-react";
 
 import type { ManagedDevice } from "@/lib/business/device-queries";
-import { renameDevice } from "@/app/business/locations/actions";
+import { renameDevice, regenerateDevicePairingCode } from "@/app/business/locations/actions";
 import { forgetDevice } from "@/app/business/actions";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
   const [name, setName] = React.useState(device.name);
   const [saving, setSaving] = React.useState(false);
   const [removing, setRemoving] = React.useState(false);
+  const [regenerating, setRegenerating] = React.useState(false);
 
   async function handleSave() {
     const trimmed = name.trim();
@@ -78,6 +80,23 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
     }
     toast.success("Device renamed.");
     setEditing(false);
+    router.refresh();
+  }
+
+  async function handleRegenerateCode() {
+    const message =
+      device.status === "online"
+        ? `${device.name} is currently online. Regenerating its pairing code will disconnect it until it's re-paired with the new code. Continue?`
+        : `Generate a new pairing code for ${device.name}?`;
+    if (!confirm(message)) return;
+    setRegenerating(true);
+    const res = await regenerateDevicePairingCode({ branchId: device.branchId, deviceId: device.id });
+    setRegenerating(false);
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("New pairing code generated.");
     router.refresh();
   }
 
@@ -150,7 +169,7 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
         </div>
         <p className="mt-0.5 text-sm text-muted-foreground">{device.deviceModel || "Unknown model"}</p>
 
-        {device.status === "pending" && device.pairingCode && (
+        {device.pairingCode && (
           <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-center">
             <p className="text-xs font-medium text-amber-300">
               Not connected yet — enter this code on {device.name}&apos;s screen
@@ -202,49 +221,61 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
           <DetailRow icon={Power} label="Paired" value={formatRelativeTime(device.pairedAt)} />
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-4">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditing(false);
-                  setName(device.name);
-                }}
-                className="rounded-xl border border-input py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving || !name.trim()}
-                className="rounded-xl bg-violet-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save"}
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
-              >
-                <Pencil className="size-3.5" />
-                Rename
-              </button>
-              <button
-                type="button"
-                onClick={handleForget}
-                disabled={removing}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-strong py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#a82420] disabled:opacity-50"
-              >
-                <Trash2 className="size-3.5" />
-                {removing ? "Forgetting…" : "Forget"}
-              </button>
-            </>
-          )}
+        <div className="mt-4 space-y-2 border-t border-border pt-4">
+          <button
+            type="button"
+            onClick={handleRegenerateCode}
+            disabled={regenerating}
+            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-input py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+          >
+            <RefreshCw className={cn("size-3.5", regenerating && "animate-spin")} />
+            {regenerating ? "Generating…" : "Regenerate Pairing Code"}
+          </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            {editing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(false);
+                    setName(device.name);
+                  }}
+                  className="rounded-xl border border-input py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={saving || !name.trim()}
+                  className="rounded-xl bg-violet-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  <Pencil className="size-3.5" />
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForget}
+                  disabled={removing}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-brand-strong py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#a82420] disabled:opacity-50"
+                >
+                  <Trash2 className="size-3.5" />
+                  {removing ? "Forgetting…" : "Forget"}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

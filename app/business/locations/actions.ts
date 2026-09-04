@@ -521,6 +521,98 @@ export async function registerDevice(input: {
   return { ok: true, deviceId: device.id, code };
 }
 
+export type RegenerateDeviceCodeResult =
+  | { ok: true; code: string }
+  | { ok: false; error: string };
+
+/**
+ * For a device that's lost its pairing (factory reset, wiped app storage, or
+ * a swapped physical screen) — mints a fresh device_token and a fresh
+ * dashboard_initiated code for the SAME branch_devices row, so re-pairing
+ * doesn't lose the device's name/room/history the way forgetDevice() +
+ * registerDevice() again would.
+ *
+ * Deliberately does not reuse the device's existing device_token: a token
+ * from a device-initiated pairing (pair-init/claimDevice()) never gets its
+ * device_pairings row deleted on claim (only claim-code's dashboard-initiated
+ * flow does that), so the old token could still be occupying
+ * device_pairings.device_token's unique constraint. A fresh randomUUID()
+ * sidesteps that regardless of how the device was originally paired.
+ *
+ * Order matters for failure safety: the new device_pairings row is inserted
+ * BEFORE the device's token is switched over, so a failed insert leaves the
+ * device's existing (working) token untouched; if the token swap itself then
+ * fails, the just-inserted pairing row is rolled back so it can't be
+ * redeemed against a token nothing actually carries.
+ */
+export async function regenerateDevicePairingCode(input: {
+  branchId: string;
+  deviceId: string;
+}): Promise<RegenerateDeviceCodeResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || !canActOnBranch(viewer, input.branchId)) {
+    return { ok: false, error: "You don't have access to this branch." };
+  }
+
+  const branch = await getBranch(viewer.businessId, input.branchId);
+  if (!branch) return { ok: false, error: "Branch not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { ok: false, error: "Not configured." };
+
+  const { data: device, error: deviceError } = await admin
+    .from("branch_devices")
+    .select("id, room_id")
+    .eq("id", input.deviceId)
+    .eq("branch_id", branch.id)
+    .maybeSingle();
+  if (deviceError || !device) return { ok: false, error: "Device not found." };
+  if (!device.room_id) {
+    return { ok: false, error: "This device has no room assigned — reassign it before re-pairing." };
+  }
+
+  const newDeviceToken = crypto.randomUUID();
+
+  let code = generateDeviceCode();
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: existing } = await admin
+      .from("device_pairings")
+      .select("id")
+      .eq("code", code)
+      .maybeSingle();
+    if (!existing) break;
+    code = generateDeviceCode();
+  }
+
+  const now = new Date();
+  const { error: pairingError } = await admin.from("device_pairings").insert({
+    code,
+    device_token: newDeviceToken,
+    claimed_branch_id: branch.id,
+    claimed_room_id: device.room_id,
+    claimed_at: now.toISOString(),
+    origin: "dashboard_initiated",
+    expires_at: new Date(now.getTime() + DEVICE_CODE_EXPIRY_MS).toISOString(),
+  });
+  if (pairingError) {
+    console.error("regenerateDevicePairingCode: device_pairings insert failed", pairingError);
+    return { ok: false, error: "Could not generate a pairing code for this device." };
+  }
+
+  const { error: tokenError } = await admin
+    .from("branch_devices")
+    .update({ device_token: newDeviceToken })
+    .eq("id", device.id);
+  if (tokenError) {
+    console.error("regenerateDevicePairingCode: branch_devices token update failed", tokenError);
+    await admin.from("device_pairings").delete().eq("device_token", newDeviceToken);
+    return { ok: false, error: "Could not update the device's pairing token." };
+  }
+
+  revalidatePath(`/business/branches/${branch.id}/screens-devices`);
+  return { ok: true, code };
+}
+
 export async function renameDevice(input: {
   branchId: string;
   deviceId: string;

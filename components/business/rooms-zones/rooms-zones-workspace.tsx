@@ -6,6 +6,8 @@ import { ChevronDown, DoorOpen, LayoutGrid, List, Plus, Search, SlidersHorizonta
 import { toast } from "sonner";
 
 import type { Zone, Room } from "@/lib/business/locations-queries";
+import type { ManagedDevice } from "@/lib/business/device-queries";
+import type { AudioZone } from "@/lib/business/audio-zone-types";
 import {
   createZone,
   updateZone,
@@ -37,10 +39,14 @@ export function RoomsZonesWorkspace({
   branchId,
   initialZones,
   initialRooms,
+  devices,
+  audioZones,
 }: {
   branchId: string;
   initialZones: Zone[];
   initialRooms: Room[];
+  devices: ManagedDevice[];
+  audioZones: AudioZone[];
 }) {
   const router = useRouter();
 
@@ -376,6 +382,8 @@ export function RoomsZonesWorkspace({
           <ZoneDetailPanel
             zone={selectedZone}
             rooms={rooms}
+            devices={devices}
+            audioZones={audioZones}
             onViewRooms={() => setTab("rooms")}
             onUpdate={(patch) => handleUpdateZone(selectedZone.id, patch)}
             onDelete={() => handleDeleteZone(selectedZone.id)}
@@ -386,6 +394,8 @@ export function RoomsZonesWorkspace({
             room={selectedRoom}
             zone={selectedRoomZone}
             zones={zones}
+            devices={devices}
+            audioZones={audioZones}
             onUpdate={(patch) => handleUpdateRoom(selectedRoom.id, patch)}
             onDelete={() => handleDeleteRoom(selectedRoom.id)}
             pending={pending}

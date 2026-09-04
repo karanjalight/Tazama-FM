@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 
 import type { Zone, Room } from "@/lib/business/locations-queries";
+import type { ManagedDevice } from "@/lib/business/device-queries";
+import type { AudioZone } from "@/lib/business/audio-zone-types";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -102,6 +104,8 @@ function formatHours(start: string | null, end: string | null): string {
 export function ZoneDetailPanel({
   zone,
   rooms,
+  devices,
+  audioZones,
   onViewRooms,
   onUpdate,
   onDelete,
@@ -109,6 +113,8 @@ export function ZoneDetailPanel({
 }: {
   zone: Zone;
   rooms: Room[];
+  devices: ManagedDevice[];
+  audioZones: AudioZone[];
   onViewRooms: () => void;
   onUpdate: (patch: ZoneUpdateInput) => void | Promise<void>;
   onDelete: () => void;
@@ -116,6 +122,12 @@ export function ZoneDetailPanel({
 }) {
   const zoneRooms = rooms.filter((r) => r.zoneId === zone.id);
   const capacity = zoneRooms.reduce((sum, r) => sum + (r.capacity ?? 0), 0);
+  const zoneRoomIds = new Set(zoneRooms.map((r) => r.id));
+  const zoneScreens = devices.filter((d) => d.kind === "screen" && d.roomId && zoneRoomIds.has(d.roomId));
+  const zoneScreensOnline = zoneScreens.filter((d) => d.status === "online").length;
+  const zoneAudioZoneCount = audioZones.filter((az) =>
+    az.roomIds.some((roomId) => zoneRoomIds.has(roomId)),
+  ).length;
 
   const [editing, setEditing] = React.useState(false);
   const [name, setName] = React.useState(zone.name);
@@ -223,8 +235,13 @@ export function ZoneDetailPanel({
               <h3 className="text-sm font-semibold text-foreground">Overview</h3>
               <div className="mt-2.5 grid grid-cols-2 gap-2.5">
                 <MiniStat icon={DoorOpen} label="Rooms" value={zoneRooms.length} />
-                <MiniStat icon={MonitorPlay} label="Screens" value={0} sublabel="Not yet wired" />
-                <MiniStat icon={Volume2} label="Audio Zones" value={0} />
+                <MiniStat
+                  icon={MonitorPlay}
+                  label="Screens"
+                  value={zoneScreens.length}
+                  sublabel={zoneScreens.length ? `${zoneScreensOnline} online` : undefined}
+                />
+                <MiniStat icon={Volume2} label="Audio Zones" value={zoneAudioZoneCount} />
                 <MiniStat icon={Users} label="Capacity" value={capacity} sublabel="From rooms" />
               </div>
             </div>
@@ -283,6 +300,8 @@ export function RoomDetailPanel({
   room,
   zone,
   zones,
+  devices,
+  audioZones,
   onUpdate,
   onDelete,
   pending,
@@ -290,10 +309,14 @@ export function RoomDetailPanel({
   room: Room;
   zone: Zone | undefined;
   zones: Zone[];
+  devices: ManagedDevice[];
+  audioZones: AudioZone[];
   onUpdate: (patch: RoomUpdateInput) => void | Promise<void>;
   onDelete: () => void;
   pending: boolean;
 }) {
+  const roomScreens = devices.filter((d) => d.kind === "screen" && d.roomId === room.id);
+  const roomAudioZoneCount = audioZones.filter((az) => az.roomIds.includes(room.id)).length;
   const [editing, setEditing] = React.useState(false);
   const [name, setName] = React.useState(room.name);
   const [roomType, setRoomType] = React.useState(room.roomType ?? "");
@@ -426,8 +449,8 @@ export function RoomDetailPanel({
             <div>
               <h3 className="text-sm font-semibold text-foreground">Overview</h3>
               <div className="mt-2.5 grid grid-cols-3 gap-2.5">
-                <MiniStat icon={MonitorPlay} label="Screens" value={0} />
-                <MiniStat icon={Volume2} label="Audio Zones" value={0} />
+                <MiniStat icon={MonitorPlay} label="Screens" value={roomScreens.length} />
+                <MiniStat icon={Volume2} label="Audio Zones" value={roomAudioZoneCount} />
                 <MiniStat icon={Users} label="Capacity" value={room.capacity ?? 0} />
               </div>
             </div>

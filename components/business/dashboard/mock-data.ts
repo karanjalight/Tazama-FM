@@ -1,54 +1,15 @@
 /**
- * Static placeholder content for the redesigned business dashboard. Shaped
- * plausibly like the real `branches`/`branch_devices`/`room_playback` rows
- * (see lib/business/types.ts) so swapping in live queries later is a
- * reshape, not a rewrite — nothing here is wired to Supabase yet.
+ * Preview-only content for dashboard panels with no real backend yet
+ * (analytics events, ad-serving telemetry). Locations, screens,
+ * announcements, now-playing and active-user stats are real Supabase
+ * reads built in app/business/dashboard/page.tsx — see
+ * lib/business/{queries,locations-queries,announcement-queries,device-queries}.ts.
  */
-import {
-  Building2,
-  MonitorPlay,
-  Signal,
-  Users,
-  Play,
-  Clapperboard,
-  Megaphone,
-} from "lucide-react";
+import { Users, Play, Clapperboard } from "lucide-react";
 
 import type { StatItem } from "@/components/business/stat-tile";
 
-export const MOCK_STATS: StatItem[] = [
-  {
-    key: "locations",
-    label: "Locations",
-    value: "4",
-    sublabel: "All active",
-    icon: Building2,
-    color: "violet",
-  },
-  {
-    key: "screens",
-    label: "Screens",
-    value: "18",
-    sublabel: "17 online · 1 offline",
-    icon: MonitorPlay,
-    color: "blue",
-  },
-  {
-    key: "online",
-    label: "Online",
-    value: "17",
-    sublabel: "94.4% of screens",
-    icon: Signal,
-    color: "emerald",
-  },
-  {
-    key: "announcements",
-    label: "Announcements",
-    value: "12",
-    sublabel: "Sent today",
-    icon: Megaphone,
-    color: "pink",
-  },
+export const PREVIEW_STATS: StatItem[] = [
   {
     key: "reach",
     label: "Today's reach",
@@ -76,104 +37,7 @@ export const MOCK_STATS: StatItem[] = [
     icon: Clapperboard,
     color: "rose",
   },
-  {
-    key: "users",
-    label: "Active Users",
-    value: "32",
-    sublabel: "Sent today",
-    icon: Users,
-    color: "blue",
-  },
 ];
-
-export interface MockDevice {
-  id: string;
-  name: string;
-  kind: "screen" | "audio";
-  online: boolean;
-}
-
-export interface MockRoom {
-  id: string;
-  name: string;
-  devices: MockDevice[];
-}
-
-export interface MockLocation {
-  id: string;
-  name: string;
-  roomCount: number;
-  screenCount: number;
-  online: number;
-  offline: number;
-  rooms: MockRoom[];
-}
-
-export const MOCK_LOCATIONS: MockLocation[] = [
-  {
-    id: "nairobi-cbd",
-    name: "Nairobi CBD",
-    roomCount: 2,
-    screenCount: 8,
-    online: 7,
-    offline: 1,
-    rooms: [
-      {
-        id: "main-hall",
-        name: "Main Hall",
-        devices: [
-          { id: "tv01", name: "TV 01", kind: "screen", online: true },
-          { id: "tv02", name: "TV 02", kind: "screen", online: true },
-          { id: "audio-mh", name: "Audio", kind: "audio", online: true },
-        ],
-      },
-      {
-        id: "rooftop",
-        name: "Rooftop",
-        devices: [
-          { id: "tv03", name: "TV 03", kind: "screen", online: true },
-          { id: "tv04", name: "TV 04", kind: "screen", online: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: "westlands",
-    name: "Westlands",
-    roomCount: 1,
-    screenCount: 2,
-    online: 2,
-    offline: 0,
-    rooms: [],
-  },
-  {
-    id: "kilimani",
-    name: "Kilimani",
-    roomCount: 1,
-    screenCount: 4,
-    online: 4,
-    offline: 0,
-    rooms: [],
-  },
-  {
-    id: "thika-road",
-    name: "Thika Road",
-    roomCount: 1,
-    screenCount: 4,
-    online: 4,
-    offline: 0,
-    rooms: [],
-  },
-];
-
-export const MOCK_NOW_PLAYING = {
-  playlistName: "Afrobeats Hits",
-  nextUp: [
-    { title: "Calm Down", artist: "Rema", duration: "3:59" },
-    { title: "Soweto", artist: "Victony", duration: "2:57" },
-    { title: "Water", artist: "Tyla", duration: "3:20" },
-  ],
-};
 
 export const MOCK_TOP_CONTENT = [
   {
@@ -208,35 +72,6 @@ export const MOCK_TOP_CONTENT = [
     plays: 142,
     engagement: "11.3%",
   },
-];
-
-export const MOCK_ANNOUNCEMENTS = [
-  {
-    title: "Happy Hour – 5PM to 8PM",
-    meta: "Audio · All locations",
-    time: "10:30 AM",
-  },
-  {
-    title: "Weekend vibes this Friday!",
-    meta: "Image · Nairobi CBD",
-    time: "Yesterday",
-  },
-  {
-    title: "Staff meeting at 9AM",
-    meta: "Audio · All locations",
-    time: "Yesterday",
-  },
-  {
-    title: "New menu launch",
-    meta: "Image · All locations",
-    time: "Aug 26",
-  },
-];
-
-export const MOCK_SCREEN_STATUS = { total: 18, online: 17, offline: 1, idle: 0 };
-
-export const MOCK_OFFLINE_SCREENS = [
-  { name: "Rooftop TV 04", location: "Nairobi CBD", since: "2h 15m ago" },
 ];
 
 /** Hourly-bucketed, index-normalized (0-100) — three validated categorical series. */

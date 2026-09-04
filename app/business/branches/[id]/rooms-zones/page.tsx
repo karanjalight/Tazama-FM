@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronRight, DoorOpen, ExternalLink, LayoutGrid, MonitorPlay, Users, Volume2 } from "lucide-react";
 
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranchByIdOrSlug } from "@/lib/business/queries";
-import { listZones, listRooms } from "@/lib/business/locations-queries";
-import { ROOMS_ZONES_STATS } from "@/components/business/rooms-zones/mock-data";
+import { listZones, listRooms, type Zone, type Room } from "@/lib/business/locations-queries";
+import { listBranchDevicesDetailed, type ManagedDevice } from "@/lib/business/device-queries";
+import { listAudioZonesForBranch } from "@/lib/business/audio-zone-queries";
+import type { AudioZone } from "@/lib/business/audio-zone-types";
 import { RoomsZonesWorkspace } from "@/components/business/rooms-zones/rooms-zones-workspace";
-import { StatTile } from "@/components/business/stat-tile";
+import { StatTile, type StatItem } from "@/components/business/stat-tile";
 
 export const metadata: Metadata = { title: "Rooms & Zones — Business Dashboard" };
 
@@ -25,28 +27,14 @@ export default async function RoomsZonesPage({
   if (!branch) notFound();
   if (!canActOnBranch(viewer, branch.id)) notFound();
 
-  const [zones, rooms] = await Promise.all([
+  const [zones, rooms, devices, audioZones] = await Promise.all([
     listZones(branch.id),
     listRooms(branch.id),
+    listBranchDevicesDetailed(branch.id),
+    listAudioZonesForBranch(branch.id),
   ]);
 
-  // Screens / Capacity stay mock for now — Screens & Devices isn't wired yet.
-  // Rooms and Zones are real, now that this page reads live data instead of
-  // the static preview (Audio Zones has since gone real too — see
-  // /business/branches/[id]/audio-zones).
-  const stats = ROOMS_ZONES_STATS.map((stat) => {
-    if (stat.key === "rooms") {
-      return {
-        ...stat,
-        value: String(rooms.length),
-        sublabel: `Across ${zones.length} zone${zones.length === 1 ? "" : "s"}`,
-      };
-    }
-    if (stat.key === "zones") {
-      return { ...stat, value: String(zones.length), sublabel: undefined };
-    }
-    return stat;
-  });
+  const stats = buildRoomsZonesStats(zones, rooms, devices, audioZones);
 
   return (
     <div className="space-y-6">
@@ -84,7 +72,67 @@ export default async function RoomsZonesPage({
         ))}
       </div>
 
-      <RoomsZonesWorkspace branchId={branch.id} initialZones={zones} initialRooms={rooms} />
+      <RoomsZonesWorkspace
+        branchId={branch.id}
+        initialZones={zones}
+        initialRooms={rooms}
+        devices={devices}
+        audioZones={audioZones}
+      />
     </div>
   );
+}
+
+function buildRoomsZonesStats(
+  zones: Zone[],
+  rooms: Room[],
+  devices: ManagedDevice[],
+  audioZones: AudioZone[],
+): StatItem[] {
+  const screens = devices.filter((d) => d.kind === "screen");
+  const screensOnline = screens.filter((d) => d.status === "online").length;
+  const activeAudioZones = audioZones.filter((z) => z.status === "active").length;
+  const capacity = rooms.reduce((sum, r) => sum + (r.capacity ?? 0), 0);
+
+  return [
+    {
+      key: "rooms",
+      label: "Total Rooms",
+      value: String(rooms.length),
+      sublabel: `Across ${zones.length} zone${zones.length === 1 ? "" : "s"}`,
+      icon: DoorOpen,
+      color: "violet",
+    },
+    {
+      key: "zones",
+      label: "Total Zones",
+      value: String(zones.length),
+      icon: LayoutGrid,
+      color: "blue",
+    },
+    {
+      key: "screens",
+      label: "Total Screens",
+      value: String(screens.length),
+      sublabel: screens.length ? `${screensOnline} online` : "No screens paired",
+      icon: MonitorPlay,
+      color: "emerald",
+    },
+    {
+      key: "audio-zones",
+      label: "Total Audio Zones",
+      value: String(audioZones.length),
+      sublabel: audioZones.length ? `${activeAudioZones} active` : undefined,
+      icon: Volume2,
+      color: "amber",
+    },
+    {
+      key: "capacity",
+      label: "Capacity (All Rooms)",
+      value: String(capacity),
+      sublabel: "From rooms",
+      icon: Users,
+      color: "fuchsia",
+    },
+  ];
 }

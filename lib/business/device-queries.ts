@@ -79,6 +79,60 @@ function statusFor(lastSeenAt: string | null): DeviceStatus {
   return isOnline(lastSeenAt) ? "online" : "offline";
 }
 
+/** Lightweight cross-branch device status — for aggregate/overview views
+ * (dashboard status donut, room/device rollups) that only need
+ * kind/room/status, not the full per-device model/IP/pairing-code detail
+ * `ManagedDevice` carries. Two queries total regardless of branch count,
+ * unlike calling `listBranchDevicesDetailed` once per branch. */
+export interface DeviceStatusSummary {
+  id: string;
+  branchId: string;
+  name: string;
+  kind: DeviceKind;
+  roomId: string | null;
+  roomName: string | null;
+  lastSeenAt: string | null;
+  status: DeviceStatus;
+}
+
+export async function listDeviceStatusSummaries(branchIds: string[]): Promise<DeviceStatusSummary[]> {
+  if (!branchIds.length) return [];
+  const admin = createAdminClient();
+  if (!admin) return [];
+
+  const [{ data: deviceRows }, { data: roomRows }] = await Promise.all([
+    admin
+      .from("branch_devices")
+      .select("id, branch_id, name, device_kind, room_id, last_seen_at")
+      .in("branch_id", branchIds),
+    admin.from("rooms").select("id, name").in("branch_id", branchIds),
+  ]);
+
+  const roomNameById = new Map(
+    ((roomRows ?? []) as { id: string; name: string }[]).map((r) => [r.id, r.name]),
+  );
+
+  return (
+    (deviceRows ?? []) as {
+      id: string;
+      branch_id: string;
+      name: string;
+      device_kind: string;
+      room_id: string | null;
+      last_seen_at: string | null;
+    }[]
+  ).map((row) => ({
+    id: row.id,
+    branchId: row.branch_id,
+    name: row.name,
+    kind: row.device_kind === "audio" ? "audio" : "screen",
+    roomId: row.room_id,
+    roomName: row.room_id ? (roomNameById.get(row.room_id) ?? null) : null,
+    lastSeenAt: row.last_seen_at,
+    status: statusFor(row.last_seen_at),
+  }));
+}
+
 export async function listBranchDevicesDetailed(branchId: string): Promise<ManagedDevice[]> {
   const admin = createAdminClient();
   if (!admin) return [];

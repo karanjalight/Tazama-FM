@@ -78,10 +78,9 @@ export function Locations() {
         <SectionIntro
           index="07"
           kicker="Multi-location"
-          tone="light"
           title={
             <>
-              One business. Every location. <span className="text-zinc-400">One control center.</span>
+              One business. Every location. <span className="text-white/40">One control center.</span>
             </>
           }
           body="Run a single café or a chain across the country. Every branch, zone, screen and speaker shows up in the same place."
@@ -89,14 +88,14 @@ export function Locations() {
 
         <div ref={ref} className="mt-14 grid gap-4 sm:mt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-5">
           {/* Map */}
-          <div className="relative overflow-hidden rounded-[24px] bg-white p-6 ring-1 ring-black/[0.07] sm:p-8">
+          <div className="relative overflow-hidden rounded-[24px] bg-ink-2 p-6 ring-1 ring-white/[0.08] sm:p-8">
             <div className="flex items-center justify-between">
               <p className="text-[14px] font-medium">Kilele Kitchen · Kenya</p>
-              <IllustrativeNote tone="light" />
+              <IllustrativeNote />
             </div>
             <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto mt-4 block w-full max-w-[400px]" role="img" aria-label="Map of Kenya with four Kilele Kitchen locations">
               {DOTS.map(([x, y]) => (
-                <circle key={`${x}-${y}`} cx={x} cy={y} r={2.1} className="fill-zinc-300" />
+                <circle key={`${x}-${y}`} cx={x} cy={y} r={2.1} className="fill-white/[0.16]" />
               ))}
               {PINS.slice(1).map((pin) => {
                 const mx = (HQ.x + pin.x) / 2;
@@ -106,7 +105,7 @@ export function Locations() {
                     key={pin.id}
                     d={`M${HQ.x} ${HQ.y} Q${mx} ${my} ${pin.x} ${pin.y}`}
                     fill="none"
-                    stroke="rgb(10 10 10 / 0.25)"
+                    stroke="rgb(255 255 255 / 0.3)"
                     strokeWidth="1"
                     strokeDasharray="3 4"
                   />
@@ -131,13 +130,13 @@ export function Locations() {
                         style={{ transformOrigin: `${pin.x}px ${pin.y}px` }}
                       />
                     ) : null}
-                    <circle cx={pin.x} cy={pin.y} r={active ? 7 : 5.5} className={active ? "fill-brand" : "fill-ink"} />
-                    <circle cx={pin.x} cy={pin.y} r={2.2} className="fill-white" />
+                    <circle cx={pin.x} cy={pin.y} r={active ? 7 : 5.5} className={active ? "fill-brand" : "fill-white"} />
+                    <circle cx={pin.x} cy={pin.y} r={2.2} className={active ? "fill-white" : "fill-ink"} />
                     <text
                       x={labelLeft ? pin.x - 14 : pin.x + 14}
                       y={pin.y + 4}
                       textAnchor={labelLeft ? "end" : "start"}
-                      className={cn("font-display text-[13px]", active ? "fill-ink font-semibold" : "fill-zinc-500")}
+                      className={cn("font-display text-[13px]", active ? "fill-white font-semibold" : "fill-white/50")}
                     >
                       {loc.city}
                     </text>
@@ -148,8 +147,8 @@ export function Locations() {
           </div>
 
           {/* Location list */}
-          <div className="overflow-hidden rounded-[24px] bg-white ring-1 ring-black/[0.07]">
-            <div className="grid grid-cols-3 divide-x divide-black/[0.06] border-b border-black/[0.06]">
+          <div className="overflow-hidden rounded-[24px] bg-ink-2 ring-1 ring-white/[0.08]">
+            <div className="grid grid-cols-3 divide-x divide-white/[0.07] border-b border-white/[0.07]">
               {[
                 [String(LOCATIONS.length), "Locations"],
                 [`${totals.online}/${totals.screens}`, "Screens online"],
@@ -157,11 +156,11 @@ export function Locations() {
               ].map(([value, label]) => (
                 <div key={label} className="px-4 py-4 sm:px-6 sm:py-5">
                   <p className="font-tech text-[22px] leading-none tracking-[-0.02em] sm:text-[26px]">{value}</p>
-                  <p className="mt-2 text-[12.5px] text-zinc-500">{label}</p>
+                  <p className="mt-2 text-[12.5px] text-white/50">{label}</p>
                 </div>
               ))}
             </div>
-            <ul className="divide-y divide-black/[0.06]">
+            <ul className="divide-y divide-white/[0.07]">
               {LOCATIONS.map((loc, i) => (
                 <LocationRow key={loc.id} loc={loc} open={i === index} onSelect={() => select(i)} />
               ))}
@@ -177,7 +176,7 @@ function LocationRow({ loc, open, onSelect }: { loc: DemoLocation; open: boolean
   const allUp = loc.screens.online === loc.screens.total;
   const panelId = `location-${loc.id}`;
   return (
-    <li className={cn("transition-colors", open && "bg-snow/60")}>
+    <li className={cn("transition-colors", open && "bg-white/[0.03]")}>
       <button
         type="button"
         onClick={onSelect}
@@ -188,13 +187,13 @@ function LocationRow({ loc, open, onSelect }: { loc: DemoLocation; open: boolean
         <span className={cn("h-8 w-[2px] shrink-0 rounded-full transition-colors", open ? "bg-brand" : "bg-transparent")} aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block text-[15px] font-medium">{loc.name}</span>
-          <span className="block text-[13px] text-zinc-500">{loc.city}</span>
+          <span className="block text-[13px] text-white/50">{loc.city}</span>
         </span>
-        <span className="flex items-center gap-1.5 font-tech text-[12.5px] text-zinc-600">
+        <span className="flex items-center gap-1.5 font-tech text-[12.5px] text-white/60">
           <StatusDot state={allUp ? "online" : "warning"} />
           {loc.screens.online}/{loc.screens.total}
         </span>
-        <ChevronDown aria-hidden className={cn("size-4 text-zinc-400 transition-transform duration-300", open && "rotate-180")} />
+        <ChevronDown aria-hidden className={cn("size-4 text-white/35 transition-transform duration-300", open && "rotate-180")} />
       </button>
       <AnimatePresence initial={false}>
         {open ? (
@@ -208,27 +207,27 @@ function LocationRow({ loc, open, onSelect }: { loc: DemoLocation; open: boolean
           >
             <dl className="grid grid-cols-2 gap-x-6 gap-y-4 px-4 pb-5 pl-[34px] text-[13px] sm:px-6 sm:pl-[42px]">
               <div>
-                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-zinc-400 uppercase">Screens</dt>
+                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-white/35 uppercase">Screens</dt>
                 <dd className="mt-1">
                   {loc.screens.online} of {loc.screens.total} online
-                  {!allUp ? <span className="text-zinc-500"> · 1 reconnecting</span> : null}
+                  {!allUp ? <span className="text-white/50"> · 1 reconnecting</span> : null}
                 </dd>
               </div>
               <div>
-                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-zinc-400 uppercase">Zones</dt>
+                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-white/35 uppercase">Zones</dt>
                 <dd className="mt-1 truncate">{loc.zones.join(", ")}</dd>
               </div>
               <div>
-                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-zinc-400 uppercase">Audio</dt>
+                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-white/35 uppercase">Audio</dt>
                 <dd className="mt-1 flex items-center gap-2">
                   <Equalizer bars={3} className="h-3" barClassName="w-[2px]" />
                   {loc.playlist}
                 </dd>
               </div>
               <div>
-                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-zinc-400 uppercase">Content</dt>
+                <dt className="font-tech text-[10.5px] tracking-[0.1em] text-white/35 uppercase">Content</dt>
                 <dd className="mt-1 flex items-center gap-2">
-                  <span className="relative block h-4 w-6 shrink-0 overflow-hidden rounded-[3px] bg-zinc-200">
+                  <span className="relative block h-4 w-6 shrink-0 overflow-hidden rounded-[3px] bg-white/10">
                     <Image src={CONTENT[loc.content].thumb} alt="" fill sizes="24px" className="object-cover" />
                   </span>
                   <span className="truncate">{CONTENT[loc.content].title}</span>

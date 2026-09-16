@@ -39,12 +39,12 @@ export function Industries() {
         <SectionIntro
           index="06"
           kicker="Industries"
-          tone="light"
           title={
             <>
-              Built for businesses where customers <span className="text-zinc-400">see, hear and interact.</span>
+              Built for businesses where customers <span className="text-white/40">see, hear and interact.</span>
             </>
           }
+          body="Restaurants, shops, hotels, clinics, banks and entertainment venues all run on the same platform. Pick yours to see what plays, shows and speaks there."
         />
 
         <div ref={ref} className="mt-12 sm:mt-16">
@@ -64,14 +64,14 @@ export function Industries() {
                 onClick={() => select(i)}
                 className={cn(
                   "relative shrink-0 px-3 py-3 text-[15px] whitespace-nowrap transition-colors sm:px-4",
-                  index === i ? "text-ink" : "text-zinc-400 hover:text-zinc-700",
+                  index === i ? "text-white" : "text-white/45 hover:text-white/75",
                 )}
               >
                 {ind.label}
                 {index === i ? (
                   <motion.span
                     layoutId="industry-underline"
-                    className="absolute inset-x-3 bottom-0 h-[2px] bg-ink sm:inset-x-4"
+                    className="absolute inset-x-3 bottom-0 h-[2px] bg-brand sm:inset-x-4"
                     transition={{ duration: 0.4, ease: EASE }}
                   />
                 ) : null}
@@ -83,7 +83,7 @@ export function Industries() {
             id="industry-panel"
             role="tabpanel"
             aria-labelledby={`industry-tab-${industry.id}`}
-            className="relative mt-4 aspect-[9/15.5] overflow-hidden rounded-[24px] bg-ink text-white sm:aspect-[16/10] lg:aspect-[16/8] lg:rounded-[28px]"
+            className="relative mt-4 aspect-[9/15.5] overflow-hidden rounded-[24px] bg-ink text-white ring-1 ring-white/[0.08] sm:aspect-[16/10] lg:aspect-[16/8] lg:rounded-[28px]"
           >
             <AnimatePresence initial={false}>
               <motion.div

@@ -24,12 +24,12 @@ export function SiteFooter() {
   return (
     <footer className={cn(marketingFontVars, "border-t border-white/[0.07] bg-ink font-display text-white")}>
       <div className="mx-auto max-w-[1320px] px-5 pt-16 pb-10 sm:px-8 sm:pt-20">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:grid-cols-[1.3fr_repeat(4,1fr)] lg:gap-8">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-5 lg:grid-cols-6 lg:gap-8">
           <div className="col-span-2 sm:col-span-4 lg:col-span-1">
             <Link href="/#top" aria-label="Tazama, home" className="inline-block rounded-md">
               <BrandLogo className="h-14" />
             </Link>
-            <p className="mt-5 max-w-[260px] text-[14px] leading-relaxed text-white/50">
+            <p className="mt-5   text-[14px] leading-relaxed text-white/50">
               Everything your customers see and hear. One platform.
             </p>
           </div>

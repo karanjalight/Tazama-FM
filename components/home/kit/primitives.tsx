@@ -1,12 +1,17 @@
-import { Reveal } from "@/components/motion/reveal";
 import { cn } from "@/lib/utils";
+import { RevealBelowFold } from "./reveal-below-fold";
 
+/**
+ * Section surfaces. Every tone is dark now: "light" and "snow" are two raised
+ * graphite bands between the ink ones (names kept for API compatibility), so
+ * text and hairlines on them use the same white-on-dark values as "dark".
+ */
 export type Tone = "dark" | "light" | "snow";
 
 const TONE: Record<Tone, string> = {
   dark: "bg-ink text-white",
-  light: "bg-white text-ink",
-  snow: "bg-snow text-ink",
+  light: "bg-[#141417] text-white border-y border-white/[0.06]",
+  snow: "bg-[#18181b] text-white border-y border-white/[0.06]",
 };
 
 export function Container({
@@ -65,22 +70,16 @@ export function Section({
 export function Kicker({
   index,
   children,
-  tone = "dark",
   className,
 }: {
   index?: string;
   children: React.ReactNode;
+  /** Unused: every section surface is dark. Kept for API compatibility. */
   tone?: Tone;
   className?: string;
 }) {
   return (
-    <p
-      className={cn(
-        "font-tech text-[12px] tracking-[0.12em] uppercase",
-        tone === "dark" ? "text-white/50" : "text-zinc-500",
-        className,
-      )}
-    >
+    <p className={cn("font-tech text-[12px] tracking-[0.12em] text-white/50 uppercase", className)}>
       {index ? (
         <>
           <span className="text-brand">{index}</span>
@@ -99,7 +98,6 @@ export function SectionIntro({
   kicker,
   title,
   body,
-  tone = "dark",
   align = "left",
   className,
   aside,
@@ -108,6 +106,7 @@ export function SectionIntro({
   kicker: string;
   title: React.ReactNode;
   body?: React.ReactNode;
+  /** Unused: every section surface is dark. Kept for API compatibility. */
   tone?: Tone;
   align?: "left" | "center";
   className?: string;
@@ -116,7 +115,7 @@ export function SectionIntro({
 }) {
   const centered = align === "center";
   return (
-    <Reveal
+    <RevealBelowFold
       className={cn(
         aside && !centered && "lg:flex lg:items-end lg:justify-between lg:gap-16",
         centered && "mx-auto text-center",
@@ -124,18 +123,15 @@ export function SectionIntro({
       )}
     >
       <div className={cn(centered ? "mx-auto max-w-[980px]" : "max-w-3xl")}>
-        <Kicker index={index} tone={tone}>
-          {kicker}
-        </Kicker>
+        <Kicker index={index}>{kicker}</Kicker>
         <h2 className="mt-5 font-display text-[38px] leading-[1.02] font-semibold tracking-[-0.042em] text-balance sm:text-[52px] lg:text-[64px]">
           {title}
         </h2>
         {body ? (
           <p
             className={cn(
-              "mt-6 max-w-xl text-[17px] leading-[1.6] text-pretty sm:text-lg",
+              "mt-6 max-w-xl text-[17px] leading-[1.6] text-pretty text-zinc-400 sm:text-lg",
               centered && "mx-auto",
-              tone === "dark" ? "text-zinc-400" : "text-zinc-600",
             )}
           >
             {body}
@@ -143,29 +139,21 @@ export function SectionIntro({
         ) : null}
       </div>
       {aside ? <div className="mt-8 shrink-0 lg:mt-0">{aside}</div> : null}
-    </Reveal>
+    </RevealBelowFold>
   );
 }
 
 /** Small mono caption flagging demo numbers as illustrative. */
 export function IllustrativeNote({
-  tone = "dark",
   className,
   children = "Illustrative data",
 }: {
+  /** Unused: every section surface is dark. Kept for API compatibility. */
   tone?: Tone;
   className?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <span
-      className={cn(
-        "font-tech text-[11px] tracking-[0.06em] uppercase",
-        tone === "dark" ? "text-white/35" : "text-zinc-400",
-        className,
-      )}
-    >
-      {children}
-    </span>
+    <span className={cn("font-tech text-[11px] tracking-[0.06em] text-white/35 uppercase", className)}>{children}</span>
   );
 }

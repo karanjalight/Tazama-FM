@@ -2,12 +2,12 @@
 
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Search } from "lucide-react";
+import { Check, ListMusic, Search } from "lucide-react";
 
 import { PLAYLISTS } from "@/lib/home-content";
 import { cn } from "@/lib/utils";
 import { PhoneFrame, ScreenFrame } from "./kit/frames";
-import { Container, IllustrativeNote, Section, SectionIntro } from "./kit/primitives";
+import { Container, Section, SectionIntro } from "./kit/primitives";
 import { QrMark } from "./kit/qr";
 import { RequestedTrack, ScreenContent } from "./kit/signage";
 import { useCycle } from "./kit/use-cycle";
@@ -19,7 +19,7 @@ const STEPS = [
   { title: "A guest scans", body: "Any phone camera. Nothing to install." },
   { title: "They take part", body: "Guests request the next song or send a reaction." },
   { title: "The room responds", body: "Requests play next, credited on screen. Then your playlist picks up where it left off." },
-  { title: "You learn", body: "See what your crowd loves — and when you’re busiest." },
+  { title: "You stay in control", body: "Requests are limited per guest, and your playlist picks up right where it left off." },
 ];
 
 const STEP_MS = 3200;
@@ -38,7 +38,7 @@ export function Engagement() {
               Turn attention <span className="text-white/40">into engagement.</span>
             </>
           }
-          body="Tazama is more than signage. Your screens invite guests to take part — and every interaction tells you something."
+          body="Tazama is more than signage. Your screens invite guests to take part — and you set the limits."
         />
 
         <div ref={ref} className="mt-14 grid gap-6 sm:mt-20 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:gap-12">
@@ -123,7 +123,7 @@ export function Engagement() {
  * loop, and whichever one matters for the current step comes forward.
  */
 function Stage({ step }: { step: number }) {
-  const focus = step === 1 || step === 2 ? "phone" : step === 4 ? "insights" : "tv";
+  const focus = step === 1 || step === 2 ? "phone" : step === 4 ? "rules" : "tv";
   return (
     <div className="relative overflow-hidden rounded-[24px] bg-[#0e0d0c] ring-1 ring-white/[0.06]">
       <div aria-hidden className="absolute inset-0 bg-[repeating-linear-gradient(90deg,rgb(255_255_255/0.02)_0px,rgb(255_255_255/0.02)_1px,transparent_1px,transparent_30px)]" />
@@ -177,9 +177,9 @@ function Stage({ step }: { step: number }) {
           </PhoneFrame>
         </motion.div>
 
-        {/* What the business learns */}
+        {/* The limits the business keeps */}
         <AnimatePresence>
-          {focus === "insights" ? (
+          {focus === "rules" ? (
             <motion.div
               className="absolute top-1/2 left-[8%] w-[58%] -translate-y-1/2 sm:w-[44%]"
               initial={{ opacity: 0, y: 16 }}
@@ -187,7 +187,7 @@ function Stage({ step }: { step: number }) {
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.5, ease: EASE }}
             >
-              <InsightsCard active />
+              <RulesCard />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -277,43 +277,34 @@ function PickView({ active }: { active: boolean }) {
   );
 }
 
-const BUSY = [18, 26, 34, 52, 78, 100, 84, 46];
+const RULES = [
+  { icon: Check, title: "Up to 3 songs per guest", body: "Waiting in the queue at once." },
+  { icon: ListMusic, title: "Your playlist resumes", body: "Right where it left off." },
+];
 
-function InsightsCard({ active }: { active: boolean }) {
+function RulesCard() {
   return (
     <div className="w-full rounded-2xl bg-ink-2/95 p-4 shadow-[0_30px_70px_-20px_rgb(0_0_0/0.9)] ring-1 ring-white/[0.1] backdrop-blur-xl sm:p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-[13px] font-medium">Audience insights</p>
-        <IllustrativeNote className="text-[9px]">Demo</IllustrativeNote>
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-2">
-        <div className="rounded-lg bg-white/[0.04] p-2.5">
-          <dt className="text-[10.5px] text-white/45">Requests this week</dt>
-          <dd className="mt-1 font-tech text-[18px] leading-none">342</dd>
-        </div>
-        <div className="rounded-lg bg-white/[0.04] p-2.5">
-          <dt className="text-[10.5px] text-white/45">Most requested</dt>
-          <dd className="mt-1 truncate text-[13px] leading-tight">Amapiano</dd>
-        </div>
-      </dl>
-      <p className="mt-3 text-[10.5px] text-white/45">Busiest hours</p>
-      <div className="mt-2 flex h-14 items-end gap-1">
-        {BUSY.map((h, i) => (
-          <motion.span
-            key={i}
-            className={cn("flex-1 origin-bottom rounded-[2px]", i === 5 ? "bg-brand" : "bg-white/20")}
-            style={{ height: `${h}%` }}
-            initial={false}
-            animate={{ scaleY: active ? 1 : 0.4 }}
-            transition={{ duration: 0.5, delay: active ? i * 0.05 : 0, ease: EASE }}
-          />
+      <p className="text-[13px] font-medium">Guest requests</p>
+      <ul className="mt-3 space-y-2">
+        {RULES.map(({ icon: Icon, title, body }, i) => (
+          <motion.li
+            key={title}
+            className="flex items-center gap-3 rounded-lg bg-white/[0.04] p-2.5"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.15 + i * 0.12, ease: EASE }}
+          >
+            <span className="grid size-7 shrink-0 place-items-center rounded-md bg-brand/15 text-brand">
+              <Icon aria-hidden className="size-3.5" strokeWidth={2.5} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[13px] leading-tight">{title}</span>
+              <span className="block truncate text-[11px] text-white/45">{body}</span>
+            </span>
+          </motion.li>
         ))}
-      </div>
-      <div className="mt-1 flex justify-between font-tech text-[9.5px] text-white/35">
-        <span>15:00</span>
-        <span>19:00</span>
-        <span>23:00</span>
-      </div>
+      </ul>
     </div>
   );
 }

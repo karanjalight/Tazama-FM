@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Check, Film } from "lucide-react";
@@ -31,19 +30,18 @@ export function Workflow() {
         <SectionIntro
           index="04"
           kicker="How it works"
-          tone="light"
           title={
             <>
-              Create. Schedule. Publish. <span className="text-zinc-400">Monitor.</span>
+              Create. Schedule. Publish. <span className="text-white/40">Monitor.</span>
             </>
           }
           body="One flow takes a piece of content from your library to every screen that should show it — and tells you it’s playing."
         />
 
         <div ref={ref} className="mt-14 sm:mt-20">
-          <div className="overflow-hidden rounded-[24px] bg-white shadow-[0_40px_100px_-50px_rgb(10_10_10/0.35)] ring-1 ring-black/[0.07]">
+          <div className="overflow-hidden rounded-[24px] bg-ink-2 shadow-[0_60px_120px_-50px_rgb(0_0_0/0.9)] ring-1 ring-white/[0.08]">
             {/* Stage rail */}
-            <div role="tablist" aria-label="Workflow stages" className="relative grid grid-cols-4 border-b border-black/[0.06]">
+            <div role="tablist" aria-label="Workflow stages" className="relative grid grid-cols-4 border-b border-white/[0.07]">
               {STAGES.map((stage, i) => (
                 <button
                   key={stage.key}
@@ -53,24 +51,24 @@ export function Workflow() {
                   onClick={() => select(i)}
                   className={cn(
                     "group px-3 py-4 text-left transition-colors sm:px-6 sm:py-6",
-                    i > 0 && "border-l border-black/[0.06]",
+                    i > 0 && "border-l border-white/[0.07]",
                   )}
                 >
-                  <span className={cn("font-tech text-[11px] tracking-[0.08em]", index === i ? "text-brand" : "text-zinc-400")}>
+                  <span className={cn("font-tech text-[11px] tracking-[0.08em]", index === i ? "text-brand" : "text-white/35")}>
                     0{i + 1}
                   </span>
                   <span
                     className={cn(
                       "mt-1 block text-[15px] font-semibold tracking-[-0.015em] transition-colors sm:text-[18px]",
-                      index === i ? "text-ink" : "text-zinc-400 group-hover:text-zinc-600",
+                      index === i ? "text-white" : "text-white/40 group-hover:text-white/70",
                     )}
                   >
                     {stage.title}
                   </span>
-                  <span className="mt-1 hidden text-[14px] text-zinc-500 md:block">{stage.body}</span>
+                  <span className="mt-1 hidden text-[14px] text-zinc-400 md:block">{stage.body}</span>
                 </button>
               ))}
-              <span aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-black/[0.04]" />
+              <span aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-white/[0.04]" />
               <motion.span
                 aria-hidden
                 className="absolute bottom-[-1px] left-0 h-[2px] bg-brand"
@@ -81,7 +79,7 @@ export function Workflow() {
             </div>
 
             {/* Travelling content card lane (desktop) */}
-            <div className="relative hidden h-[84px] border-b border-black/[0.06] bg-snow/60 lg:block">
+            <div className="relative hidden h-[84px] border-b border-white/[0.07] bg-white/[0.02] lg:block">
               <motion.div
                 className="absolute top-1/2 w-1/4 -translate-y-1/2 px-6"
                 initial={false}
@@ -99,7 +97,7 @@ export function Workflow() {
                   key={stage.key}
                   className={cn(
                     "h-[340px] p-6 transition-opacity duration-500",
-                    i > 0 && "border-l border-black/[0.06]",
+                    i > 0 && "border-l border-white/[0.07]",
                     index === i ? "opacity-100" : "opacity-45",
                   )}
                 >
@@ -125,16 +123,16 @@ export function Workflow() {
 function ContentChip({ stage }: { stage: number }) {
   const status = ["Approved", "Sat & Sun · 09:00", "Sending to 3 screens", "Playing on 3 screens"][stage];
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-white p-2 pr-3 shadow-[0_12px_30px_-14px_rgb(10_10_10/0.35)] ring-1 ring-black/[0.08]">
+    <div className="flex items-center gap-3 rounded-xl bg-ink-3 p-2 pr-3 shadow-[0_14px_34px_-14px_rgb(0_0_0/0.9)] ring-1 ring-white/[0.1]">
       <span className="relative block h-10 w-14 shrink-0 overflow-hidden rounded-md">
         <Image src={ITEM.thumb} alt="" fill sizes="56px" className="object-cover" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13.5px] font-medium">{ITEM.title}</span>
-        <span className="flex items-center gap-1.5 truncate text-[12px] text-zinc-500">
+        <span className="flex items-center gap-1.5 truncate text-[12px] text-white/50">
           <Film aria-hidden className="size-3" /> {ITEM.duration}
-          <span className="text-zinc-300">·</span>
-          <span className={cn("truncate", stage === 3 && "text-ink")}>{status}</span>
+          <span className="text-white/25">·</span>
+          <span className={cn("truncate", stage === 3 && "text-white")}>{status}</span>
         </span>
       </span>
       {stage === 3 ? <StatusDot pulse /> : null}
@@ -156,7 +154,7 @@ function StageBody({ stage, active }: { stage: number; active: boolean }) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <p className="font-tech text-[10.5px] tracking-[0.1em] text-zinc-400 uppercase">{children}</p>;
+  return <p className="font-tech text-[10.5px] tracking-[0.1em] text-white/35 uppercase">{children}</p>;
 }
 
 const LIBRARY = ["weekend-brunch", "breakfast-menu", "happy-hour", "chefs-special", "lunch-menu", "brand-film"] as const;
@@ -169,7 +167,7 @@ function CreateStage({ active }: { active: boolean }) {
         {LIBRARY.map((id, i) => {
           const selected = i === 0;
           return (
-            <div key={id} className="relative aspect-[4/3] overflow-hidden rounded-md bg-zinc-100">
+            <div key={id} className="relative aspect-[4/3] overflow-hidden rounded-md bg-white/[0.06]">
               <Image src={CONTENT[id].thumb} alt="" fill sizes="90px" className="object-cover" />
               {selected ? (
                 <motion.span
@@ -186,9 +184,9 @@ function CreateStage({ active }: { active: boolean }) {
           );
         })}
       </div>
-      <div className="mt-4 flex items-center justify-between rounded-lg bg-snow px-3 py-2.5 text-[12.5px]">
+      <div className="mt-4 flex items-center justify-between rounded-lg bg-white/[0.05] px-3 py-2.5 text-[12.5px]">
         <span className="truncate">Weekend brunch.mp4</span>
-        <span className="flex items-center gap-1 text-zinc-600">
+        <span className="flex items-center gap-1 text-white/60">
           <Check aria-hidden className="size-3.5 text-live" /> Approved
         </span>
       </div>
@@ -215,7 +213,7 @@ function ScheduleStage({ active }: { active: boolean }) {
             key={i}
             className={cn(
               "grid size-7 place-items-center rounded-md text-[12px] transition-colors duration-500",
-              i >= 5 && active ? "bg-ink text-white" : i >= 5 ? "bg-zinc-200 text-ink" : "bg-snow text-zinc-500",
+              i >= 5 && active ? "bg-white text-ink" : i >= 5 ? "bg-white/15 text-white" : "bg-white/[0.05] text-white/40",
             )}
           >
             {d}
@@ -223,21 +221,21 @@ function ScheduleStage({ active }: { active: boolean }) {
         ))}
       </div>
       <p className="mt-2.5 font-tech text-[13px]">
-        09:00 <span className="text-zinc-400">→</span> 13:00
+        09:00 <span className="text-white/35">→</span> 13:00
       </p>
       <div className="mt-5">
         <Label>Where</Label>
         <ul className="mt-2.5 space-y-1.5 text-[13px]">
           {TARGETS.map((t, i) => (
-            <li key={t.name} className={cn("flex items-center gap-2", t.depth && "pl-5 text-zinc-600")}>
+            <li key={t.name} className={cn("flex items-center gap-2", t.depth && "pl-5 text-white/60")}>
               <motion.span
                 className="grid size-4 place-items-center rounded-[4px] ring-1"
                 initial={false}
                 animate={{
-                  backgroundColor: active ? "rgb(10 10 10)" : "rgb(255 255 255)",
-                  color: active ? "rgb(255 255 255)" : "rgb(10 10 10)",
+                  backgroundColor: active ? "rgba(255, 255, 255, 1)" : "rgba(255, 255, 255, 0)",
+                  color: active ? "rgba(10, 10, 10, 1)" : "rgba(255, 255, 255, 0.6)",
                 }}
-                style={{ boxShadow: "inset 0 0 0 1px rgb(10 10 10 / 0.2)" }}
+                style={{ boxShadow: "inset 0 0 0 1px rgb(255 255 255 / 0.25)" }}
                 transition={{ duration: 0.25, delay: active ? i * 0.12 : 0 }}
               >
                 <Check className="size-3" strokeWidth={3} />
@@ -263,7 +261,7 @@ function PublishStage({ active }: { active: boolean }) {
             <div className="flex items-center justify-between gap-2 text-[13px]">
               <span className="truncate">{screen}</span>
               <motion.span
-                className="flex shrink-0 items-center gap-1 text-[12px] text-zinc-600"
+                className="flex shrink-0 items-center gap-1 text-[12px] text-white/60"
                 initial={false}
                 animate={{ opacity: active ? 1 : 0 }}
                 transition={{ delay: active ? 0.9 + i * 0.35 : 0, duration: 0.3 }}
@@ -271,9 +269,9 @@ function PublishStage({ active }: { active: boolean }) {
                 <Check aria-hidden className="size-3.5 text-live" /> Live
               </motion.span>
             </div>
-            <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-100">
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/[0.08]">
               <motion.div
-                className="h-full origin-left rounded-full bg-ink"
+                className="h-full origin-left rounded-full bg-white/80"
                 initial={false}
                 animate={{ scaleX: active ? 1 : 0 }}
                 transition={{ duration: active ? 0.9 : 0.3, delay: active ? i * 0.35 : 0, ease: EASE }}
@@ -282,49 +280,49 @@ function PublishStage({ active }: { active: boolean }) {
           </li>
         ))}
       </ul>
-      <p className="mt-6 text-[12.5px] leading-relaxed text-zinc-500">
+      <p className="mt-6 text-[12.5px] leading-relaxed text-white/45">
         Screens pick up changes in real time — nobody touches a remote.
       </p>
     </div>
   );
 }
 
-const HOURS = [22, 38, 61, 84, 70, 52, 44, 30];
+const LIVE_SCREENS = [
+  { name: "Main Screen", location: "Westlands" },
+  { name: "Bar TV", location: "Westlands" },
+  { name: "Entrance screen", location: "Nyali" },
+];
 
 function MonitorStage({ active }: { active: boolean }) {
-  const [plays, setPlays] = useState(1284);
-  useEffect(() => {
-    if (!active) return;
-    const id = window.setInterval(() => setPlays((p) => p + 1 + Math.floor(Math.random() * 3)), 700);
-    return () => window.clearInterval(id);
-  }, [active]);
-
   return (
     <div>
       <Label>Playing now</Label>
       <p className="mt-3 flex items-baseline gap-2">
         <span className="font-tech text-[34px] leading-none tracking-[-0.03em]">3</span>
-        <span className="text-[13px] text-zinc-500">of 3 screens</span>
+        <span className="text-[13px] text-white/50">of 3 screens</span>
       </p>
       <div className="mt-5">
-        <Label>Plays this weekend</Label>
-        <p className="mt-2 font-tech text-[20px] tabular-nums">{plays.toLocaleString("en-US")}</p>
-        <div className="mt-3 flex h-16 items-end gap-1.5">
-          {HOURS.map((h, i) => (
-            <motion.span
-              key={i}
-              className={cn("flex-1 origin-bottom rounded-[3px]", i === 3 ? "bg-brand" : "bg-zinc-200")}
-              style={{ height: `${h}%` }}
+        <Label>Screen status</Label>
+        <ul className="mt-3 space-y-2">
+          {LIVE_SCREENS.map((screen, i) => (
+            <motion.li
+              key={screen.name}
+              className="flex items-center gap-3 rounded-lg bg-white/[0.04] px-3 py-2.5"
               initial={false}
-              animate={{ scaleY: active ? 1 : 0.35 }}
-              transition={{ duration: 0.6, delay: active ? i * 0.05 : 0, ease: EASE }}
-            />
+              animate={{ opacity: active ? 1 : 0.6 }}
+              transition={{ duration: 0.4, delay: active ? i * 0.12 : 0 }}
+            >
+              <StatusDot pulse={active} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px]">{screen.name}</span>
+                <span className="block truncate text-[11.5px] text-white/45">
+                  {screen.location} · showing {ITEM.title}
+                </span>
+              </span>
+              <span className="font-tech text-[10.5px] tracking-[0.08em] text-white/50 uppercase">Online</span>
+            </motion.li>
           ))}
-        </div>
-        <div className="mt-1.5 flex justify-between font-tech text-[10px] text-zinc-400">
-          <span>09:00</span>
-          <span>13:00</span>
-        </div>
+        </ul>
       </div>
     </div>
   );

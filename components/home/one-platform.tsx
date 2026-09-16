@@ -37,7 +37,7 @@ const EXPERIENCES: Experience[] = [
   { kind: "announcements", title: "Announcements", body: "Voice messages that lower the music, then hand it back.", status: "“Last orders” scheduled for 22:30" },
   { kind: "advertising", title: "Advertising", body: "Campaigns for your offers — or other brands.", status: "New season campaign on air" },
   { kind: "qr", title: "QR experiences", body: "Guests request songs from their phone. No app.", status: "3 guest requests queued" },
-  { kind: "analytics", title: "Analytics", body: "Plays, reach and screen health, everywhere.", status: "Screen health checked just now" },
+  { kind: "analytics", title: "Screen status & ad reporting", body: "Live screen status, plus plays and estimated reach for every campaign.", status: "18 of 19 screens online" },
 ];
 
 /* Diagram coordinates: a 1000 × 480 box. Nodes sit at these y's, four a side. */
@@ -68,11 +68,10 @@ export function OnePlatform() {
         <SectionIntro
           index="02"
           kicker="The platform"
-          tone="light"
           align="center"
           title={
             <>
-              One platform. <span className="text-zinc-400 sm:block">Every customer-facing experience.</span>
+              One platform. <span className="text-white/40 sm:block">Every customer-facing experience.</span>
             </>
           }
           body="Everything that plays, shows or speaks in your venues runs from the same control center — so it all works together."
@@ -88,7 +87,7 @@ export function OnePlatform() {
               className="pointer-events-none absolute inset-0 size-full"
             >
               {PATHS.map((d) => (
-                <path key={d} d={d} fill="none" stroke="rgb(10 10 10 / 0.12)" strokeWidth="0.9" />
+                <path key={d} d={d} fill="none" stroke="rgb(255 255 255 / 0.12)" strokeWidth="0.9" />
               ))}
               <motion.path
                 key={index}
@@ -123,12 +122,12 @@ export function OnePlatform() {
                     <span
                       className={cn(
                         "block text-[17px] font-semibold tracking-[-0.015em] transition-colors",
-                        index === i ? "text-ink" : "text-zinc-500 group-hover:text-ink",
+                        index === i ? "text-white" : "text-white/55 group-hover:text-white",
                       )}
                     >
                       {exp.title}
                     </span>
-                    <span className="mt-1 block text-[14px] leading-snug text-zinc-500">{exp.body}</span>
+                    <span className="mt-1 block text-[14px] leading-snug text-zinc-400">{exp.body}</span>
                   </span>
                 </button>
               );
@@ -153,7 +152,7 @@ export function OnePlatform() {
                   aria-pressed={index === i}
                   className={cn(
                     "flex flex-col items-start gap-3 rounded-2xl p-3 text-left ring-1 transition-[box-shadow,background-color]",
-                    index === i ? "bg-snow ring-black/10" : "ring-black/[0.05]",
+                    index === i ? "bg-white/[0.06] ring-white/15" : "ring-white/[0.07]",
                   )}
                 >
                   <Visual kind={exp.kind} active={index === i} />
@@ -170,7 +169,7 @@ export function OnePlatform() {
 
 function Hub({ status, kind }: { status: string; kind: Kind }) {
   return (
-    <div className="rounded-[22px] bg-ink p-5 text-white shadow-[0_40px_80px_-30px_rgb(10_10_10/0.55)] ring-1 ring-black">
+    <div className="rounded-[22px] bg-ink p-5 text-white shadow-[0_40px_80px_-30px_rgb(0_0_0/0.9),0_0_80px_-20px_rgb(229_52_46/0.18)] ring-1 ring-white/[0.1]">
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 text-[14px] font-medium">
           <MicGlyph className="size-4" />
@@ -217,23 +216,23 @@ function Hub({ status, kind }: { status: string; kind: Kind }) {
 function Visual({ kind, active }: { kind: Kind; active: boolean }) {
   const box = cn(
     "relative grid size-14 shrink-0 place-items-center overflow-hidden rounded-[14px] ring-1 transition-[background-color,box-shadow] duration-300",
-    active ? "bg-ink text-white ring-ink shadow-[0_12px_28px_-12px_rgb(10_10_10/0.6)]" : "bg-white text-ink ring-black/[0.08]",
+    active ? "bg-white text-ink ring-white shadow-[0_12px_32px_-12px_rgb(229_52_46/0.45)]" : "bg-white/[0.04] text-white ring-white/[0.09]",
   );
   switch (kind) {
     case "music":
       return (
         <span aria-hidden className={box}>
-          <Equalizer bars={5} playing={active} className="h-5" barClassName={active ? "" : "bg-zinc-400"} />
+          <Equalizer bars={5} playing={active} className="h-5" barClassName={active ? "" : "bg-white/35"} />
         </span>
       );
     case "signage":
       return (
         <span aria-hidden className={box}>
-          <span className={cn("grid h-7 w-10 grid-cols-2 gap-[3px] rounded-[4px] p-[3px] ring-1", active ? "ring-white/25" : "ring-black/15")}>
-            <span className={cn("rounded-[2px]", active ? "bg-brand" : "bg-zinc-300")} />
+          <span className={cn("grid h-7 w-10 grid-cols-2 gap-[3px] rounded-[4px] p-[3px] ring-1", active ? "ring-black/15" : "ring-white/20")}>
+            <span className={cn("rounded-[2px]", active ? "bg-brand" : "bg-white/25")} />
             <span className="flex flex-col justify-center gap-[3px]">
               {[0, 1, 2].map((l) => (
-                <span key={l} className={cn("h-[2px] rounded-full", active ? "bg-white/60" : "bg-zinc-300")} />
+                <span key={l} className={cn("h-[2px] rounded-full", active ? "bg-ink/50" : "bg-white/25")} />
               ))}
             </span>
           </span>
@@ -265,7 +264,7 @@ function Visual({ kind, active }: { kind: Kind; active: boolean }) {
               {[1, 0.6, 0.85].map((h, b) => (
                 <span
                   key={b}
-                  className={cn("w-[2px] rounded-full transition-transform duration-500", active ? "bg-white/40" : "bg-zinc-400")}
+                  className={cn("w-[2px] rounded-full transition-transform duration-500", active ? "bg-ink/40" : "bg-white/35")}
                   style={{ height: "100%", transform: `scaleY(${active ? 0.3 : h})`, transformOrigin: "bottom" }}
                 />
               ))}
@@ -277,7 +276,7 @@ function Visual({ kind, active }: { kind: Kind; active: boolean }) {
       return (
         <span aria-hidden className={box}>
           <span className="flex flex-col items-center gap-1">
-            <span className={cn("rounded-[4px] px-1.5 py-[3px] font-tech text-[10px] leading-none font-semibold", active ? "bg-white text-ink" : "bg-ink text-white")}>AD</span>
+            <span className={cn("rounded-[4px] px-1.5 py-[3px] font-tech text-[10px] leading-none font-semibold", active ? "bg-ink text-white" : "bg-white text-ink")}>AD</span>
             <span className="flex items-center gap-1 font-tech text-[8px] tracking-[0.08em] uppercase">
               <StatusDot state={active ? "live" : "idle"} pulse={active} className="size-1.5" />
               {active ? "On air" : "Ready"}
@@ -299,7 +298,7 @@ function Visual({ kind, active }: { kind: Kind; active: boolean }) {
               key={active ? "on" : "off"}
               d="M1 20 L8 15 L14 17 L21 9 L28 11 L39 3"
               fill="none"
-              stroke={active ? "var(--color-brand)" : "rgb(161 161 170)"}
+              stroke={active ? "var(--color-brand)" : "rgb(255 255 255 / 0.4)"}
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"

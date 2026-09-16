@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BusinessViewer } from "@/lib/business/types";
+import { parseTourMeta, TOUR_META_KEY } from "@/lib/business/onboarding-tour";
+import { CHECKLIST_META_KEY, parseChecklistDismissedAt } from "@/lib/business/onboarding-checklist";
 
 export async function getBusinessViewer(): Promise<BusinessViewer | null> {
   // Require a real Supabase session — no demo-session fallback for the business dashboard.
@@ -17,6 +19,13 @@ export async function getBusinessViewer(): Promise<BusinessViewer | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const onboarding = {
+    userId: user.id,
+    tourMeta: parseTourMeta(metadata[TOUR_META_KEY]),
+    checklistDismissedAt: parseChecklistDismissedAt(metadata[CHECKLIST_META_KEY]),
+  };
 
   const profile = await getCurrentProfile();
   if (!profile) return null;
@@ -28,6 +37,7 @@ export async function getBusinessViewer(): Promise<BusinessViewer | null> {
       role: "owner",
       staffId: null,
       branchIds: "all",
+      ...onboarding,
     };
   }
 
@@ -82,6 +92,7 @@ export async function getBusinessViewer(): Promise<BusinessViewer | null> {
     role: staff.role,
     staffId: staff.id,
     branchIds,
+    ...onboarding,
   };
 }
 

@@ -45,12 +45,17 @@ export interface ZoneChannelApi {
  */
 export function useZoneChannel({
   zoneId,
+  channelName,
   viewer,
   joined,
   enabled = true,
   handlers,
 }: {
   zoneId: string;
+  /** Overrides the default `zone:<zoneId>` channel — Pair with a Screen
+   * reuses this exact presence/reaction/queue-ping machinery on a per-room
+   * channel (`pairChannelName`). */
+  channelName?: string;
   viewer: RoomViewer;
   joined: boolean;
   /** Matches `useZonePlayback`'s own always-called-but-conditionally-enabled
@@ -69,10 +74,12 @@ export function useZoneChannel({
     hRef.current = handlers;
   });
 
+  const name = channelName ?? zoneChannelName(zoneId);
+
   React.useEffect(() => {
     if (!enabled) return;
     const supabase = createClient();
-    const channel = supabase.channel(zoneChannelName(zoneId), {
+    const channel = supabase.channel(name, {
       config: {
         presence: { key: viewer.id },
         broadcast: { self: false },
@@ -115,7 +122,7 @@ export function useZoneChannel({
       supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [zoneId, viewer.id, enabled]);
+  }, [name, viewer.id, enabled]);
 
   React.useEffect(() => {
     const channel = channelRef.current;

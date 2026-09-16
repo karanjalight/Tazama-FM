@@ -52,3 +52,10 @@ export function roomChannelName(roomId: string): string {
 export function zoneChannelName(zoneId: string): string {
   return `zone:${zoneId}`;
 }
+
+/** Sibling of `zoneChannelName` for Pair with a Screen (`/pair/[slug]`) — one
+ * channel per room, so everyone paired with any screen in the same room shares
+ * presence, reactions and queue pings (and the room's kiosk can listen in). */
+export function pairChannelName(roomId: string): string {
+  return `pair-room:${roomId}`;
+}

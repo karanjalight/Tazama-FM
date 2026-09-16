@@ -92,6 +92,11 @@ export function checklistProgress(items: readonly ChecklistItem[]): { done: numb
   return { done: items.filter((i) => i.done).length, total: items.length };
 }
 
+/** Every setup step has at least one real row behind it. */
+export function isChecklistComplete(counts: ChecklistCounts): boolean {
+  return Object.values(counts).every((n) => n > 0);
+}
+
 export function isChecklistVisible(items: readonly ChecklistItem[], dismissedAt: string | null): boolean {
   return !dismissedAt && items.some((i) => !i.done);
 }

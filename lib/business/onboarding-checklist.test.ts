@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildChecklist,
   checklistProgress,
+  isChecklistComplete,
   isChecklistVisible,
   parseChecklistDismissedAt,
   type ChecklistCounts,
@@ -55,4 +56,11 @@ test("parseChecklistDismissedAt reads only a string dismissedAt", () => {
   assert.equal(parseChecklistDismissedAt({ dismissedAt: 5 }), null);
   assert.equal(parseChecklistDismissedAt(null), null);
   assert.equal(parseChecklistDismissedAt("x"), null);
+});
+
+test("isChecklistComplete only when every count is above zero", () => {
+  const all = { locations: 1, connectedScreens: 2, playlists: 1, contentItems: 4, schedules: 1, announcements: 1, teamMembers: 1 };
+  assert.equal(isChecklistComplete(all), true);
+  assert.equal(isChecklistComplete({ ...all, teamMembers: 0 }), false);
+  assert.equal(isChecklistComplete(ZERO), false);
 });

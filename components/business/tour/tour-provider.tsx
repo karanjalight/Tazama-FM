@@ -42,6 +42,8 @@ interface TourSession {
   open: boolean;
   index: number;
   source: TourSource;
+  /** Bumped per open so the overlay remounts fresh (no stale spotlight/card position from last time). */
+  run: number;
 }
 
 export function BusinessTourProvider({
@@ -55,7 +57,7 @@ export function BusinessTourProvider({
 }) {
   const pathname = usePathname() ?? "";
   const steps = React.useMemo(() => stepsForRole(TOUR_STEPS, role), [role]);
-  const [session, setSession] = React.useState<TourSession>({ open: false, index: 0, source: "auto" });
+  const [session, setSession] = React.useState<TourSession>({ open: false, index: 0, source: "auto", run: 0 });
 
   const track = React.useCallback(
     (event: TourEventName, index: number, source: TourSource) => {
@@ -69,7 +71,7 @@ export function BusinessTourProvider({
     (source: TourSource, chapter?: JumpableChapter) => {
       autoLaunchHandled = true;
       const index = chapter ? chapterStartIndex(steps, chapter) : 0;
-      setSession({ open: true, index, source });
+      setSession((prev) => ({ open: true, index, source, run: prev.run + 1 }));
       track("started", index, source);
       track("step_viewed", index, source);
     },
@@ -112,6 +114,7 @@ export function BusinessTourProvider({
     <TourContext.Provider value={value}>
       {children}
       <TourOverlay
+        key={session.run}
         open={session.open}
         steps={steps}
         index={session.index}

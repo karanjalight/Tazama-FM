@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { getBusinessViewer } from "@/lib/business/viewer";
+import { getChecklistCounts } from "@/lib/business/onboarding-queries";
 import { nextTourMeta, parseTourMeta, TOUR_META_KEY, type TourStatus } from "@/lib/business/onboarding-tour";
-import { CHECKLIST_META_KEY } from "@/lib/business/onboarding-checklist";
+import { CHECKLIST_META_KEY, isChecklistComplete } from "@/lib/business/onboarding-checklist";
 import type { ActionResult } from "@/lib/business/types";
 
 /**
@@ -42,4 +44,26 @@ export async function dismissChecklist(): Promise<ActionResult> {
 
   revalidatePath("/business/dashboard");
   return { ok: true };
+}
+
+/**
+ * Retire the checklist for good once every step is done, so the Overview stops
+ * running its count queries and the card never resurfaces for an established
+ * venue when a count later drops back to zero. Re-checks counts server-side
+ * rather than trusting the caller.
+ */
+export async function markChecklistComplete(): Promise<ActionResult> {
+  const viewer = await getBusinessViewer();
+  if (!viewer || viewer.role === "manager") return { ok: false, error: "Not available." };
+  if (viewer.checklistDismissedAt) return { ok: true };
+
+  if (!isChecklistComplete(await getChecklistCounts(viewer.businessId))) {
+    return { ok: false, error: "Checklist is not complete yet." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({
+    data: { [CHECKLIST_META_KEY]: { dismissedAt: new Date().toISOString(), reason: "completed" } },
+  });
+  return error ? { ok: false, error: "Could not save checklist completion." } : { ok: true };
 }

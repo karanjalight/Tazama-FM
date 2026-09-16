@@ -1,42 +1,61 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { AVAILABLE_INVENTORY_SCREENS, BOOKED_INVENTORY_SCREENS, INVENTORY_LOCATIONS, TOTAL_INVENTORY_SCREENS } from "./inventory/mock-data";
+import type { AdInventory } from "@/lib/business/ad-inventory-queries";
 
-export function InventorySummary() {
-  const availablePct = Math.round((AVAILABLE_INVENTORY_SCREENS / TOTAL_INVENTORY_SCREENS) * 100);
+export function InventorySummary({ inventory }: { inventory: AdInventory }) {
+  const { totals } = inventory;
+  const pct = (n: number) => (totals.total ? Math.round((n / totals.total) * 100) : 0);
+
+  if (!totals.total) {
+    return (
+      <div className="py-6 text-center text-sm text-muted-foreground">
+        No screens paired yet. Pair a screen under Screens &amp; Devices to create ad inventory.
+      </div>
+    );
+  }
 
   return (
     <div>
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <p className="font-mono text-xl font-bold text-foreground">{TOTAL_INVENTORY_SCREENS}</p>
+          <p className="font-mono text-xl font-bold text-foreground">{totals.total}</p>
           <p className="text-xs text-muted-foreground">Total Screens</p>
         </div>
         <div>
-          <p className="font-mono text-xl font-bold text-emerald-400">{AVAILABLE_INVENTORY_SCREENS}</p>
+          <p className="font-mono text-xl font-bold text-emerald-400">{totals.available}</p>
           <p className="text-xs text-muted-foreground">Available</p>
         </div>
         <div>
-          <p className="font-mono text-xl font-bold text-amber-400">{BOOKED_INVENTORY_SCREENS}</p>
-          <p className="text-xs text-muted-foreground">Booked</p>
+          <p className="font-mono text-xl font-bold text-amber-400">{totals.booked}</p>
+          <p className="text-xs text-muted-foreground">Booked today</p>
         </div>
       </div>
 
-      <div className="mt-4 h-3 overflow-hidden rounded-full bg-amber-500/30" role="img" aria-label={`${availablePct}% of inventory available, the rest booked`}>
-        <div className="h-full rounded-full bg-emerald-500" style={{ width: `${availablePct}%` }} />
+      <div
+        className="mt-4 flex h-3 overflow-hidden rounded-full bg-muted"
+        role="img"
+        aria-label={`${pct(totals.available)}% available, ${pct(totals.booked)}% booked, ${pct(totals.restricted)}% restricted`}
+      >
+        <div className="h-full bg-emerald-500" style={{ width: `${pct(totals.available)}%` }} />
+        <div className="h-full bg-amber-500" style={{ width: `${pct(totals.booked)}%` }} />
+        <div className="h-full bg-rose-500/50" style={{ width: `${pct(totals.restricted)}%` }} />
       </div>
-      <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
-        <span>Available ({availablePct}%)</span>
-        <span>Booked ({100 - availablePct}%)</span>
+      <div className="mt-1.5 flex flex-wrap justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>Available {pct(totals.available)}%</span>
+        <span>Booked {pct(totals.booked)}%</span>
+        {totals.restricted > 0 && <span>Ads off {pct(totals.restricted)}%</span>}
+        <span>{totals.online} online</span>
       </div>
 
       <div className="mt-4 space-y-1.5 border-t border-border pt-4">
-        <p className="mb-1 text-xs font-medium text-muted-foreground">Available Inventory</p>
-        {INVENTORY_LOCATIONS.map((loc) => (
+        <p className="mb-1 text-xs font-medium text-muted-foreground">Available by location</p>
+        {inventory.locations.map((loc) => (
           <div key={loc.id} className="flex items-center justify-between text-sm">
-            <span className="text-foreground">{loc.name}</span>
-            <span className="font-mono text-muted-foreground">{loc.available} screens</span>
+            <span className="truncate text-foreground">{loc.name}</span>
+            <span className="shrink-0 font-mono text-muted-foreground">
+              {loc.available} / {loc.total} screens
+            </span>
           </div>
         ))}
       </div>

@@ -6,7 +6,8 @@ import { z } from "zod";
 import { getBusinessViewer } from "@/lib/business/viewer";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { getContentItem, getPlaylist } from "@/lib/business/content-queries";
-import { uploadContentFile, deleteContentFile } from "@/lib/business/content-storage";
+import { deleteContentFile } from "@/lib/business/content-storage";
+import { insertContentItem } from "@/lib/business/content-upload";
 import { upsertTracksFromYouTube } from "@/lib/tracks";
 import { searchTracks, type YouTubeTrack } from "@/lib/youtube/search";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -82,42 +83,17 @@ export async function uploadContentItem(formData: FormData): Promise<ActionResul
     return { ok: false, error: "Invalid content type." };
   }
 
-  const uploaded = await uploadContentFile(viewer.businessId, file);
-  if (!uploaded) {
-    return { ok: false, error: "Could not upload the file — check its size and format." };
-  }
-
-  const admin = createAdminClient();
-  if (!admin) return { ok: false, error: "Not configured (missing service-role key)." };
-
   const profile = await getCurrentProfile();
-  // Prefer the filename's real extension; fall back to the MIME subtype
-  // when there isn't one. `"noext".split(".").pop()` would otherwise return
-  // the whole filename (truthy), so the dot must be checked for explicitly
-  // rather than just falling through on an empty split result.
-  const nameExt = file.name.includes(".") ? file.name.split(".").pop() : undefined;
-  const mimeExt = file.type.split("/").pop();
-  const format = (nameExt || mimeExt || "").toUpperCase() || null;
-
-  const { error } = await admin.from("content_items").insert({
-    business_id: viewer.businessId,
+  const result = await insertContentItem({
+    businessId: viewer.businessId,
+    uploadedBy: profile?.id ?? null,
     title: parsedTitle.data,
-    content_type: parsedType.data,
+    contentType: parsedType.data,
     purpose: "content",
-    format,
-    storage_path: uploaded.path,
-    size_bytes: file.size,
-    duration_seconds: durationSeconds,
-    status: "pending",
-    uploaded_by: profile?.id ?? null,
+    file,
+    durationSeconds,
   });
-  if (error) {
-    console.error("uploadContentItem: insert failed", error);
-    // Best-effort cleanup: don't leave an orphaned Storage object behind
-    // when the row insert fails.
-    await deleteContentFile(uploaded.path);
-    return { ok: false, error: "Could not save the content item." };
-  }
+  if (!result.ok) return result;
 
   revalidatePath(CONTENT_LIBRARY_PATH);
   return { ok: true };

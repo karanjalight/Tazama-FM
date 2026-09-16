@@ -1,9 +1,15 @@
 import type * as React from "react";
 
-import { CREATIVES } from "../../mock-data";
-import { totalScreensFor } from "../../types";
-import type { CampaignDraft } from "../campaign-draft";
-import { estimatedDelivery } from "../campaign-estimate";
+import type { ContentItem } from "@/lib/business/content-queries";
+import {
+  coveredScreens,
+  frequencyLabel,
+  namesFor,
+  type CampaignTargetOptions,
+} from "@/lib/business/campaign-types";
+import { draftTarget, type CampaignDraft } from "../campaign-draft";
+import { DeliveryProjection } from "../delivery-projection";
+import { formatClock, formatKes, formatShortDate } from "../../format";
 
 function SummarySection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -14,60 +20,81 @@ function SummarySection({ title, children }: { title: string; children: React.Re
   );
 }
 
-function formatDate(d: string): string {
-  return d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—";
-}
-
-export function CampaignReviewStep({ draft }: { draft: CampaignDraft }) {
-  const screens = totalScreensFor(draft.roomIds);
-  const { plays, reach } = estimatedDelivery(draft.budgetAmount);
-  const libraryCreative = draft.creativeId ? CREATIVES.find((c) => c.id === draft.creativeId) : null;
-  const creativeName = libraryCreative?.name ?? draft.uploadedCreative?.name ?? "No creative selected";
-  const creativeDuration = libraryCreative?.durationLabel ?? draft.uploadedCreative?.durationLabel;
+export function CampaignReviewStep({
+  draft,
+  creatives,
+  targetOptions,
+}: {
+  draft: CampaignDraft;
+  creatives: ContentItem[];
+  targetOptions: CampaignTargetOptions;
+}) {
+  const target = draftTarget(draft);
+  const screens = coveredScreens(target, targetOptions);
+  const creative = draft.creativeId ? (creatives.find((c) => c.id === draft.creativeId) ?? null) : null;
+  const targetLabel =
+    [
+      ...namesFor(draft.locationIds, targetOptions.locations),
+      ...namesFor(draft.zoneIds, targetOptions.zones),
+      ...namesFor(draft.roomIds, targetOptions.rooms),
+      ...namesFor(draft.screenIds, targetOptions.screens),
+    ].join(", ") || "No target selected";
 
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-border p-4">
         <p className="text-lg font-semibold text-foreground">{draft.name || "Untitled Campaign"}</p>
         <p className="text-sm text-muted-foreground">
-          {draft.advertiser} · {draft.objective}
+          {draft.objective}
+          {draft.advertiserName.trim() && ` · ${draft.advertiserName.trim()}`}
         </p>
       </div>
 
-      <SummarySection title="Creative">
-        <p className="text-sm text-foreground">{creativeName}</p>
-        {creativeDuration && <p className="text-sm text-muted-foreground">{creativeDuration}</p>}
-      </SummarySection>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <SummarySection title="Creative">
+          {creative ? (
+            <>
+              <p className="truncate text-sm text-foreground">{creative.title}</p>
+              <p className="text-sm text-muted-foreground capitalize">
+                {creative.contentType}
+                {(creative.contentType === "image" || creative.contentType === "document") && ` · ${draft.displaySeconds}s on screen`}
+              </p>
+              {creative.status !== "approved" && (
+                <p className="mt-1 text-xs text-amber-400">{creative.status} — won&apos;t air until approved</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No creative selected</p>
+          )}
+        </SummarySection>
 
-      <SummarySection title="Target">
-        <p className="text-sm text-foreground">{draft.locationIds.length} location{draft.locationIds.length === 1 ? "" : "s"}</p>
-        <p className="text-sm text-muted-foreground">{screens} screens</p>
-      </SummarySection>
+        <SummarySection title="Target">
+          <p className="line-clamp-2 text-sm text-foreground">{targetLabel}</p>
+          <p className="text-sm text-muted-foreground">
+            {screens.length} screen{screens.length === 1 ? "" : "s"}
+          </p>
+        </SummarySection>
 
-      <SummarySection title="Placement">
-        <p className="text-sm text-foreground">{draft.placementType}</p>
-        <p className="text-sm text-muted-foreground">{draft.frequency}</p>
-      </SummarySection>
+        <SummarySection title="Placement">
+          <p className="text-sm text-foreground">{draft.placementType}</p>
+          <p className="text-sm text-muted-foreground">
+            {frequencyLabel(draft.frequencyMinutes)} · {draft.maxPlaysPerDay > 0 ? `max ${draft.maxPlaysPerDay}/day` : "no daily limit"} ·{" "}
+            {draft.priority} priority
+          </p>
+        </SummarySection>
 
-      <SummarySection title="Schedule">
-        <p className="text-sm text-foreground">
-          {formatDate(draft.startDate)} – {formatDate(draft.endDate)}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {draft.activeStart} – {draft.activeEnd}
-        </p>
-      </SummarySection>
-
-      <SummarySection title="Budget">
-        <p className="text-sm text-foreground">KES {draft.budgetAmount.toLocaleString()}</p>
-        <p className="text-sm text-muted-foreground capitalize">{draft.budgetType}</p>
-      </SummarySection>
-
-      <div className="rounded-xl border border-violet-500/30 bg-violet-500/10 p-4">
-        <p className="mb-1 text-xs font-semibold text-violet-300">Estimated Delivery</p>
-        <p className="text-sm text-foreground">~{plays.toLocaleString()} plays</p>
-        <p className="text-sm text-foreground">~{reach.toLocaleString()} estimated reach</p>
+        <SummarySection title="Schedule & Budget">
+          <p className="text-sm text-foreground">
+            {draft.startDate ? formatShortDate(draft.startDate) : "Now"} – {draft.endDate ? formatShortDate(draft.endDate) : "until paused"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {draft.activeStart || draft.activeEnd ? `${formatClock(draft.activeStart || "00:00")} – ${formatClock(draft.activeEnd || "00:00")}` : "All day"} ·{" "}
+            {draft.budgetAmount > 0 ? `${formatKes(draft.budgetAmount)} ${draft.budgetType}` : "no budget cap"}
+          </p>
+        </SummarySection>
       </div>
+
+      <DeliveryProjection draft={draft} targetOptions={targetOptions} />
     </div>
   );
 }

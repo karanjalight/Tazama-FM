@@ -119,7 +119,7 @@ export function AnalyticsWorkspace() {
 
           {loading ? <TableSkeleton rows={5} /> : <ScreenHealth screens={snapshot.screens} summary={snapshot.screenSummary} />}
 
-          {loading ? <TableSkeleton rows={4} /> : <AdvertisingPerformance advertising={snapshot.advertising} />}
+          <AdvertisingPerformance dateRange={filters.dateRange} />
 
           {loading ? <ChartSkeleton height="h-32" /> : <AnnouncementAnalytics announcements={snapshot.announcements} />}
 

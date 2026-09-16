@@ -10,13 +10,22 @@ export const CAMPAIGN_STEPS = [
   { id: 5, label: "Review" },
 ] as const;
 
-export function CampaignStepIndicator({ currentStep, onStepClick }: { currentStep: number; onStepClick: (step: number) => void }) {
+export function CampaignStepIndicator({
+  currentStep,
+  onStepClick,
+  allClickable = false,
+}: {
+  currentStep: number;
+  onStepClick: (step: number) => void;
+  /** Edit mode: every step is already filled in, so any can be jumped to. */
+  allClickable?: boolean;
+}) {
   return (
     <div className="flex items-center gap-1 overflow-x-auto">
       {CAMPAIGN_STEPS.map((step, i) => {
         const isDone = step.id < currentStep;
         const isActive = step.id === currentStep;
-        const clickable = isDone;
+        const clickable = isDone || (allClickable && !isActive);
         return (
           <div key={step.id} className="flex shrink-0 items-center last:flex-none">
             <button

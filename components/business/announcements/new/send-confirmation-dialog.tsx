@@ -46,7 +46,12 @@ export function SendConfirmationDialog({
           </div>
         </div>
 
-        <p className="mt-3 text-sm text-muted-foreground">This announcement will play immediately on the selected devices.</p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          This plays immediately on the selected devices, interrupting anything on screen, including ads.{" "}
+          {draft.playbackMode === "pause"
+            ? "Music stops until it finishes, then picks back up."
+            : `Music drops to ${draft.reducedVolumePercent}% until it finishes.`}
+        </p>
 
         <DialogFooter>
           <button

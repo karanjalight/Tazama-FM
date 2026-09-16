@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Megaphone, Minus, Send, Sparkles, X } from "lucide-react";
 
+import type { CampaignTargetOptions } from "@/lib/business/campaign-types";
 import type { CampaignDraft } from "../new/campaign-draft";
 import { matchAdsIntent } from "./ads-assistant-scripts";
 import type { AssistantMessage } from "./ads-assistant-types";
@@ -20,12 +21,14 @@ function newMsgId(): string {
 }
 
 export function TazamaAdsAssistant({
+  targetOptions,
   onApply,
   onContinue,
   onMinimize,
   onClose,
   className,
 }: {
+  targetOptions: CampaignTargetOptions;
   onApply: (patch: Partial<CampaignDraft>) => void;
   onContinue: () => void;
   onMinimize?: () => void;
@@ -52,7 +55,7 @@ export function TazamaAdsAssistant({
     setIsTyping(true);
 
     window.setTimeout(() => {
-      const result = matchAdsIntent(trimmed);
+      const result = matchAdsIntent(trimmed, targetOptions);
       if (result) {
         if (result.apply) onApply(result.apply);
         setMessages((m) => [

@@ -119,7 +119,7 @@ export function ReportWorkspace() {
           ) : (
             <>
               {activeTab === "Performance" && <PerformanceReportView snapshot={snapshot} dateRangeLabel={filters.dateRange} />}
-              {activeTab === "Advertising" && <AdvertisingReportView snapshot={snapshot} dateRangeLabel={filters.dateRange} />}
+              {activeTab === "Advertising" && <AdvertisingReportView dateRangeLabel={filters.dateRange} />}
               {activeTab === "Audience" && <AudienceReportView snapshot={snapshot} dateRangeLabel={filters.dateRange} />}
               {activeTab === "Location" && <LocationReportView snapshot={snapshot} dateRangeLabel={filters.dateRange} />}
               {activeTab === "Screen Health" && <ScreenHealthReportView snapshot={snapshot} dateRangeLabel={filters.dateRange} />}

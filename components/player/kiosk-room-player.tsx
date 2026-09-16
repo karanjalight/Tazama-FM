@@ -19,14 +19,28 @@ import {
 import { useZoneChannel } from "@/lib/business/use-zone-channel";
 import { FloatingReactions, type FloatingItem } from "@/components/rooms/room-reactions";
 import { ScheduleContentDisplay } from "@/components/business/schedules/schedule-content-display";
-import type { PlaybackPayload } from "@/lib/rooms/channel";
+import { AdOverlay } from "@/components/player/ad-overlay";
+import { AnnouncementOverlay } from "@/components/player/announcement-overlay";
+import { KioskPairOverlay } from "@/components/pair/kiosk-pair-overlay";
+import { useAnnouncementFeed } from "@/lib/business/use-announcement-feed";
+import { duckedVolume, type AnnouncementAiring } from "@/lib/business/announcement-airing";
+import { pairChannelName, type PlaybackPayload, type ReactionPayload } from "@/lib/rooms/channel";
 import type { RoomPlayback, RoomTrack, RoomViewer } from "@/lib/rooms/types";
+import type { ActiveAdSnapshot } from "@/lib/business/ad-types";
+import { adShowsOnPlayer } from "@/lib/business/ad-scheduling";
 import { cn } from "@/lib/utils";
 
 /** How often the kiosk asks whether an active Schedule now covers this room
  * — same cadence as the device heartbeat below, so this file has exactly
  * one "poll every ~25s" pattern instead of two different intervals. */
 const SCHEDULE_POLL_MS = 25_000;
+/** How often a branch kiosk ticks live ad serving (lib/business/ad-serving.ts)
+ * to start a due airing or pick up the one already on air. Every kiosk ticks
+ * independently (including every screen mirroring the same synchronized
+ * zone/schedule) — the server-side claim (`active_ad is null`) arbitrates, so
+ * there's no leader to elect. Once one screen starts an airing, the others
+ * learn about it instantly over their existing realtime subscription. */
+const AD_TICK_MS = 30_000;
 /** A content item with neither an explicit display duration nor its own
  * natural length (shouldn't happen — the wizard requires one for images —
  * but the kiosk must never get stuck showing something forever). */
@@ -71,12 +85,15 @@ export function KioskRoomPlayer({
   initialPlayback,
   initialVolume = 80,
   initialZoneVersion = 0,
+  pairSlug = null,
 }: {
   room: { id: string; slug: string; name: string; isBranch?: boolean; zoneId?: string | null };
   hostName: string | null;
   initialPlayback: RoomPlayback | null;
   initialVolume?: number;
   initialZoneVersion?: number;
+  /** A device slug in this room for the "Scan to pair" badge (`/pair/[slug]`). */
+  pairSlug?: string | null;
 }) {
   const [started, setStarted] = React.useState(false);
   const [muted, setMuted] = React.useState(true);
@@ -92,6 +109,30 @@ export function KioskRoomPlayer({
   // any moment) via a poll of /api/business/rooms/[roomId]/active-schedule.
   const [activeScheduleId, setActiveScheduleId] = React.useState<string | null>(null);
   const [scheduleContent, setScheduleContent] = React.useState<ScheduleContentSnapshot | null>(null);
+  // Live ad serving. Whichever of Schedule/Zone/Room is authoritative, an
+  // airing arrives the same way — `active_ad` on that source's playback row
+  // (all three hooks' trailing param below) or the ad tick's response.
+  // `showingAd` is the airing this screen is rendering right now; while it's
+  // a video/audio ad, `adHoldRef` holds the music underneath (payloads are
+  // recorded but not applied) and the latest one is applied when it ends.
+  const [showingAd, setShowingAd] = React.useState<ActiveAdSnapshot | null>(null);
+  const showingAdRef = React.useRef<ActiveAdSnapshot | null>(null);
+  const shownBreakIdsRef = React.useRef<Set<string>>(new Set());
+  const adHoldRef = React.useRef(false);
+  const deviceTokenRef = React.useRef<string | null>(null);
+  // Learned from the first ad tick — lets realtime-delivered airings be
+  // matched against per-screen targets.
+  const deviceIdRef = React.useRef<string | null>(null);
+  // Announcements outrank everything, ads included. `announcementHoldRef` is
+  // their own music hold, separate from `adHoldRef` — the music only comes
+  // back once neither holds it. An ad already on screen stays mounted (its
+  // `onFinish` ends the airing server-side) but is covered and silenced, and
+  // `adInterruptedBreakIdRef` makes it report as not completed.
+  const [showingAnnouncement, setShowingAnnouncement] = React.useState<AnnouncementAiring | null>(null);
+  const showingAnnouncementRef = React.useRef<AnnouncementAiring | null>(null);
+  const announcementQueueRef = React.useRef<AnnouncementAiring[]>([]);
+  const announcementHoldRef = React.useRef(false);
+  const adInterruptedBreakIdRef = React.useRef<string | null>(null);
   const scheduleVersionRef = React.useRef(0);
   const contentTimerRef = React.useRef<number | null>(null);
   // Freshest known "seconds until the current session ends" (from the
@@ -215,6 +256,10 @@ export function KioskRoomPlayer({
   // skip (no live host queue to hijack, unlike the consumer room mirror).
   const handleSkip = React.useCallback(() => {
     if (!room.isBranch) return;
+    // An ad on screen can't be skipped from the remote.
+    if (showingAdRef.current) return;
+    // Nor can an announcement, and the music under it stays put.
+    if (showingAnnouncementRef.current) return;
     // A schedule currently showing visual content is what the remote's
     // "skip" should move past — the same instinct as skipping a video ad.
     // Only when nothing's showing does skip fall through to the music track.
@@ -288,6 +333,17 @@ export function KioskRoomPlayer({
   const applyHostPayload = React.useCallback(
     (p: PlaybackPayload) => {
       setNowPlaying(p.track);
+      if (adHoldRef.current) {
+        // A video/audio ad owns the screen — remember the latest state and
+        // apply it once the ad ends (handleAdFinish).
+        lastPayloadRef.current = p;
+        return;
+      }
+      if (announcementHoldRef.current) {
+        // Same for an announcement that stops the music (handleAnnouncementFinish).
+        lastPayloadRef.current = p;
+        return;
+      }
       if (!p.track) {
         ytRef.current.pause();
         return;
@@ -343,15 +399,206 @@ export function KioskRoomPlayer({
 
   const { connected, requestSync } = useRoomFollower(room.id, handlePlayback);
 
-  useBranchPlayback(room.id, !!room.isBranch && !room.zoneId && !activeScheduleId, handlePlayback);
+  /* ------------------------------- ad serving ----------------------------- */
 
-  useZonePlayback(room.zoneId ?? "", !!room.zoneId && !activeScheduleId, (p, version) => {
-    zoneVersionRef.current = version;
+  const postImpression = React.useCallback(
+    (ad: ActiveAdSnapshot, fields: Record<string, unknown>, beacon = false) => {
+      const body = JSON.stringify({ breakId: ad.breakId, roomId: room.id, deviceToken: deviceTokenRef.current, ...fields });
+      if (beacon && typeof navigator.sendBeacon === "function") {
+        navigator.sendBeacon("/api/business/ads/impression", new Blob([body], { type: "application/json" }));
+        return;
+      }
+      fetch("/api/business/ads/impression", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      }).catch(() => {
+        // Best-effort — a lost `end` is healed server-side once the airing goes stale.
+      });
+    },
+    [room.id],
+  );
+
+  /** Starts showing an airing on this screen — at most once per airing, and
+   * only if it covers this screen and has enough of its slot left. */
+  const offerAd = React.useCallback(
+    (ad: ActiveAdSnapshot | null, knownToShow?: boolean) => {
+      if (!ad || !room.isBranch) return;
+      // No new ad starts under an announcement — a later tick or realtime
+      // update offers it again once the announcement is over, if still on air.
+      if (showingAnnouncementRef.current) return;
+      if (showingAdRef.current || shownBreakIdsRef.current.has(ad.breakId)) return;
+      if (Date.parse(ad.endsAt) - Date.now() < 1500) return;
+      const shows = knownToShow ?? adShowsOnPlayer(ad, { roomId: room.id, deviceId: deviceIdRef.current });
+      if (!shows) return;
+      shownBreakIdsRef.current.add(ad.breakId);
+      showingAdRef.current = ad;
+      setShowingAd(ad);
+      if (ad.contentType === "video" || ad.contentType === "audio") {
+        adHoldRef.current = true;
+        ytRef.current.pause();
+      }
+      postImpression(ad, { phase: "start" });
+    },
+    [room.isBranch, room.id, postImpression],
+  );
+
+  const handleAdFinish = React.useCallback(
+    ({ completed, durationMs }: { completed: boolean; durationMs: number }) => {
+      const ad = showingAdRef.current;
+      showingAdRef.current = null;
+      setShowingAd(null);
+      // An ad an announcement covered wasn't really seen/heard in full.
+      const interrupted = !!ad && adInterruptedBreakIdRef.current === ad.breakId;
+      adInterruptedBreakIdRef.current = null;
+      if (ad) postImpression(ad, { phase: "end", completed: completed && !interrupted, durationMs });
+      if (adHoldRef.current) {
+        adHoldRef.current = false;
+        // A partial airing rejoins the live song; a full one applies the
+        // frozen state until the server's resume arrives over realtime.
+        // An announcement still stopping the music resumes it itself.
+        const p = lastPayloadRef.current;
+        if (p && syncedRef.current && readyAppliedRef.current && !announcementHoldRef.current) {
+          applyHostPayloadRef.current?.(p);
+        }
+      }
+    },
+    [postImpression],
+  );
+
+  React.useEffect(() => {
+    if (!room.isBranch) return;
+    deviceTokenRef.current = window.localStorage.getItem("tz_device_token");
+    let cancelled = false;
+
+    async function tick() {
+      try {
+        const res = await fetch(`/api/business/rooms/${room.id}/ads/tick`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ deviceToken: deviceTokenRef.current }),
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          status: "idle" | "on-air";
+          deviceId: string | null;
+          ad?: ActiveAdSnapshot;
+          showOnThisPlayer?: boolean;
+        };
+        if (cancelled) return;
+        deviceIdRef.current = data.deviceId;
+        if (data.status === "on-air" && data.ad) offerAd(data.ad, data.showOnThisPlayer);
+      } catch {
+        // Best-effort — the next tick tries again.
+      }
+    }
+
+    tick();
+    const id = setInterval(tick, AD_TICK_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [room.isBranch, room.id, offerAd]);
+
+  // A screen closed or reloaded mid-ad still reports its play as ended.
+  React.useEffect(() => {
+    const onHide = () => {
+      const ad = showingAdRef.current;
+      if (ad) postImpression(ad, { phase: "end", completed: false }, true);
+    };
+    window.addEventListener("pagehide", onHide);
+    return () => window.removeEventListener("pagehide", onHide);
+  }, [postImpression]);
+
+  /* ------------------------------ announcements --------------------------- */
+
+  const beginAnnouncement = React.useCallback(
+    (airing: AnnouncementAiring) => {
+      showingAnnouncementRef.current = airing;
+      setShowingAnnouncement(airing);
+      if (showingAdRef.current) adInterruptedBreakIdRef.current = showingAdRef.current.breakId;
+      if (airing.playbackMode === "pause") {
+        announcementHoldRef.current = true;
+        ytRef.current.pause();
+      }
+      // "pause" also zeroes the music volume, so nothing (a remote play press,
+      // a track change) can make it audible under the announcement.
+      ytRef.current.setVolume(duckedVolume(volumeRef.current, airing));
+
+      let deviceToken: string | null = null;
+      try {
+        deviceToken = window.localStorage.getItem("tz_device_token");
+      } catch {
+        // Storage blocked — an unpaired-looking screen just isn't counted.
+      }
+      fetch("/api/business/announcements/delivered", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          announcementId: airing.announcementId,
+          firedAt: airing.firedAt,
+          roomId: room.id,
+          deviceToken,
+          playbackMode: airing.playbackMode,
+        }),
+        keepalive: true,
+      }).catch(() => {
+        // Best-effort — a lost receipt only undercounts delivery stats.
+      });
+    },
+    [room.id],
+  );
+
+  const offerAnnouncement = React.useCallback(
+    (airing: AnnouncementAiring) => {
+      if (!room.isBranch) return;
+      if (showingAnnouncementRef.current) {
+        announcementQueueRef.current.push(airing);
+        return;
+      }
+      beginAnnouncement(airing);
+    },
+    [room.isBranch, beginAnnouncement],
+  );
+
+  const handleAnnouncementFinish = React.useCallback(() => {
+    const wasHolding = announcementHoldRef.current;
+    showingAnnouncementRef.current = null;
+    announcementHoldRef.current = false;
+    const next = announcementQueueRef.current.shift();
+    if (next) {
+      beginAnnouncement(next);
+      if (next.playbackMode === "pause") return;
+    } else {
+      setShowingAnnouncement(null);
+      ytRef.current.setVolume(volumeRef.current);
+    }
+    // The music resumes on the room's live song — unless an ad still holds it,
+    // in which case handleAdFinish resumes it.
+    if (wasHolding && !adHoldRef.current) {
+      const p = lastPayloadRef.current;
+      if (p && syncedRef.current && readyAppliedRef.current) applyHostPayloadRef.current?.(p);
+    }
+  }, [beginAnnouncement]);
+
+  useAnnouncementFeed(room.id, !!room.isBranch, offerAnnouncement);
+
+  useBranchPlayback(room.id, !!room.isBranch && !room.zoneId && !activeScheduleId, (p, adSnapshot) => {
+    offerAd(adSnapshot);
     handlePlayback(p);
   });
 
-  useSchedulePlayback(activeScheduleId ?? "", !!activeScheduleId, (p, content, version) => {
+  useZonePlayback(room.zoneId ?? "", !!room.zoneId && !activeScheduleId, (p, version, adSnapshot) => {
+    zoneVersionRef.current = version;
+    offerAd(adSnapshot);
+    handlePlayback(p);
+  });
+
+  useSchedulePlayback(activeScheduleId ?? "", !!activeScheduleId, (p, content, version, adSnapshot) => {
     scheduleVersionRef.current = version;
+    offerAd(adSnapshot);
     handlePlayback(p);
     if (content?.contentItemId !== scheduleContent?.contentItemId) {
       setScheduleContent(content);
@@ -366,18 +613,26 @@ export function KioskRoomPlayer({
     () => ({ id: `screen-${room.id}`, name: room.name, avatarKey: null, genres: [], plan: "free", accountType: null }),
     [room.id, room.name],
   );
+  const showReaction = React.useCallback((r: ReactionPayload) => {
+    const id = `kr${reactionIdRef.current++}`;
+    setFloatingReactions((prev) => [...prev, { id, emoji: r.emoji, x: r.x }]);
+    setTimeout(() => setFloatingReactions((prev) => prev.filter((f) => f.id !== id)), 2800);
+  }, []);
   useZoneChannel({
     zoneId: room.zoneId ?? "",
     viewer: zoneReactionViewer,
     joined: false,
     enabled: !!room.zoneId,
-    handlers: {
-      onReaction: (r) => {
-        const id = `kr${reactionIdRef.current++}`;
-        setFloatingReactions((prev) => [...prev, { id, emoji: r.emoji, x: r.x }]);
-        setTimeout(() => setFloatingReactions((prev) => prev.filter((f) => f.id !== id)), 2800);
-      },
-    },
+    handlers: { onReaction: showReaction },
+  });
+  // Same, for guests paired with any screen in this room (app/pair/[slug]).
+  useZoneChannel({
+    zoneId: room.id,
+    channelName: pairChannelName(room.id),
+    viewer: zoneReactionViewer,
+    joined: false,
+    enabled: !!room.isBranch,
+    handlers: { onReaction: showReaction },
   });
 
   // Discovers whether an active Schedule currently covers this room. Only a
@@ -451,10 +706,17 @@ export function KioskRoomPlayer({
     };
   }, [room.isBranch, room.id, armContentTimer]);
 
+  // The music's actual volume — ducked or zeroed while an announcement plays,
+  // so volume changes made during one don't bring the music back early.
+  const musicVolume = React.useCallback((v: number) => {
+    const airing = showingAnnouncementRef.current;
+    return airing ? duckedVolume(v, airing) : v;
+  }, []);
+
   useBranchVolume(room.id, !!room.isBranch, (v) => {
     volumeRef.current = v;
     setVolume(v);
-    ytRef.current.setVolume(v);
+    ytRef.current.setVolume(musicVolume(v));
   });
 
   // When the player becomes ready, start muted + in sync from the last snapshot.
@@ -517,7 +779,7 @@ export function KioskRoomPlayer({
     setSynced(true);
     syncedRef.current = true;
     ytRef.current.unMute();
-    ytRef.current.setVolume(volumeRef.current || 80);
+    ytRef.current.setVolume(musicVolume(volumeRef.current || 80));
     if (!volumeRef.current) {
       volumeRef.current = 80;
       setVolume(80);
@@ -525,7 +787,7 @@ export function KioskRoomPlayer({
     const p = lastPayloadRef.current;
     if (p) applyHostPayload(p);
     else requestSync();
-  }, [applyHostPayload, requestSync]);
+  }, [applyHostPayload, requestSync, musicVolume]);
 
   const togglePlay = React.useCallback(() => {
     if (ytPlayingRef.current) {
@@ -553,20 +815,20 @@ export function KioskRoomPlayer({
     } else {
       setMuted(false);
       ytRef.current.unMute();
-      ytRef.current.setVolume(volumeRef.current || 80);
+      ytRef.current.setVolume(musicVolume(volumeRef.current || 80));
     }
-  }, [muted]);
+  }, [muted, musicVolume]);
 
   const changeVolume = React.useCallback((v: number) => {
     const vol = Math.min(100, Math.max(0, Math.round(v)));
     volumeRef.current = vol;
     setVolume(vol);
-    ytRef.current.setVolume(vol);
+    ytRef.current.setVolume(musicVolume(vol));
     if (vol > 0) {
       setMuted(false);
       ytRef.current.unMute();
     }
-  }, []);
+  }, [musicVolume]);
 
   /* --------------------------- controls visibility ------------------------ */
 
@@ -649,6 +911,42 @@ export function KioskRoomPlayer({
       {/* Reactions sent by anyone who's joined this zone's Zone Room online
           (app/zones/[slug]) — shared component with the room/zone-room UI. */}
       <FloatingReactions items={floatingReactions} />
+
+      {room.isBranch && (
+        <KioskPairOverlay
+          pairSlug={pairSlug}
+          trackId={nowPlaying?.youtubeId ?? null}
+          requestedByName={nowPlaying?.requestedByName ?? null}
+        />
+      )}
+
+      {/* A live ad airing takes over the whole screen, above signage and the
+          controls (see handleAdFinish for how the music comes back). */}
+      {showingAd && (
+        <AdOverlay
+          key={showingAd.breakId}
+          ad={showingAd}
+          soundOn={started && !muted && !showingAnnouncement}
+          volume={volume}
+          onFinish={handleAdFinish}
+        />
+      )}
+
+      {/* An announcement outranks everything — ads, signage, guest requests,
+          the tap-for-sound prompt (it unlocks sound itself when tapped). A
+          local mute doesn't silence it. See handleAnnouncementFinish. */}
+      {showingAnnouncement && (
+        <AnnouncementOverlay
+          key={showingAnnouncement.airingId}
+          airing={showingAnnouncement}
+          soundOn={started}
+          volume={volume > 0 ? volume : 80}
+          onFinish={handleAnnouncementFinish}
+          onTap={() => {
+            if (!started) enableSound();
+          }}
+        />
+      )}
 
       {/* Tap layer: toggles the control bar (clicks never reach the iframe). */}
       <button

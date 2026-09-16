@@ -8,6 +8,7 @@ import { getBusinessViewer } from "@/lib/business/viewer";
 import { getCurrentProfile } from "@/lib/auth/profile";
 import { getAnnouncement } from "@/lib/business/announcement-queries";
 import { uploadAnnouncementAudio, deleteAnnouncementAudio } from "@/lib/business/announcement-storage";
+import { pingAnnouncementTargets } from "@/lib/business/announcement-firing";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   CATEGORIES,
@@ -244,6 +245,10 @@ export async function createAnnouncement(formData: FormData): Promise<ActionResu
     return { ok: false, error: "Could not save the announcement's target." };
   }
 
+  // Only now that the target rows exist — kiosks resolve targeting when they
+  // check in, so pinging any earlier could find nothing to play.
+  if (sent) await pingAnnouncementTargets(target);
+
   revalidatePath(ANNOUNCEMENTS_PATH);
   return { ok: true };
 }
@@ -310,6 +315,9 @@ export async function updateAnnouncement(formData: FormData): Promise<ActionResu
   if (!targetOk) {
     return { ok: false, error: "Announcement saved, but its target couldn't be fully updated." };
   }
+
+  // A resend is a new airing (new `sent_at`), so screens play it again.
+  if (sent) await pingAnnouncementTargets(target);
 
   if (newlyUploadedPath && existing.audioPath && existing.audioPath !== newlyUploadedPath) {
     await cleanupAudioIfUnreferenced(admin, viewer.businessId, existing.audioPath, id);

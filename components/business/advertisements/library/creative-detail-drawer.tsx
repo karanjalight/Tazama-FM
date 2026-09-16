@@ -1,9 +1,13 @@
-import type * as React from "react";
-import Image from "next/image";
-import { toast } from "sonner";
-import { Archive, Copy, FileImage, Music, Pencil, Play, Video } from "lucide-react";
+"use client";
 
-import { creativeUsageCount, type Creative } from "../mock-data";
+import * as React from "react";
+import Image from "next/image";
+import { Check, Copy, FileImage, FileText, Music, Pencil, Trash2, Video, X } from "lucide-react";
+
+import type { ContentItem } from "@/lib/business/content-queries";
+import { formatDuration, formatFileSize } from "@/lib/business/content-format";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -12,7 +16,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 
-const TYPE_ICON = { Video, Image: FileImage, Audio: Music } as const;
+const TYPE_ICON = { video: Video, image: FileImage, audio: Music, document: FileText } as const;
+const STATUS_STYLE = {
+  approved: "text-emerald-400",
+  pending: "text-amber-400",
+  rejected: "text-rose-400",
+} as const;
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -25,16 +34,34 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function CreativeDetailDrawer({
   creative,
+  canModerate,
   onOpenChange,
+  onRename,
   onDuplicate,
-  onArchive,
+  onDelete,
+  onReview,
 }: {
-  creative: Creative | null;
+  creative: ContentItem | null;
+  canModerate: boolean;
   onOpenChange: (open: boolean) => void;
-  onDuplicate: (c: Creative) => void;
-  onArchive: (id: string) => void;
+  onRename: (c: ContentItem, title: string) => void;
+  onDuplicate: (c: ContentItem) => void;
+  onDelete: (c: ContentItem) => void;
+  onReview: (c: ContentItem, status: "approved" | "rejected") => void;
 }) {
-  const Icon = creative ? TYPE_ICON[creative.format] : Video;
+  const [editing, setEditing] = React.useState(false);
+  const [title, setTitle] = React.useState(creative?.title ?? "");
+
+  // Reset the edit draft whenever a different creative is selected — same
+  // convention as RoomDetailPanel/ZoneDetailPanel earlier this session.
+  const [lastId, setLastId] = React.useState(creative?.id ?? null);
+  if (creative && creative.id !== lastId) {
+    setLastId(creative.id);
+    setTitle(creative.title);
+    setEditing(false);
+  }
+
+  const Icon = creative ? TYPE_ICON[creative.contentType] : Video;
 
   return (
     <Sheet open={!!creative} onOpenChange={onOpenChange}>
@@ -42,57 +69,119 @@ export function CreativeDetailDrawer({
         {creative && (
           <>
             <SheetHeader>
-              <SheetTitle>{creative.name}</SheetTitle>
+              <SheetTitle>{creative.title}</SheetTitle>
               <SheetDescription className="sr-only">Creative details</SheetDescription>
             </SheetHeader>
 
             <div className="px-4">
               <div className="relative aspect-video overflow-hidden rounded-xl bg-muted">
-                {creative.thumbnail ? (
-                  <Image src={creative.thumbnail} alt="" fill sizes="400px" className="object-cover" unoptimized />
+                {creative.contentType === "video" && creative.url ? (
+                  <video src={creative.url} controls className="size-full object-contain" />
+                ) : creative.contentType === "image" && creative.url ? (
+                  <Image src={creative.url} alt="" fill sizes="400px" className="object-cover" unoptimized />
+                ) : creative.contentType === "audio" && creative.url ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-3">
+                    <Icon className="size-8 text-foreground/40" />
+                    <audio src={creative.url} controls className="w-4/5" />
+                  </div>
                 ) : (
                   <div className="grid h-full place-items-center bg-linear-to-br from-violet-500/20 to-fuchsia-500/20">
                     <Icon className="size-8 text-foreground/40" />
                   </div>
                 )}
               </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {creative.format} {creative.durationLabel && `· ${creative.durationLabel}`}
-              </p>
 
-              <Section title="Used in">
+              <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+                <span className="capitalize text-muted-foreground">
+                  {creative.contentType}
+                  {creative.durationSeconds != null && ` · ${formatDuration(creative.durationSeconds)}`}
+                  {` · ${formatFileSize(creative.sizeBytes)}`}
+                </span>
+                <span className={cn("shrink-0 text-xs font-medium capitalize", STATUS_STYLE[creative.status])}>
+                  {creative.status}
+                </span>
+              </div>
+
+              <Section title="Name">
+                {editing ? (
+                  <div className="flex gap-2">
+                    <Input value={title} onChange={(e) => setTitle(e.target.value)} className="h-9" maxLength={120} />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onRename(creative, title.trim() || creative.title);
+                        setEditing(false);
+                      }}
+                      disabled={!title.trim()}
+                      className="shrink-0 rounded-lg bg-violet-600 px-3 text-sm font-medium text-white transition-colors hover:bg-violet-500 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-sm text-foreground">{creative.title}</p>
+                )}
+              </Section>
+
+              <Section title="Uploaded">
                 <p className="text-sm text-foreground">
-                  {creativeUsageCount(creative.id)} campaign{creativeUsageCount(creative.id) === 1 ? "" : "s"}
+                  {new Date(creative.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })}
+                  {creative.uploadedByName && ` · ${creative.uploadedByName}`}
                 </p>
               </Section>
 
-              {creative.dimensions && (
-                <Section title="Dimensions">
-                  <p className="text-sm text-foreground">{creative.dimensions}</p>
+              {canModerate && creative.status === "pending" && (
+                <Section title="Review">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onReview(creative, "approved")}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 px-3 py-2 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/10"
+                    >
+                      <Check className="size-3.5" />
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onReview(creative, "rejected")}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/30 px-3 py-2 text-sm font-medium text-rose-400 transition-colors hover:bg-rose-500/10"
+                    >
+                      <X className="size-3.5" />
+                      Reject
+                    </button>
+                  </div>
                 </Section>
               )}
 
-              <Section title="Uploaded">
-                <p className="text-sm text-foreground">{creative.uploadedLabel}</p>
-              </Section>
-
               <Section title="Actions">
                 <div className="grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => toast.info("Preview isn't wired up in this preview yet")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
-                    <Play className="size-3.5" />
-                    Preview
-                  </button>
-                  <button type="button" onClick={() => toast.info("Editing isn't wired up in this preview yet")} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                  >
                     <Pencil className="size-3.5" />
-                    Edit
+                    Rename
                   </button>
-                  <button type="button" onClick={() => onDuplicate(creative)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+                  <button
+                    type="button"
+                    onClick={() => onDuplicate(creative)}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                  >
                     <Copy className="size-3.5" />
                     Duplicate
                   </button>
-                  <button type="button" onClick={() => onArchive(creative.id)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-input px-3 py-2 text-sm font-medium text-rose-400 transition-colors hover:bg-rose-500/10">
-                    <Archive className="size-3.5" />
-                    {creative.archived ? "Unarchive" : "Archive"}
+                  <button
+                    type="button"
+                    onClick={() => onDelete(creative)}
+                    className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl border border-rose-500/30 px-3 py-2 text-sm font-medium text-rose-400 transition-colors hover:bg-rose-500/10"
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete
                   </button>
                 </div>
               </Section>

@@ -19,12 +19,14 @@ import * as React from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { PlaybackPayload } from "@/lib/rooms/channel";
 import type { RoomTrack } from "@/lib/rooms/types";
+import type { ActiveAdSnapshot } from "@/lib/business/ad-types";
 
 interface RoomPlaybackRow {
   track: RoomTrack | null;
   position_ms: number;
   is_playing: boolean;
   updated_at: string;
+  active_ad?: ActiveAdSnapshot | null;
 }
 
 function rowToPayload(row: RoomPlaybackRow): PlaybackPayload {
@@ -36,10 +38,18 @@ function rowToPayload(row: RoomPlaybackRow): PlaybackPayload {
   };
 }
 
+/** `activeAd`, the trailing param every one of these three hooks' callbacks
+ * now carries: whether a real ad is currently overriding this exact source
+ * (see supabase/business-ad-serving.sql, lib/business/ad-playback.ts). Every
+ * pre-existing caller of these hooks (Zone Room, staff Now Playing cards,
+ * the branch queue panel) simply never declares this parameter — TypeScript
+ * allows a callback with fewer params to satisfy a type expecting more, so
+ * none of them needed to change; only the kiosk player, which actually
+ * needs to render/pause for an ad, reads it. */
 export function useBranchPlayback(
   roomId: string,
   enabled: boolean,
-  onPlayback: (p: PlaybackPayload) => void,
+  onPlayback: (p: PlaybackPayload, activeAd: ActiveAdSnapshot | null) => void,
 ): void {
   const cbRef = React.useRef(onPlayback);
   React.useEffect(() => {
@@ -61,7 +71,7 @@ export function useBranchPlayback(
         },
         (payload) => {
           const row = payload.new as RoomPlaybackRow | undefined;
-          if (row) cbRef.current(rowToPayload(row));
+          if (row) cbRef.current(rowToPayload(row), row.active_ad ?? null);
         },
       )
       .subscribe();
@@ -145,6 +155,7 @@ interface ZonePlaybackRow {
   is_playing: boolean;
   version: number;
   updated_at: string;
+  active_ad?: ActiveAdSnapshot | null;
 }
 
 function rowToZonePayload(row: ZonePlaybackRow): PlaybackPayload {
@@ -164,7 +175,7 @@ function rowToZonePayload(row: ZonePlaybackRow): PlaybackPayload {
 export function useZonePlayback(
   zoneId: string,
   enabled: boolean,
-  onPlayback: (p: PlaybackPayload, version: number) => void,
+  onPlayback: (p: PlaybackPayload, version: number, activeAd: ActiveAdSnapshot | null) => void,
 ): void {
   const cbRef = React.useRef(onPlayback);
   React.useEffect(() => {
@@ -186,7 +197,7 @@ export function useZonePlayback(
         },
         (payload) => {
           const row = payload.new as ZonePlaybackRow | undefined;
-          if (row) cbRef.current(rowToZonePayload(row), row.version);
+          if (row) cbRef.current(rowToZonePayload(row), row.version, row.active_ad ?? null);
         },
       )
       .subscribe();
@@ -257,12 +268,18 @@ interface SchedulePlaybackRow {
   started_at: string | null;
   version: number;
   updated_at: string;
+  active_ad?: ActiveAdSnapshot | null;
 }
 
 export function useSchedulePlayback(
   scheduleId: string,
   enabled: boolean,
-  onPlayback: (p: PlaybackPayload, content: ScheduleContentSnapshot | null, version: number) => void,
+  onPlayback: (
+    p: PlaybackPayload,
+    content: ScheduleContentSnapshot | null,
+    version: number,
+    activeAd: ActiveAdSnapshot | null,
+  ) => void,
 ): void {
   const cbRef = React.useRef(onPlayback);
   React.useEffect(() => {
@@ -294,6 +311,7 @@ export function useSchedulePlayback(
             },
             row.content,
             row.version,
+            row.active_ad ?? null,
           );
         },
       )

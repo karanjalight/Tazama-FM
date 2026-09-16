@@ -1,30 +1,38 @@
-import type { BudgetType, CampaignObjective, CreativeFormat, PlacementType } from "../types";
+import type {
+  Campaign,
+  CampaignObjective,
+  CampaignPriority,
+  CampaignTarget,
+  PlacementType,
+} from "@/lib/business/campaign-types";
+import { DEFAULT_IMAGE_AD_SECONDS } from "@/lib/business/ad-scheduling";
 
-export interface UploadedCreative {
-  name: string;
-  format: CreativeFormat;
-  url: string;
-  durationLabel: string | null;
-}
-
+/**
+ * The wizard's editable form state. There is only one way to end up with a
+ * creative — `creativeId`, a real `content_items.id` (an inline upload goes
+ * through `uploadAdCreative` immediately, see steps/creative-step.tsx).
+ */
 export interface CampaignDraft {
   name: string;
-  advertiser: string;
+  advertiserName: string;
   objective: CampaignObjective;
 
   creativeId: string | null;
-  uploadedCreative: UploadedCreative | null;
+  /** How long an image/document ad stays on screen. */
+  displaySeconds: number;
 
   locationIds: string[];
   zoneIds: string[];
   roomIds: string[];
+  screenIds: string[];
 
   placementType: PlacementType;
-  frequency: string;
+  /** Bare integer minutes as a string — see campaign-types.ts's FREQUENCY_OPTIONS. */
+  frequencyMinutes: string;
   maxPlaysPerDay: number;
-  priority: "Low" | "Normal" | "High" | "Critical";
+  priority: CampaignPriority;
 
-  budgetType: BudgetType;
+  budgetType: "total" | "daily";
   budgetAmount: number;
 
   startDate: string;
@@ -33,35 +41,59 @@ export interface CampaignDraft {
   activeEnd: string;
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-function plusDaysIso(days: number): string {
-  return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+function isoDate(offsetDays: number): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toISOString().slice(0, 10);
 }
 
-export const DEFAULT_CAMPAIGN_DRAFT: CampaignDraft = {
-  name: "",
-  advertiser: "Verifier Bar & Grill",
-  objective: "Promotion",
+export function defaultCampaignDraft(): CampaignDraft {
+  return {
+    name: "",
+    advertiserName: "",
+    objective: "Promotion",
+    creativeId: null,
+    displaySeconds: DEFAULT_IMAGE_AD_SECONDS,
+    locationIds: [],
+    zoneIds: [],
+    roomIds: [],
+    screenIds: [],
+    placementType: "Between Content",
+    frequencyMinutes: "15",
+    maxPlaysPerDay: 20,
+    priority: "Normal",
+    budgetType: "daily",
+    budgetAmount: 5000,
+    startDate: isoDate(0),
+    endDate: isoDate(13),
+    activeStart: "16:00",
+    activeEnd: "21:00",
+  };
+}
 
-  creativeId: null,
-  uploadedCreative: null,
+export function draftFromCampaign(c: Campaign): CampaignDraft {
+  const base = defaultCampaignDraft();
+  return {
+    name: c.name,
+    advertiserName: c.advertiserName ?? "",
+    objective: c.objective,
+    creativeId: c.creativeId,
+    displaySeconds: c.displaySeconds ?? base.displaySeconds,
+    locationIds: c.target.locationIds,
+    zoneIds: c.target.zoneIds,
+    roomIds: c.target.roomIds,
+    screenIds: c.target.screenIds,
+    placementType: c.placementType,
+    frequencyMinutes: c.frequencyMinutes ?? base.frequencyMinutes,
+    maxPlaysPerDay: c.maxPlaysPerDay ?? 0,
+    priority: c.priority,
+    budgetType: c.budgetType,
+    budgetAmount: c.budgetAmount ?? 0,
+    startDate: c.startDate ?? "",
+    endDate: c.endDate ?? "",
+    activeStart: c.activeStartTime ?? "",
+    activeEnd: c.activeEndTime ?? "",
+  };
+}
 
-  locationIds: [],
-  zoneIds: [],
-  roomIds: [],
-
-  placementType: "Between Content",
-  frequency: "Every 15 minutes",
-  maxPlaysPerDay: 20,
-  priority: "Normal",
-
-  budgetType: "daily",
-  budgetAmount: 5000,
-
-  startDate: todayIso(),
-  endDate: plusDaysIso(14),
-  activeStart: "16:00",
-  activeEnd: "21:00",
-};
+export function draftTarget(d: CampaignDraft): CampaignTarget {
+  return { locationIds: d.locationIds, zoneIds: d.zoneIds, roomIds: d.roomIds, screenIds: d.screenIds };
+}

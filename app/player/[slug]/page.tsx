@@ -6,6 +6,7 @@ import { resolveKioskPlaylist, kioskTitle } from "@/lib/player/kiosk-playlist";
 import { getRoomBySlug, getRoomPlayback } from "@/lib/rooms/queries";
 import { getRoomVolume } from "@/lib/business/queries";
 import { getSynchronizedZoneForRoom, getAudioZonePlayback } from "@/lib/business/audio-zone-queries";
+import { getPairSlugForRoom } from "@/lib/pair/queries";
 
 /**
  * Lightweight kiosk player for Android TV boxes (restaurants/clubs/hotels).
@@ -54,10 +55,11 @@ export default async function PlayerPage({
   const room = await getRoomBySlug(slug);
   if (room && (room.access === "public" || room.ownerBusinessId)) {
     const zone = room.ownerBusinessId ? await getSynchronizedZoneForRoom(room.id) : null;
-    const [roomPlayback, zonePlayback, initialVolume] = await Promise.all([
+    const [roomPlayback, zonePlayback, initialVolume, pairSlug] = await Promise.all([
       zone ? Promise.resolve(null) : getRoomPlayback(room.id),
       zone ? getAudioZonePlayback(zone.id) : Promise.resolve(null),
       getRoomVolume(room.id),
+      room.ownerBusinessId ? getPairSlugForRoom(room.id) : Promise.resolve(null),
     ]);
     const initialPlayback = zone
       ? zonePlayback
@@ -84,6 +86,7 @@ export default async function PlayerPage({
         initialPlayback={initialPlayback}
         initialVolume={initialVolume}
         initialZoneVersion={zonePlayback?.version ?? 0}
+        pairSlug={pairSlug}
       />
     );
   }

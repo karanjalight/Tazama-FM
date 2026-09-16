@@ -1,4 +1,4 @@
-import type { CampaignStatus } from "./types";
+import type { CampaignStatus } from "@/lib/business/campaign-types";
 import { cn } from "@/lib/utils";
 
 const STATUS_META: Record<CampaignStatus, { dot: string; text: string }> = {

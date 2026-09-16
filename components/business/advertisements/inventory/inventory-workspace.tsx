@@ -1,52 +1,67 @@
-import { AVAILABLE_INVENTORY_SCREENS, BOOKED_INVENTORY_SCREENS, INVENTORY_LOCATIONS, TOTAL_INVENTORY_SCREENS, UTILIZATION_PCT } from "./mock-data";
+"use client";
+
+import { MonitorOff } from "lucide-react";
+
+import type { AdInventory } from "@/lib/business/ad-inventory-queries";
+import { AdsKpiCard } from "../ads-kpi-card";
 import { InventoryLocationCard } from "./inventory-location-card";
 import { ScreenInventoryTable } from "./screen-inventory-table";
-import { InventoryCalendar } from "./inventory-calendar";
+import { AnalyticsEmptyState } from "@/components/business/analytics/empty-state";
+import { formatKes } from "../format";
 
-export function InventoryWorkspace() {
+export function InventoryWorkspace({ businessId, inventory }: { businessId: string; inventory: AdInventory }) {
+  const { totals } = inventory;
+
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Advertising Inventory</h1>
-        <p className="mt-1 text-sm text-muted-foreground">See where advertisements can appear across your Tazama network.</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Every screen you own is ad space. See what&apos;s booked, switch ads off where they don&apos;t belong, and set each
+          screen&apos;s rate. Screens without their own CPM use {formatKes(inventory.defaultCpm)}.
+        </p>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="font-mono text-2xl font-semibold text-foreground">{TOTAL_INVENTORY_SCREENS}</p>
-          <p className="text-xs text-muted-foreground">Total Screens</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="font-mono text-2xl font-semibold text-emerald-400">{AVAILABLE_INVENTORY_SCREENS}</p>
-          <p className="text-xs text-muted-foreground">Available</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="font-mono text-2xl font-semibold text-amber-400">{BOOKED_INVENTORY_SCREENS}</p>
-          <p className="text-xs text-muted-foreground">Booked</p>
-        </div>
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="font-mono text-2xl font-semibold text-foreground">{UTILIZATION_PCT}%</p>
-          <p className="text-xs text-muted-foreground">Utilization</p>
-        </div>
-      </div>
+      {!inventory.schemaReady && (
+        <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground">
+          Screen ad settings can&apos;t be saved yet. Run <code className="font-mono text-foreground">supabase/business-ad-serving.sql</code> in
+          the Supabase SQL editor to enable them.
+        </p>
+      )}
 
-      <div>
-        <h2 className="mb-3 text-base font-semibold text-foreground">Locations</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {INVENTORY_LOCATIONS.map((loc) => (
-            <InventoryLocationCard key={loc.id} location={loc} />
-          ))}
-        </div>
-      </div>
+      {totals.total === 0 ? (
+        <AnalyticsEmptyState
+          icon={MonitorOff}
+          title="No screens yet"
+          description="Pair a screen to one of your locations under Screens & Devices. Each one becomes ad inventory automatically."
+        />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <AdsKpiCard label="Total Screens" value={String(totals.total)} sublabel={`${totals.online} online now`} />
+            <AdsKpiCard label="Available" value={String(totals.available)} sublabel="Nothing booked today" />
+            <AdsKpiCard label="Booked Today" value={String(totals.booked)} sublabel={`${totals.liveNow} in an active window now`} />
+            <AdsKpiCard label="Ads Off" value={String(totals.restricted)} sublabel="Screen or location opted out" />
+            <AdsKpiCard label="Utilization" value={`${totals.utilizationPct}%`} sublabel="Booked ÷ sellable screens" />
+            <AdsKpiCard
+              label="Avg. CPM"
+              value={formatKes(inventory.screens.reduce((s, x) => s + x.effectiveCpm, 0) / Math.max(1, inventory.screens.length))}
+              sublabel="Per 1,000 est. views"
+            />
+          </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <ScreenInventoryTable />
-      </div>
+          <div>
+            <h2 className="mb-3 text-base font-semibold text-foreground">Locations</h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {inventory.locations.map((loc) => (
+                <InventoryLocationCard key={loc.id} location={loc} />
+              ))}
+            </div>
+          </div>
 
-      <div className="rounded-2xl border border-border bg-card p-5">
-        <h2 className="mb-3 text-base font-semibold text-foreground">Advertising Inventory Availability</h2>
-        <InventoryCalendar />
-      </div>
+          <ScreenInventoryTable businessId={businessId} inventory={inventory} />
+        </>
+      )}
     </div>
   );
 }

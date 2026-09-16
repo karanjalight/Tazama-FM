@@ -48,6 +48,24 @@ export function TourOverlay({
 
   const anchor = isDesktop && layout.rect && cardHeight > 0 ? anchorCard(layout.rect, layout.viewport.height, cardHeight) : null;
 
+  // ←/→ on the document, not the popup: clicking the dimmed backdrop moves focus
+  // out of the card, and keyboard navigation should keep working regardless.
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey || event.defaultPrevented) return;
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        onNext();
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        onBack();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onNext, onBack]);
+
   if (!step) return null;
 
   return (
@@ -65,16 +83,6 @@ export function TourOverlay({
           ref={popupRef}
           initialFocus={nextRef}
           data-tour-card=""
-          onKeyDown={(event) => {
-            if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
-            if (event.key === "ArrowRight") {
-              event.preventDefault();
-              onNext();
-            } else if (event.key === "ArrowLeft") {
-              event.preventDefault();
-              onBack();
-            }
-          }}
           style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
           className={cn(
             "fixed z-[70] outline-none transition-[opacity,top] duration-300 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0",

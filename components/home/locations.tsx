@@ -61,7 +61,7 @@ const PINS = LOCATIONS.map((l) => {
 });
 const HQ = PINS[0];
 
-export function Locations() {
+export function Locations({ standalone = false }: { standalone?: boolean } = {}) {
   const { ref, index, select } = useCycle<HTMLDivElement>({ count: LOCATIONS.length, interval: 3800, amount: 0.4 });
   const totals = LOCATIONS.reduce(
     (acc, l) => ({
@@ -75,6 +75,7 @@ export function Locations() {
   return (
     <Section id="locations" tone="snow">
       <Container>
+        {standalone ? null : (
         <SectionIntro
           index="07"
           kicker="Multi-location"
@@ -85,8 +86,9 @@ export function Locations() {
           }
           body="Run a single café or a chain across the country. Every branch, zone, screen and speaker shows up in the same place."
         />
+        )}
 
-        <div ref={ref} className="mt-14 grid gap-4 sm:mt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-5">
+        <div ref={ref} className={cn("mt-14 grid gap-4 sm:mt-20 lg:grid-cols-[1fr_1.05fr] lg:gap-5", standalone && "mt-0 sm:mt-0")}>
           {/* Map */}
           <div className="relative overflow-hidden rounded-[24px] bg-ink-2 p-6 ring-1 ring-white/[0.08] sm:p-8">
             <div className="flex items-center justify-between">

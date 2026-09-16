@@ -15,7 +15,7 @@ export function SiteFooter() {
       items: [
         { label: "Tazama for Business", href: "/for-business" },
         { label: "Tazama for listeners", href: "/how-it-works" },
-        { label: "Contact sales", href: "/#contact" },
+        { label: "Contact sales", href: "/contact" },
         { label: "Sign in", href: "/login" },
       ],
     },

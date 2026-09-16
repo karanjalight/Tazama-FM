@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { INDUSTRIES } from "@/lib/home-content";
+import { INDUSTRIES, type IndustryId } from "@/lib/home-content";
 import { cn } from "@/lib/utils";
 import { ScreenFrame } from "./kit/frames";
 import { Container, Section, SectionIntro } from "./kit/primitives";
@@ -13,12 +13,16 @@ import { useCycle } from "./kit/use-cycle";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-export function Industries() {
-  const { ref, index, select, reduced } = useCycle<HTMLDivElement>({ count: INDUSTRIES.length, interval: 6500, amount: 0.45 });
+export function Industries({ standalone = false, only }: { standalone?: boolean; only?: IndustryId } = {}) {
+  const cycle = useCycle<HTMLDivElement>({ count: INDUSTRIES.length, interval: 6500, amount: 0.45 });
+  const { ref, select, reduced } = cycle;
+  // `only` pins the panel to one industry (the per-industry pages): no tabs, no rotation.
+  const index = only ? Math.max(0, INDUSTRIES.findIndex((ind) => ind.id === only)) : cycle.index;
   const industry = INDUSTRIES[index];
 
   // Nav links point at #industries-<id>: open that tab when the hash matches.
   useEffect(() => {
+    if (only) return;
     const sync = () => {
       const id = window.location.hash.replace("#industries-", "");
       const i = INDUSTRIES.findIndex((ind) => ind.id === id);
@@ -27,7 +31,7 @@ export function Industries() {
     sync();
     window.addEventListener("hashchange", sync);
     return () => window.removeEventListener("hashchange", sync);
-  }, [select]);
+  }, [select, only]);
 
   return (
     <Section id="industries" tone="light">
@@ -36,6 +40,7 @@ export function Industries() {
         <span key={ind.id} id={`industries-${ind.id}`} aria-hidden className="absolute top-0 scroll-mt-16" />
       ))}
       <Container wide>
+        {standalone ? null : (
         <SectionIntro
           index="06"
           kicker="Industries"
@@ -46,9 +51,11 @@ export function Industries() {
           }
           body="Restaurants, shops, hotels, clinics, banks and entertainment venues all run on the same platform. Pick yours to see what plays, shows and speaks there."
         />
+        )}
 
-        <div ref={ref} className="mt-12 sm:mt-16">
+        <div ref={ref} className={cn("mt-12 sm:mt-16", standalone && "mt-0 sm:mt-0")}>
           <div
+            hidden={Boolean(only)}
             role="tablist"
             aria-label="Industries"
             className="no-scrollbar -mx-5 flex gap-1 overflow-x-auto px-5 sm:mx-0 sm:px-0"
@@ -81,8 +88,8 @@ export function Industries() {
 
           <div
             id="industry-panel"
-            role="tabpanel"
-            aria-labelledby={`industry-tab-${industry.id}`}
+            role={only ? undefined : "tabpanel"}
+            aria-labelledby={only ? undefined : `industry-tab-${industry.id}`}
             className="relative mt-4 aspect-[9/15.5] overflow-hidden rounded-[24px] bg-ink text-white ring-1 ring-white/[0.08] sm:aspect-[16/10] lg:aspect-[16/8] lg:rounded-[28px]"
           >
             <AnimatePresence initial={false}>

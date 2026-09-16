@@ -42,13 +42,14 @@ const CAPABILITIES = [
   ["Performance", "Plays and estimated reach for every campaign, ready to share."],
 ];
 
-export function Advertising() {
+export function Advertising({ standalone = false }: { standalone?: boolean } = {}) {
   const { ref, tick } = useTick<HTMLDivElement>({ interval: 420, amount: 0.35 });
   const live = Array.from({ length: SCREEN_COUNT }, (_, i) => onAir(tick, i)).filter(Boolean).length;
 
   return (
     <Section id="advertising" tone="light" className="overflow-hidden">
       <Container wide>
+        {standalone ? null : (
         <SectionIntro
           index="09"
           kicker="Advertising"
@@ -59,8 +60,9 @@ export function Advertising() {
           }
           body="They can become another channel for your business — for your own promotions, or for brands that want to reach your customers."
         />
+        )}
 
-        <div ref={ref} className="mt-14 grid gap-5 sm:mt-20 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        <div ref={ref} className={cn("mt-14 grid gap-5 sm:mt-20 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]", standalone && "mt-0 sm:mt-0")}>
           {/* Campaign */}
           <div className="flex flex-col rounded-[24px] bg-ink-2 p-5 shadow-[0_50px_100px_-50px_rgb(0_0_0/0.9)] ring-1 ring-white/[0.08] sm:p-6">
             <div className="flex items-center justify-between">

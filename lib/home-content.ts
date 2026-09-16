@@ -7,6 +7,7 @@
  */
 
 import { PRODUCTS, productHref } from "./product-content";
+import { pagesInGroup, type PageGroup } from "./site-pages";
 
 /* ------------------------------- Demo business ------------------------------ */
 
@@ -213,14 +214,10 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-const INDUSTRY_ICON: Record<IndustryId, NavIconKey> = {
-  restaurants: "utensils",
-  retail: "bag",
-  hotels: "hotel",
-  healthcare: "stethoscope",
-  financial: "landmark",
-  entertainment: "ticket",
-};
+/** Nav items for a group of plain-language pages (lib/site-pages.ts). */
+function pageLinks(group: PageGroup): NavItem[] {
+  return pagesInGroup(group).map((p) => ({ label: p.label, description: p.summary, href: p.href, icon: p.icon }));
+}
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -232,38 +229,19 @@ export const NAV_GROUPS: NavGroup[] = [
       icon: product.icon,
     })),
   },
-  {
-    label: "Solutions",
-    items: [
-      { label: "Scheduling", description: "Plan the whole day once. Tazama runs it.", href: "/#workflow", icon: "calendar" },
-      { label: "Multi-location", description: "One business, every branch, one view.", href: "/#locations", icon: "map" },
-      { label: "Guest engagement", description: "QR song requests and live reactions.", href: "/#engagement", icon: "qr" },
-      { label: "Advertising", description: "Run campaigns or sell screen time.", href: "/#advertising", icon: "target" },
-    ],
-  },
-  {
-    label: "Industries",
-    items: INDUSTRIES.map((industry) => ({
-      label: industry.label,
-      description: industry.uses.slice(0, 3).join(" · "),
-      href: `/#industries-${industry.id}`,
-      icon: INDUSTRY_ICON[industry.id],
-    })),
-  },
+  { label: "Solutions", items: pageLinks("solutions") },
+  { label: "Industries", items: pageLinks("industries") },
   {
     label: "Platform",
     items: [
-      { label: "How it works", description: "Create, schedule, publish, monitor.", href: "/#workflow", icon: "workflow" },
-      { label: "From dashboard to the room", description: "What you choose is what customers see.", href: "/#physical", icon: "screen-link" },
-      { label: "Reliability", description: "Built for real-time, all-day operation.", href: "/#reliability", icon: "activity" },
+      ...pageLinks("platform"),
       { label: "Tazama for Business", description: "Plans, setup and the full feature list.", href: "/for-business", icon: "building" },
     ],
   },
   {
     label: "Resources",
     items: [
-      { label: "Supported hardware", description: "Runs on the TVs and speakers you have.", href: "/#hardware", icon: "tv" },
-      { label: "Contact sales", description: "Tell us about your venues.", href: "/#contact", icon: "mail" },
+      ...pageLinks("resources"),
       { label: "Tazama for listeners", description: "Social listening rooms for everyone.", href: "/how-it-works", icon: "headphones" },
     ],
   },

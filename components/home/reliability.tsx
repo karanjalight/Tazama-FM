@@ -34,7 +34,7 @@ const clock = (seconds: number) => {
 
 const untilLabel = (seconds: number) => `${Math.floor(seconds / 3600)}h ${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}m`;
 
-export function Reliability() {
+export function Reliability({ standalone = false, showHardware = true }: { standalone?: boolean; showHardware?: boolean } = {}) {
   const { ref, tick } = useTick<HTMLDivElement>({ interval: TICK_MS, amount: 0.3 });
   const now = START_SECONDS + tick * 2;
   // The Nakuru Bar TV drops and recovers inside every loop of the log.
@@ -62,6 +62,7 @@ export function Reliability() {
   return (
     <Section id="reliability" tone="dark" className="overflow-hidden">
       <Container wide>
+        {standalone ? null : (
         <SectionIntro
           index="10"
           kicker="Reliability"
@@ -72,8 +73,9 @@ export function Reliability() {
           }
           body="Tazama is designed for real businesses, real locations and real-time operation — from the first song in the morning to last orders."
         />
+        )}
 
-        <div ref={ref} className="mt-14 sm:mt-20">
+        <div ref={ref} className={cn("mt-14 sm:mt-20", standalone && "mt-0 sm:mt-0")}>
           <AppWindow path={["Kilele Kitchen", "Status"]} note="Live view · illustrative" bodyClassName="grid lg:grid-cols-[1fr_1.05fr]">
             <ul className="divide-y divide-white/[0.06] lg:border-r lg:border-white/[0.06]">
               {statuses.map((s) => (
@@ -142,7 +144,7 @@ export function Reliability() {
           ))}
         </ul>
 
-        <Hardware />
+        {showHardware ? <Hardware /> : null}
       </Container>
     </Section>
   );
@@ -155,9 +157,10 @@ const HARDWARE: { title: string; body: string; icon: LucideIcon }[] = [
   { title: "Any browser", body: "Run it from a laptop or tablet. Nothing to install.", icon: Globe },
 ];
 
-function Hardware() {
+/** Supported hardware block — also used on its own on /resources/hardware. */
+export function Hardware({ className }: { className?: string } = {}) {
   return (
-    <div id="hardware" className="mt-24 scroll-mt-24 grid items-center gap-10 sm:mt-32 lg:grid-cols-[1fr_1.1fr] lg:gap-16">
+    <div id="hardware" className={cn("mt-24 scroll-mt-24 grid items-center gap-10 sm:mt-32 lg:grid-cols-[1fr_1.1fr] lg:gap-16", className)}>
       <div className="order-2 lg:order-1">
         <ScreenFrame>
           <PairingScreen />

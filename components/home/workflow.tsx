@@ -21,12 +21,13 @@ const STAGES = [
 
 const ITEM = CONTENT["weekend-brunch"];
 
-export function Workflow() {
+export function Workflow({ standalone = false }: { standalone?: boolean } = {}) {
   const { ref, index, select } = useCycle<HTMLDivElement>({ count: STAGES.length, interval: 3400, amount: 0.4 });
 
   return (
     <Section id="workflow" tone="snow">
       <Container>
+        {standalone ? null : (
         <SectionIntro
           index="04"
           kicker="How it works"
@@ -37,8 +38,9 @@ export function Workflow() {
           }
           body="One flow takes a piece of content from your library to every screen that should show it — and tells you it’s playing."
         />
+        )}
 
-        <div ref={ref} className="mt-14 sm:mt-20">
+        <div ref={ref} className={cn("mt-14 sm:mt-20", standalone && "mt-0 sm:mt-0")}>
           <div className="overflow-hidden rounded-[24px] bg-ink-2 shadow-[0_60px_120px_-50px_rgb(0_0_0/0.9)] ring-1 ring-white/[0.08]">
             {/* Stage rail */}
             <div role="tablist" aria-label="Workflow stages" className="relative grid grid-cols-4 border-b border-white/[0.07]">

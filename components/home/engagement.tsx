@@ -24,12 +24,13 @@ const STEPS = [
 
 const STEP_MS = 3200;
 
-export function Engagement() {
+export function Engagement({ standalone = false }: { standalone?: boolean } = {}) {
   const { ref, index, select, running } = useCycle<HTMLDivElement>({ count: STEPS.length, interval: STEP_MS, amount: 0.35 });
 
   return (
     <Section id="engagement" tone="dark" className="overflow-hidden">
       <Container wide>
+        {standalone ? null : (
         <SectionIntro
           index="08"
           kicker="Guest engagement"
@@ -40,8 +41,9 @@ export function Engagement() {
           }
           body="Tazama is more than signage. Your screens invite guests to take part — and you set the limits."
         />
+        )}
 
-        <div ref={ref} className="mt-14 grid gap-6 sm:mt-20 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:gap-12">
+        <div ref={ref} className={cn("mt-14 grid gap-6 sm:mt-20 lg:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] lg:gap-12", standalone && "mt-0 sm:mt-0")}>
           <Stage step={index} />
 
           <ol className="relative self-center">

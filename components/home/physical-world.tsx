@@ -24,13 +24,14 @@ const CHAIN: { label: string; value: string; icon: LucideIcon }[] = [
   { label: "Customer", value: "Sees it — and joins in", icon: Smartphone },
 ];
 
-export function PhysicalWorld() {
+export function PhysicalWorld({ standalone = false }: { standalone?: boolean } = {}) {
   const { ref, index, select } = useCycle<HTMLDivElement>({ count: OPTIONS.length, interval: 4000, amount: 0.35 });
   const current = OPTIONS[index];
 
   return (
     <Section id="physical" tone="dark" className="overflow-hidden">
       <Container wide>
+        {standalone ? null : (
         <SectionIntro
           index="05"
           kicker="Software meets the room"
@@ -41,8 +42,9 @@ export function PhysicalWorld() {
           }
           body="Pick the content for Westlands / Main Screen and the screen on the wall changes. The same goes for every zone, in every location."
         />
+        )}
 
-        <div ref={ref} className="mt-14 grid items-center gap-6 sm:mt-20 lg:grid-cols-[minmax(0,400px)_56px_minmax(0,1fr)] lg:gap-0">
+        <div ref={ref} className={cn("mt-14 grid items-center gap-6 sm:mt-20 lg:grid-cols-[minmax(0,400px)_56px_minmax(0,1fr)] lg:gap-0", standalone && "mt-0 sm:mt-0")}>
           {/* Dashboard side */}
           <div className="overflow-hidden rounded-2xl bg-ink-2 ring-1 ring-white/[0.09]">
             <div className="flex items-center gap-2 border-b border-white/[0.07] px-4 py-3 text-[13px]">

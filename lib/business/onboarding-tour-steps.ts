@@ -94,7 +94,7 @@ export const TOUR_STEPS: TourStep[] = [
     id: "announcements",
     chapter: "play",
     title: "Speak to the whole venue",
-    body: "Record a voice message or upload one, pick where it plays, and choose whether the music pauses or just lowers. Send it now, or schedule it — like 'Happy hour starts in 10 minutes' every day at 4:50pm.",
+    body: "Record a voice message or upload one, pick where it plays, and choose whether the music pauses or just lowers. Send it now, or schedule it — like “Happy hour starts in 10 minutes” every day at 4:50pm.",
     where: ["Manage", "Announcements"],
     targets: ["announcements"],
     illustration: "announcements",

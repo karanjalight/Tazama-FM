@@ -17,6 +17,7 @@ export type ContentType = "video" | "image" | "audio" | "document";
 export type ContentPurpose = "content" | "ad_creative";
 export type ContentStatus = "pending" | "approved" | "rejected";
 export type PlaylistStatus = "active" | "draft";
+export type PlaylistPlaybackMode = "repeat" | "continuous";
 
 export interface ContentItem {
   id: string;
@@ -66,6 +67,9 @@ export interface Playlist {
   coverUrl: string | null;
   status: PlaylistStatus;
   createdAt: string;
+  /** Genre preferences — guide AI generation and feed continuous playback. */
+  genres: string[];
+  playbackMode: PlaylistPlaybackMode;
   tracks: PlaylistTrack[];
 }
 
@@ -217,6 +221,9 @@ interface PlaylistRow {
   cover_path: string | null;
   status: PlaylistStatus;
   created_at: string;
+  // Absent until supabase/business-playlist-ai.sql is applied.
+  genres?: string[] | null;
+  playback_mode?: PlaylistPlaybackMode | null;
 }
 
 /** The shape `tracks(*)` comes back as on the `business_playlist_tracks` join. */
@@ -259,6 +266,8 @@ function rowToPlaylist(row: PlaylistRow, tracks: PlaylistTrack[]): Playlist {
     coverUrl: tracks[0]?.track.thumbnailUrl ?? getContentPublicUrl(row.cover_path),
     status: row.status,
     createdAt: row.created_at,
+    genres: row.genres ?? [],
+    playbackMode: row.playback_mode === "continuous" ? "continuous" : "repeat",
     tracks,
   };
 }

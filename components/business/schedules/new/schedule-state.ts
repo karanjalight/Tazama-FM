@@ -14,7 +14,7 @@ export interface SelectedContentItem {
   displaySeconds: number | null;
 }
 
-export type SongSource = "search" | "genre" | "playlist";
+export type SongSource = "search" | "genre" | "playlist" | "ai";
 
 export interface SessionSong {
   trackId: string;

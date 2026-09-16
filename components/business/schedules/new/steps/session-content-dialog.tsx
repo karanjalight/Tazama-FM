@@ -171,6 +171,8 @@ export function SessionContentDialog({
             <div className="border-t border-border pt-4">
               <p className="mb-3 text-sm font-semibold text-foreground">Playlist</p>
               <PlaylistBuilder
+                startTime={session.startTime}
+                endTime={session.endTime}
                 genres={draft.genres}
                 songs={draft.songs}
                 onChange={(p) => patch(p)}

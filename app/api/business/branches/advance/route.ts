@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveNextPlaylistTrack } from "@/lib/business/playlist-resolver";
+import { schedulePlaylistPlayRecord } from "@/lib/business/playlist-mix-pool";
 import { getRoomBySlug } from "@/lib/rooms/queries";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
 import type { RoomTrack } from "@/lib/rooms/types";
@@ -53,6 +54,8 @@ export async function POST(request: Request) {
     .limit(1);
 
   let next: RoomTrack | null = null;
+  // Set only when `next` came from an audio zone's playlist.
+  let playlistIdUsed: string | null = null;
 
   if (queueRows?.length) {
     next = queueRows[0].track as RoomTrack;
@@ -89,6 +92,7 @@ export async function POST(request: Request) {
 
     if (playlistId) {
       next = await resolveNextPlaylistTrack(admin, playlistId, currentYoutubeId);
+      if (next) playlistIdUsed = playlistId;
     }
 
     if (!next) {
@@ -128,7 +132,7 @@ export async function POST(request: Request) {
       .lt("created_at", cutoff);
   }
 
-  await admin
+  const { error: playbackError } = await admin
     .from("room_playback")
     .upsert(
       {
@@ -140,6 +144,10 @@ export async function POST(request: Request) {
       },
       { onConflict: "room_id" },
     );
+
+  if (!playbackError && playlistIdUsed && next) {
+    schedulePlaylistPlayRecord(admin, playlistIdUsed, next.youtubeId);
+  }
 
   return NextResponse.json({ track: next });
 }

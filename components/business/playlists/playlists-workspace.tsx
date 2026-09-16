@@ -19,6 +19,14 @@ export function PlaylistsWorkspace({
   const [query, setQuery] = React.useState("");
   const [selectedId, setSelectedId] = React.useState<string | null>(playlists[0]?.id ?? null);
   const [createOpen, setCreateOpen] = React.useState(false);
+  // "Build with AI" from the create dialog: open the AI dialog once the new
+  // playlist's panel mounts (after the router refresh brings it in).
+  const [aiHandoff, setAiHandoff] = React.useState<{ id: string; prompt: string } | null>(null);
+
+  function selectPlaylist(id: string | null) {
+    setSelectedId(id);
+    setAiHandoff(null);
+  }
 
   const q = query.trim().toLowerCase();
   const filtered = playlists.filter((p) => {
@@ -66,7 +74,7 @@ export function PlaylistsWorkspace({
             </div>
 
             <div className="overflow-x-auto">
-              <PlaylistGrid playlists={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+              <PlaylistGrid playlists={filtered} selectedId={selectedId} onSelect={selectPlaylist} />
               {filtered.length === 0 && (
                 <p className="px-4 py-10 text-center text-sm text-muted-foreground">
                   No playlists match your search.
@@ -82,7 +90,9 @@ export function PlaylistsWorkspace({
               key={selected.id}
               playlist={selected}
               businessId={businessId}
-              onClose={() => setSelectedId(null)}
+              onClose={() => selectPlaylist(null)}
+              openAiOnMount={aiHandoff?.id === selected.id}
+              aiPrompt={aiHandoff?.id === selected.id ? aiHandoff.prompt : undefined}
             />
           ) : (
             <div className="grid place-items-center rounded-2xl border border-dashed border-border p-10 text-center">
@@ -92,7 +102,15 @@ export function PlaylistsWorkspace({
         </div>
       </div>
 
-      <CreatePlaylistDialog open={createOpen} onOpenChange={setCreateOpen} businessId={businessId} />
+      <CreatePlaylistDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        businessId={businessId}
+        onCreated={(id, handoff) => {
+          setSelectedId(id);
+          setAiHandoff(handoff.buildWithAi ? { id, prompt: handoff.prompt } : null);
+        }}
+      />
     </div>
   );
 }

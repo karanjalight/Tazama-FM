@@ -4,25 +4,38 @@ import * as React from "react";
 import { toast } from "sonner";
 import { ListMusic, ListPlus, Music, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { FEATURED_GENRES, searchGenres, genreLabel } from "@/lib/genres";
+import { genreLabel } from "@/lib/genres";
 import type { SessionSong } from "../schedule-state";
 import { SongPickerDialog } from "./song-picker-dialog";
 import { PlaylistSourcePickerDialog } from "./playlist-source-picker-dialog";
-import { generateScheduleGenreTracks } from "@/app/business/schedules/actions";
-import { formatDurationSeconds } from "@/lib/business/schedule-duration";
+import { formatDurationSeconds, sessionWindowSeconds } from "@/lib/business/schedule-duration";
+import type { GeneratedSong } from "@/lib/business/ai-song-generator";
 import type { Playlist } from "@/lib/business/content-queries";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { useDialogTrigger } from "@/components/business/branches/new/use-dialog-trigger";
+import { GenreChipPicker } from "@/components/business/genre-chip-picker";
+import { AiSongsDialog, type AiLengthOption } from "@/components/business/ai-songs/ai-songs-dialog";
 
-const AI_SONGS_PER_GENERATION = 6;
+/** Below this much unfilled time, "fill the session" isn't offered. */
+const MIN_FILL_SECONDS = 60;
+
+const SOURCE_BADGE: Record<SessionSong["source"], { label: string; className: string }> = {
+  ai: { label: "AI", className: "bg-violet-500/15 text-violet-400" },
+  genre: { label: "Genre", className: "bg-violet-500/10 text-violet-300" },
+  playlist: { label: "Playlist", className: "bg-muted text-muted-foreground" },
+  search: { label: "Search", className: "bg-muted text-muted-foreground" },
+};
 
 export function PlaylistBuilder({
+  startTime,
+  endTime,
   genres,
   songs,
   onChange,
   businessPlaylists,
 }: {
+  startTime: string;
+  endTime: string;
   genres: string[];
   songs: SessionSong[];
   onChange: (patch: { genres?: string[]; songs?: SessionSong[] }) => void;
@@ -30,28 +43,7 @@ export function PlaylistBuilder({
 }) {
   const songPicker = useDialogTrigger("playlist-songs");
   const playlistPicker = useDialogTrigger("playlist-source");
-  const [genreQuery, setGenreQuery] = React.useState("");
-  const [generating, setGenerating] = React.useState(false);
-
-  function toggleGenre(genre: string) {
-    onChange({ genres: genres.includes(genre) ? genres.filter((g) => g !== genre) : [...genres, genre] });
-  }
-
-  async function generateWithAi() {
-    setGenerating(true);
-    const existingTrackIds = new Set(songs.map((s) => s.trackId));
-    const picks = await generateScheduleGenreTracks(genres, AI_SONGS_PER_GENERATION);
-    const fresh = picks.filter((t) => !existingTrackIds.has(t.id));
-    onChange({ songs: [...songs, ...fresh.map((track) => ({ trackId: track.id, track, source: "genre" as const }))] });
-    setGenerating(false);
-    if (!fresh.length) {
-      toast.error(genres.length ? "No new tracks found for those genres." : "Pick at least one genre first.");
-    } else {
-      toast.success(`Added ${fresh.length} song${fresh.length === 1 ? "" : "s"}`, {
-        description: genres.length > 0 ? `Matched to ${genres.map(genreLabel).join(", ")}` : undefined,
-      });
-    }
-  }
+  const aiDialog = useDialogTrigger("playlist-ai");
 
   function addSongs(picked: SessionSong[]) {
     onChange({ songs: [...songs, ...picked] });
@@ -63,48 +55,51 @@ export function PlaylistBuilder({
 
   const totalSeconds = songs.reduce((sum, s) => sum + (s.track.durationSeconds ?? 0), 0);
   const unresolvedCount = songs.filter((s) => s.track.durationSeconds == null).length;
-  const genreChips = genreQuery.trim() ? searchGenres(genreQuery, 24) : FEATURED_GENRES;
+  const windowSeconds = sessionWindowSeconds({ startTime, endTime });
+  const remainingSeconds = Math.max(0, windowSeconds - totalSeconds);
+  const canFill = remainingSeconds >= MIN_FILL_SECONDS;
+
+  const aiLengths: AiLengthOption[] = [
+    ...(canFill
+      ? [{ id: "fill", label: `Fill ${formatDurationSeconds(remainingSeconds)}`, target: { kind: "duration" as const, seconds: remainingSeconds } }]
+      : []),
+    { id: "10", label: "10 songs", target: { kind: "count", count: 10 } },
+    { id: "30m", label: "30 min", target: { kind: "duration", seconds: 30 * 60 } },
+  ];
+
+  function addGenerated(generated: GeneratedSong[], genresUsed: string[]): boolean {
+    const existing = new Set(songs.map((s) => s.trackId));
+    const fresh = generated.filter((g) => !existing.has(g.track.id));
+    onChange({
+      songs: [...songs, ...fresh.map((g) => ({ trackId: g.track.id, track: g.track, source: g.source }))],
+      // A session without genres adopts generation's — they also drive the
+      // kiosk's genre fallback when the session has no songs.
+      ...(genres.length === 0 && genresUsed.length ? { genres: genresUsed } : {}),
+    });
+    toast.success(`Added ${fresh.length} song${fresh.length === 1 ? "" : "s"}`, {
+      description: genresUsed.length ? `Matched to ${genresUsed.map(genreLabel).join(", ")}` : undefined,
+    });
+    return true;
+  }
 
   return (
     <div className="space-y-4">
       <div>
         <p className="text-sm font-semibold text-foreground">Genre preference</p>
-        <p className="mb-2 text-xs text-muted-foreground">Used to pull real tracks when generating.</p>
-        <Input
-          value={genreQuery}
-          onChange={(e) => setGenreQuery(e.target.value)}
-          placeholder="Search genres..."
-          className="mb-2 h-8 text-xs"
-        />
-        <div className="flex flex-wrap gap-1.5">
-          {genreChips.map((genre) => {
-            const selected = genres.includes(genre.value);
-            return (
-              <button
-                key={genre.value}
-                type="button"
-                onClick={() => toggleGenre(genre.value)}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                  selected ? "border-violet-500 bg-violet-500/15 text-violet-300" : "border-input text-muted-foreground hover:bg-muted",
-                )}
-              >
-                {genre.label}
-              </button>
-            );
-          })}
-        </div>
+        <p className="mb-2 text-xs text-muted-foreground">
+          Guides AI generation, and plays when the session has no songs.
+        </p>
+        <GenreChipPicker value={genres} onChange={(next) => onChange({ genres: next })} />
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <button
           type="button"
-          onClick={generateWithAi}
-          disabled={generating}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-2.5 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/20 disabled:pointer-events-none disabled:opacity-60"
+          onClick={aiDialog.show}
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-violet-500/40 bg-violet-500/10 px-4 py-2.5 text-sm font-medium text-violet-300 transition-colors hover:bg-violet-500/20"
         >
           <Sparkles className="size-4" />
-          {generating ? "Generating songs…" : "Generate songs"}
+          Generate with AI
         </button>
         <button
           type="button"
@@ -125,13 +120,31 @@ export function PlaylistBuilder({
       </div>
 
       <div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold text-foreground">Songs</p>
-          <span className="text-xs text-muted-foreground">
-            {songs.length} song{songs.length === 1 ? "" : "s"} · {formatDurationSeconds(totalSeconds)}
+          <span className="text-right text-xs text-muted-foreground">
+            {songs.length} song{songs.length === 1 ? "" : "s"} · {formatDurationSeconds(totalSeconds)} of{" "}
+            {formatDurationSeconds(windowSeconds)}
             {unresolvedCount > 0 && ` · ${unresolvedCount} unknown length`}
           </span>
         </div>
+        {windowSeconds > 0 && (
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn("h-full rounded-full transition-all", canFill ? "bg-violet-500" : "bg-emerald-500")}
+              style={{ width: `${Math.min(100, (totalSeconds / windowSeconds) * 100)}%` }}
+            />
+          </div>
+        )}
+        {songs.length > 0 && canFill && (
+          <button
+            type="button"
+            onClick={aiDialog.show}
+            className="mt-1.5 text-xs font-medium text-violet-400 hover:text-violet-300"
+          >
+            {formatDurationSeconds(remainingSeconds)} left to fill — generate the rest with AI
+          </button>
+        )}
 
         {songs.length > 0 ? (
           <div className="mt-2 overflow-hidden rounded-xl border border-border">
@@ -149,10 +162,10 @@ export function PlaylistBuilder({
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
-                        song.source === "genre" ? "bg-violet-500/15 text-violet-400" : "bg-muted text-muted-foreground",
+                        SOURCE_BADGE[song.source].className,
                       )}
                     >
-                      {song.source === "genre" ? "Generated" : song.source === "playlist" ? "Playlist" : "Search"}
+                      {SOURCE_BADGE[song.source].label}
                     </span>
                   </span>
                   <span className="block truncate text-xs text-muted-foreground">{song.track.artist ?? "Unknown"}</span>
@@ -174,11 +187,29 @@ export function PlaylistBuilder({
         ) : (
           <div className="mt-2 flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-input py-8 text-center">
             <ListMusic className="size-6 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">No songs yet — generate, search, or add from a playlist.</p>
+            <p className="text-sm text-muted-foreground">
+              No songs yet — generate with AI to fill this session, search, or add from a playlist.
+            </p>
           </div>
         )}
       </div>
 
+      <AiSongsDialog
+        key={aiDialog.dialogKey}
+        open={aiDialog.open}
+        onOpenChange={aiDialog.onOpenChange}
+        description="Describe the mood for this session. Songs are picked to cover its time, and you review them before adding."
+        initialGenres={genres}
+        seeds={songs.map((s) => ({ title: s.track.title, artist: s.track.artist ?? "" }))}
+        excludeYoutubeIds={songs.map((s) => s.track.youtubeId)}
+        lengthOptions={aiLengths}
+        lengthHint={
+          canFill
+            ? `This session runs ${formatDurationSeconds(windowSeconds)}; ${formatDurationSeconds(remainingSeconds)} isn't covered yet.`
+            : "This session is already filled — extra songs just add variety."
+        }
+        onAdd={addGenerated}
+      />
       <SongPickerDialog
         key={songPicker.dialogKey}
         open={songPicker.open}

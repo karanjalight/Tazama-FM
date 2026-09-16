@@ -8,7 +8,7 @@ import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
 import { getBranch } from "@/lib/business/queries";
 import { getSchedule, getScheduleTargetsByIds } from "@/lib/business/schedule-queries";
 import { getContentItemsByIds } from "@/lib/business/content-queries";
-import { getTrackDurations, ensureGenreSeeded, upsertTracksFromYouTube, type Track } from "@/lib/tracks";
+import { getTrackDurations, upsertTracksFromYouTube, type Track } from "@/lib/tracks";
 import type { YouTubeTrack } from "@/lib/youtube/search";
 import { playlistDurationSummary, contentDurationSummary, formatDurationSeconds } from "@/lib/business/schedule-duration";
 import { advanceScheduleTrack, advanceScheduleContent, advanceScheduleTrackTo } from "@/lib/business/schedule-playback";
@@ -739,26 +739,6 @@ const pickSchema = z.object({
   thumbnailUrl: z.string().nullable(),
 });
 
-/**
- * Real tracks for a set of genres, pulled from the shared read-through
- * catalog (`ensureGenreSeeded` — same cache `buildSuggestions`'s genre
- * fallback and the signup taste step already warm) and shuffled — the real
- * version of the old mock's `generateWithAi()`, which shuffled a 36-song
- * local array. Every returned track carries a real `durationSeconds`.
- */
-export async function generateScheduleGenreTracks(genres: string[], count = 6): Promise<Track[]> {
-  const viewer = await getBusinessViewer();
-  if (!viewer) return [];
-  const parsedGenres = z.array(z.string()).max(20).safeParse(genres);
-  if (!parsedGenres.success || !parsedGenres.data.length) return [];
-
-  const perGenre = Math.max(2, Math.ceil((count * 2) / parsedGenres.data.length));
-  const pools = await Promise.all(parsedGenres.data.map((g) => ensureGenreSeeded(g, perGenre)));
-  const seen = new Set<string>();
-  const pool = pools.flat().filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
 
 /**
  * Catalogs a set of hand-picked YouTube search hits (from `searchBusinessTracks`

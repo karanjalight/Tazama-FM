@@ -10,6 +10,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveNextPlaylistTrack } from "@/lib/business/playlist-resolver";
+import { schedulePlaylistPlayRecord } from "@/lib/business/playlist-mix-pool";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
 import { nextQueuedZoneTrack } from "@/lib/business/zone-queue";
 import type { RoomTrack } from "@/lib/rooms/types";
@@ -75,6 +76,9 @@ export async function advanceZonePlayback(
   // when nothing's queued does the zone fall back to its own resolution,
   // exactly as before this change.
   let next: RoomTrack | null = await nextQueuedZoneTrack(admin, zoneId);
+  // Set only when `next` came from the zone's playlist — its play gets
+  // recorded (least-recently-played tracking) once the CAS write lands.
+  let playlistIdUsed: string | null = null;
 
   if (!next) {
     const { data: zone, error: zoneError } = await admin
@@ -87,6 +91,7 @@ export async function advanceZonePlayback(
     next = zone?.default_playlist_id
       ? await resolveNextPlaylistTrack(admin, zone.default_playlist_id, currentYoutubeId)
       : null;
+    if (next && zone?.default_playlist_id) playlistIdUsed = zone.default_playlist_id;
   }
 
   if (!next) {
@@ -134,5 +139,6 @@ export async function advanceZonePlayback(
     return { ok: true, track: latest.track as RoomTrack | null, version: latest.version };
   }
 
+  if (playlistIdUsed && next) schedulePlaylistPlayRecord(admin, playlistIdUsed, next.youtubeId);
   return { ok: true, track: updated.track as RoomTrack | null, version: updated.version };
 }

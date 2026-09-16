@@ -19,6 +19,7 @@ import {
   sessionStartInstantMs,
 } from "@/lib/business/schedule-session-resolver";
 import { nextPlaylistPosition } from "@/lib/business/playlist-position";
+import { ensureGenreSeeded } from "@/lib/tracks";
 import type { RoomTrack } from "@/lib/rooms/types";
 import type { Schedule, ScheduleSession, ScheduleSessionContentItem, ScheduleContentSnapshot, ContentRepeat } from "@/lib/business/schedule-types";
 
@@ -188,7 +189,11 @@ export async function advanceScheduleTrack(
     };
   }
 
-  if (!session.playlistEnabled || !session.songs.length) {
+  // A playlist session with genres but no picked songs plays from its genres
+  // rather than going silent.
+  const genreOnly = session.playlistEnabled && !session.songs.length && session.genres.length > 0;
+
+  if (!session.playlistEnabled || (!session.songs.length && !genreOnly)) {
     await admin
       .from("schedule_playback")
       .update({ session_id: session.id, track: null, is_playing: false, position_ms: 0, version: reportedVersion + 1, updated_at: new Date().toISOString() })
@@ -198,12 +203,36 @@ export async function advanceScheduleTrack(
   }
 
   const { data: current } = await admin.from("schedule_playback").select("track").eq("schedule_id", scheduleId).maybeSingle();
-  const currentYoutubeId = (current?.track as RoomTrack | null)?.youtubeId ?? null;
-  const ordered = [...session.songs].sort((a, b) => a.position - b.position);
-  const currentIndex = currentYoutubeId ? ordered.findIndex((s) => s.track.youtubeId === currentYoutubeId) : -1;
-  const nextIndex = nextPlaylistPosition(ordered.length, currentIndex === -1 ? null : currentIndex);
-  const next = ordered[nextIndex];
-  const track: RoomTrack = { youtubeId: next.track.youtubeId, title: next.track.title, artist: next.track.artist, thumbnailUrl: next.track.thumbnailUrl };
+  const currentTrack = (current?.track as RoomTrack | null) ?? null;
+  const currentYoutubeId = currentTrack?.youtubeId ?? null;
+  let track: RoomTrack;
+  if (genreOnly) {
+    // Random pick from a random session genre's bucket — a deterministic
+    // "first song that isn't the current one" would ping-pong between two.
+    const genre = session.genres[Math.floor(Math.random() * session.genres.length)];
+    const pool = (await ensureGenreSeeded(genre, 24)).filter((t) => t.youtubeId !== currentYoutubeId);
+    const picked = pool[Math.floor(Math.random() * pool.length)];
+    const fallback: RoomTrack | null = picked
+      ? { youtubeId: picked.youtubeId, title: picked.title, artist: picked.artist, thumbnailUrl: picked.thumbnailUrl }
+      : currentTrack;
+    if (!fallback) {
+      // Genre catalog unreachable and nothing playing — same silent write as
+      // a session with no music at all, rather than erroring the kiosk.
+      await admin
+        .from("schedule_playback")
+        .update({ session_id: session.id, track: null, is_playing: false, position_ms: 0, version: reportedVersion + 1, updated_at: new Date().toISOString() })
+        .eq("schedule_id", scheduleId)
+        .eq("version", reportedVersion);
+      return { ok: true, noActiveSession: false, version: reportedVersion + 1, sessionEndsInSeconds, track: null };
+    }
+    track = fallback;
+  } else {
+    const ordered = [...session.songs].sort((a, b) => a.position - b.position);
+    const currentIndex = currentYoutubeId ? ordered.findIndex((s) => s.track.youtubeId === currentYoutubeId) : -1;
+    const nextIndex = nextPlaylistPosition(ordered.length, currentIndex === -1 ? null : currentIndex);
+    const next = ordered[nextIndex];
+    track = { youtubeId: next.track.youtubeId, title: next.track.title, artist: next.track.artist, thumbnailUrl: next.track.thumbnailUrl };
+  }
 
   const { data: updated, error } = await admin
     .from("schedule_playback")

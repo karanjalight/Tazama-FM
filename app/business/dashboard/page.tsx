@@ -17,6 +17,9 @@ import {
   type AnnouncementTargetOptions,
 } from "@/lib/business/announcement-types";
 import type { BranchCardSummary } from "@/lib/business/types";
+import { getChecklistCounts } from "@/lib/business/onboarding-queries";
+import { buildChecklist, isChecklistVisible } from "@/lib/business/onboarding-checklist";
+import { GettingStartedCard } from "@/components/business/tour/getting-started-card";
 import { StatTile, type StatItem } from "@/components/business/stat-tile";
 import { LocationsPanel, type DashboardLocation } from "@/components/business/dashboard/locations-panel";
 import {
@@ -52,11 +55,15 @@ export default async function BusinessDashboardPage() {
   const viewer = await getBusinessViewer();
   if (!viewer) redirect("/login");
 
-  const [locations, branchSummaries, announcements, targetOptions] = await Promise.all([
+  // Owners/admins get the getting-started checklist; managers join an already-set-up business.
+  const checklistEligible = viewer.role !== "manager" && !viewer.checklistDismissedAt;
+
+  const [locations, branchSummaries, announcements, targetOptions, checklistCounts] = await Promise.all([
     listLocationSummaries(viewer.businessId),
     getBranchCardSummaries(viewer.businessId),
     listAnnouncements(viewer.businessId),
     getAnnouncementTargetOptions(viewer),
+    checklistEligible ? getChecklistCounts(viewer.businessId) : Promise.resolve(null),
   ]);
 
   const devices = await listDeviceStatusSummaries(locations.map((l) => l.id));
@@ -76,6 +83,9 @@ export default async function BusinessDashboardPage() {
   const announcementEntries = buildAnnouncementEntries(announcements, targetOptions);
   const defaultBranchSlug = locations[0]?.slug ?? null;
 
+  const checklistItems = checklistCounts ? buildChecklist(checklistCounts, { defaultBranchSlug }) : [];
+  const showChecklist = checklistCounts !== null && isChecklistVisible(checklistItems, viewer.checklistDismissedAt ?? null);
+
   return (
     <div className="space-y-6">
       <header>
@@ -86,6 +96,8 @@ export default async function BusinessDashboardPage() {
           Here&apos;s what&apos;s happening across {viewer.businessName} today.
         </p>
       </header>
+
+      {showChecklist && <GettingStartedCard items={checklistItems} />}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
         {stats.map((stat, i) => (

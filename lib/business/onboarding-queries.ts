@@ -29,12 +29,17 @@ export async function getChecklistCounts(businessId: string): Promise<ChecklistC
   const admin = createAdminClient();
   if (!admin) return EMPTY;
 
-  const { data: branchRows, error: branchError } = await admin
-    .from("branches")
-    .select("id")
-    .eq("business_id", businessId)
-    .is("archived_at", null);
-  const branchIds = branchError ? [] : (branchRows ?? []).map((r) => r.id as string);
+  let branchIds: string[] = [];
+  try {
+    const { data: branchRows, error: branchError } = await admin
+      .from("branches")
+      .select("id")
+      .eq("business_id", businessId)
+      .is("archived_at", null);
+    if (!branchError) branchIds = (branchRows ?? []).map((r) => r.id as string);
+  } catch {
+    // Same contract as safeCount: a failure here must never break the Overview page.
+  }
 
   const head = { count: "exact" as const, head: true };
   const [connectedScreens, playlists, contentItems, schedules, announcements, teamMembers] = await Promise.all([

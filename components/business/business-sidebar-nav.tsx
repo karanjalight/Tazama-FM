@@ -35,6 +35,7 @@ function NavRow({ item, active }: { item: BusinessNavItem; active: boolean }) {
     return (
       <div
         aria-disabled="true"
+        data-tour={item.tourId}
         className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground/40"
       >
         <Icon className="size-4.5" />
@@ -50,6 +51,7 @@ function NavRow({ item, active }: { item: BusinessNavItem; active: boolean }) {
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
+      data-tour={item.tourId}
       className={cn(
         "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
         active
@@ -97,6 +99,7 @@ export function BusinessSidebarNav({
               key={item.label}
               href={item.href!}
               aria-current={active ? "page" : undefined}
+              data-tour={item.tourId}
               className={cn(
                 "flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                 active

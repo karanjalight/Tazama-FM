@@ -11,7 +11,15 @@ const PAD = 6;
  * With no target the box collapses to the centre, so the whole page stays dim
  * and the box glides between steps instead of popping.
  */
-export function TourSpotlight({ layout, reducedMotion }: { layout: TargetLayout; reducedMotion: boolean }) {
+export function TourSpotlight({
+  layout,
+  reducedMotion,
+  visible,
+}: {
+  layout: TargetLayout;
+  reducedMotion: boolean;
+  visible: boolean;
+}) {
   const { rect, viewport } = layout;
   const box = rect
     ? { top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }
@@ -24,7 +32,7 @@ export function TourSpotlight({ layout, reducedMotion }: { layout: TargetLayout;
       className="pointer-events-none fixed z-[60] rounded-2xl"
       style={{ boxShadow: "0 0 0 200vmax rgb(0 0 0 / 0.58)" }}
       initial={{ ...box, opacity: 0 }}
-      animate={{ ...box, opacity: 1 }}
+      animate={{ ...box, opacity: visible ? 1 : 0 }}
       transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 34, opacity: { duration: 0.2 } }}
     >
       <motion.div

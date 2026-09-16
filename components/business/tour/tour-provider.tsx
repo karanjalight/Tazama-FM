@@ -78,7 +78,9 @@ export function BusinessTourProvider({
 
   React.useEffect(() => {
     if (autoLaunchHandled || !shouldAutoLaunch({ meta: tourMeta, pathname })) return;
-    const timer = window.setTimeout(() => open("auto"), 700);
+    const timer = window.setTimeout(() => {
+      if (!autoLaunchHandled) open("auto");
+    }, 700);
     return () => window.clearTimeout(timer);
   }, [pathname, tourMeta, open]);
 

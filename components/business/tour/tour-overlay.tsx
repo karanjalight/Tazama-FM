@@ -59,12 +59,14 @@ export function TourOverlay({
       disablePointerDismissal
     >
       <DialogPrimitive.Portal>
-        <TourSpotlight layout={layout} reducedMotion={reducedMotion} />
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-[60]" />
+        <TourSpotlight layout={layout} reducedMotion={reducedMotion} visible={open} />
         <DialogPrimitive.Popup
           ref={popupRef}
           initialFocus={nextRef}
           data-tour-card=""
           onKeyDown={(event) => {
+            if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
             if (event.key === "ArrowRight") {
               event.preventDefault();
               onNext();

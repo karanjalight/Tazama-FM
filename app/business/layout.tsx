@@ -1,10 +1,12 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Bell, ChevronDown, HelpCircle } from "lucide-react";
+import { Bell, ChevronDown } from "lucide-react";
 
 import { Logo } from "@/components/brand/logo";
 import { BusinessSidebarNav } from "@/components/business/business-sidebar-nav";
 import { BusinessBottomNav } from "@/components/business/business-bottom-nav";
+import { BusinessTourProvider } from "@/components/business/tour/tour-provider";
+import { TourHelpMenu } from "@/components/business/tour/tour-help-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getBusinessViewer, canActOnBranch } from "@/lib/business/viewer";
@@ -36,6 +38,7 @@ export default async function BusinessLayout({
   const roleLabel = ROLE_LABEL[viewer.role] ?? viewer.role;
 
   return (
+    <BusinessTourProvider role={viewer.role} tourMeta={viewer.tourMeta ?? null}>
     <div className="min-h-dvh bg-background text-foreground">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 hidden w-72 shrink-0 flex-col border-r border-border bg-section-alt/60 p-4 sm:flex">
@@ -101,6 +104,7 @@ export default async function BusinessLayout({
             <Logo />
           </Link>
           <div className="flex items-center gap-3">
+            <TourHelpMenu className="size-8" />
             <span className="max-w-32 truncate text-sm font-medium text-foreground">
               {viewer.businessName}
             </span>
@@ -119,13 +123,7 @@ export default async function BusinessLayout({
         <div className="sticky top-0 z-10 hidden items-center justify-end gap-3 border-b border-border bg-background/85 px-6 py-3 backdrop-blur-xl sm:flex lg:px-10">
           <div className="flex shrink-0 items-center gap-3">
             <ThemeToggle className="rounded-full border border-border text-muted-foreground hover:bg-muted hover:text-foreground" />
-            <button
-              type="button"
-              aria-label="Help"
-              className="grid size-9 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <HelpCircle className="size-4" />
-            </button>
+            <TourHelpMenu />
             <button
               type="button"
               aria-label="Notifications"
@@ -160,6 +158,7 @@ export default async function BusinessLayout({
         <div className="p-6 pb-24 sm:p-10">{children}</div>
       </main>
     </div>
+    </BusinessTourProvider>
   );
 }
 

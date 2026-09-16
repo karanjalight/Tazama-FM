@@ -34,8 +34,8 @@ export function LocationCreatedSuccess({
             Screen pairing codes
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            On each TV, open the Tazama Player and choose &ldquo;Enter a code instead,&rdquo; then
-            type the matching code below. Codes expire in 7 days.
+            On each TV, open the Tazama pairing page (/pair) and type the matching code below.
+            Codes expire in 7 days; each TV stays paired once connected.
           </p>
           <ul className="mt-3 space-y-2">
             {result.screens.map((s) => (

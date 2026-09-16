@@ -22,6 +22,7 @@ import { ScheduleContentDisplay } from "@/components/business/schedules/schedule
 import { AdOverlay } from "@/components/player/ad-overlay";
 import { AnnouncementOverlay } from "@/components/player/announcement-overlay";
 import { KioskPairOverlay } from "@/components/pair/kiosk-pair-overlay";
+import { readDeviceToken } from "@/lib/business/device-token";
 import { useAnnouncementFeed } from "@/lib/business/use-announcement-feed";
 import { duckedVolume, type AnnouncementAiring } from "@/lib/business/announcement-airing";
 import { pairChannelName, type PlaybackPayload, type ReactionPayload } from "@/lib/rooms/channel";
@@ -284,7 +285,7 @@ export function KioskRoomPlayer({
   // loading the same slug, so the slug alone can't tell them apart.
   React.useEffect(() => {
     if (!room.isBranch) return;
-    const deviceToken = window.localStorage.getItem("tz_device_token");
+    const deviceToken = readDeviceToken();
     if (!deviceToken) return;
     const send = () => {
       fetch("/api/business/devices/heartbeat", {
@@ -469,7 +470,7 @@ export function KioskRoomPlayer({
 
   React.useEffect(() => {
     if (!room.isBranch) return;
-    deviceTokenRef.current = window.localStorage.getItem("tz_device_token");
+    deviceTokenRef.current = readDeviceToken();
     let cancelled = false;
 
     async function tick() {
@@ -527,12 +528,8 @@ export function KioskRoomPlayer({
       // a track change) can make it audible under the announcement.
       ytRef.current.setVolume(duckedVolume(volumeRef.current, airing));
 
-      let deviceToken: string | null = null;
-      try {
-        deviceToken = window.localStorage.getItem("tz_device_token");
-      } catch {
-        // Storage blocked — an unpaired-looking screen just isn't counted.
-      }
+      // Storage blocked → null: an unpaired-looking screen just isn't counted.
+      const deviceToken = readDeviceToken();
       fetch("/api/business/announcements/delivered", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

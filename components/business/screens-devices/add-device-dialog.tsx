@@ -86,8 +86,8 @@ export function AddDeviceDialog({
           <div className="flex flex-col items-center gap-3 py-4 text-center">
             <p className="text-sm font-semibold text-foreground">{result.name} registered</p>
             <p className="text-xs text-muted-foreground">
-              On the device, open the Tazama Player, choose &ldquo;Enter a code instead,&rdquo; and
-              type this code. It expires in 7 days.
+              On the device, open the Tazama pairing page (/pair) and type this code. It expires in
+              7 days; once entered, the device stays paired.
             </p>
             <p className="font-mono text-4xl font-semibold tracking-[0.2em] text-violet-400">{result.code}</p>
             <VioletButton type="button" onClick={() => onOpenChange(false)} className="mt-1">

@@ -1,53 +1,58 @@
-import { SiteHeader } from "@/components/nav/site-header";
-import { Hero } from "@/components/sections/hero";
-import { Solutions } from "@/components/sections/solutions";
-import { BusinessTypes } from "@/components/sections/business-types";
-import { Devices } from "@/components/sections/devices";
-import { Testimonials } from "@/components/sections/testimonials";
-import { Contact } from "@/components/sections/contact";
-import { TrendingTracks } from "@/components/sections/trending-tracks";
-import { TrendingArtists } from "@/components/sections/trending-artists";
-import { LiveNow } from "@/components/sections/live-now";
-import { HowItWorks } from "@/components/sections/how-it-works";
-import { ForBusiness } from "@/components/sections/for-business";
-import { SiteFooter } from "@/components/sections/site-footer";
-import { LandingPlayerProvider } from "@/components/landing/landing-player";
-import {
-  getCachedTrendingTracks,
-  getCachedTrendingArtists,
-  getCachedPublicRooms,
-} from "@/lib/landing-data";
-import { getHeaderAuth } from "@/lib/auth/profile";
+import type { Metadata } from "next";
 
-// Catalog + rooms come from the cached reads (revalidated every few minutes), so
-// the landing no longer hits Supabase on every request. The page stays dynamic
-// only for the per-visitor auth header (getHeaderAuth reads cookies).
+import { SiteHeader } from "@/components/nav/site-header";
+import { SiteFooter } from "@/components/sections/site-footer";
+import { Hero } from "@/components/home/hero";
+import { Problem } from "@/components/home/problem";
+import { OnePlatform } from "@/components/home/one-platform";
+import { ControlCenter } from "@/components/home/control-center";
+import { Workflow } from "@/components/home/workflow";
+import { PhysicalWorld } from "@/components/home/physical-world";
+import { Industries } from "@/components/home/industries";
+import { Locations } from "@/components/home/locations";
+import { Engagement } from "@/components/home/engagement";
+import { Advertising } from "@/components/home/advertising";
+import { Reliability } from "@/components/home/reliability";
+import { Analytics } from "@/components/home/analytics";
+import { FinalCta } from "@/components/home/final-cta";
+import { getHeaderAuth } from "@/lib/auth/profile";
+import { marketingFontVars } from "@/lib/fonts";
+import { cn } from "@/lib/utils";
+
+const title = "Tazama — Everything your customers see and hear. One platform.";
+const description =
+  "Run the music, digital signage, video, promotions, announcements and advertising in every location — from one platform.";
+
+export const metadata: Metadata = {
+  title: { absolute: title },
+  description,
+  openGraph: { title, description, images: [{ url: "/brand/logo-stacked.png", width: 2000, height: 2000, alt: "Tazama" }] },
+  twitter: { card: "summary_large_image", title, description, images: ["/brand/logo-stacked.png"] },
+};
+
+// Dynamic only for the per-visitor auth state in the header.
 export default async function Home() {
-  const [tracks, artists, rooms, auth] = await Promise.all([
-    getCachedTrendingTracks(18),
-    getCachedTrendingArtists(10),
-    getCachedPublicRooms(8),
-    getHeaderAuth(),
-  ]);
+  const auth = await getHeaderAuth();
 
   return (
-    <LandingPlayerProvider>
+    <>
       <SiteHeader auth={auth} />
-      <main id="content" className="flex-1">
+      <main id="content" className={cn(marketingFontVars, "flex-1 overflow-x-clip bg-ink font-display")}>
         <Hero />
-        <Solutions />
-        <BusinessTypes />
-        <Devices />
-        <ForBusiness />
-
-        <Testimonials />
-        <Contact />
-        {/* <TrendingTracks tracks={tracks} />
-        <TrendingArtists artists={artists} />
-        <LiveNow rooms={rooms} />
-        <HowItWorks /> */}
+        <Problem />
+        <OnePlatform />
+        <ControlCenter />
+        <Workflow />
+        <PhysicalWorld />
+        <Industries />
+        <Locations />
+        <Engagement />
+        <Advertising />
+        <Reliability />
+        <Analytics />
+        <FinalCta />
       </main>
       <SiteFooter />
-    </LandingPlayerProvider>
+    </>
   );
 }

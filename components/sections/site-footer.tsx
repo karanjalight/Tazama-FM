@@ -1,33 +1,47 @@
-import { Logo } from "@/components/brand/logo";
-import { SocialIcon } from "@/components/social-icons";
-import { footerColumns, socials } from "@/lib/data";
+import Link from "next/link";
+import { BrandLogo } from "@/components/home/kit/brand-logo";
+import { marketingFontVars } from "@/lib/fonts";
+import { NAV_GROUPS } from "@/lib/home-content";
+import { cn } from "@/lib/utils";
 
+/** Marketing footer, shared by the homepage, /for-business and /how-it-works. */
 export function SiteFooter() {
+  const columns = [
+    NAV_GROUPS[0],
+    NAV_GROUPS[1],
+    NAV_GROUPS[2],
+    {
+      label: "Company",
+      items: [
+        { label: "Tazama for Business", href: "/for-business" },
+        { label: "Tazama for listeners", href: "/how-it-works" },
+        { label: "Contact sales", href: "/#contact" },
+        { label: "Sign in", href: "/login" },
+      ],
+    },
+  ];
+
   return (
-    <footer className="border-t border-transparent bg-ink text-white dark:border-white/10">
-      <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8">
-        <div className="grid gap-12 md:grid-cols-[1.5fr_repeat(3,1fr)]">
-          <div>
-            <Logo className="text-white [&_img]:h-12 [&_img]:lg:h-16" />
-            <p className="mt-5 max-w-xs text-sm leading-relaxed text-white/55">
-              Vibe &amp; Connect. Social listening for people who&rsquo;d rather
-              hear it together.
+    <footer className={cn(marketingFontVars, "border-t border-white/[0.07] bg-ink font-display text-white")}>
+      <div className="mx-auto max-w-[1320px] px-5 pt-16 pb-10 sm:px-8 sm:pt-20">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4 lg:grid-cols-[1.3fr_repeat(4,1fr)] lg:gap-8">
+          <div className="col-span-2 sm:col-span-4 lg:col-span-1">
+            <Link href="/#top" aria-label="Tazama, home" className="inline-block rounded-md">
+              <BrandLogo className="h-14" />
+            </Link>
+            <p className="mt-5 max-w-[260px] text-[14px] leading-relaxed text-white/50">
+              Everything your customers see and hear. One platform.
             </p>
           </div>
 
-          {footerColumns.map((col) => (
-            <nav key={col.heading} aria-label={col.heading}>
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-brand">
-                {col.heading}
-              </h3>
-              <ul className="mt-4 space-y-3">
-                {col.links.map((l) => (
-                  <li key={l.label}>
-                    <a
-                      href={l.href}
-                      className="text-sm text-white/55 transition-colors hover:text-white"
-                    >
-                      {l.label}
+          {columns.map((col) => (
+            <nav key={col.label} aria-label={col.label}>
+              <h2 className="font-tech text-[11px] tracking-[0.12em] text-white/40 uppercase">{col.label}</h2>
+              <ul className="mt-4 space-y-2.5">
+                {col.items.map((item) => (
+                  <li key={item.label}>
+                    <a href={item.href} className="text-[14px] text-white/60 transition-colors hover:text-white">
+                      {item.label}
                     </a>
                   </li>
                 ))}
@@ -36,25 +50,11 @@ export function SiteFooter() {
           ))}
         </div>
 
-        <div className="mt-14 flex flex-col items-start justify-between gap-6 border-t border-white/10 pt-6 sm:flex-row sm:items-center">
-          <div className="flex flex-col gap-1">
-            <p className="text-sm text-white/45">
-              © 2026 Tazama. Made for people who listen together.
-            </p>
-            <p className="font-mono text-xs text-white/40">Nairobi · Worldwide</p>
-          </div>
-          <div className="flex gap-2">
-            {socials.map((s) => (
-              <a
-                key={s.label}
-                href={s.href}
-                aria-label={s.label}
-                className="inline-grid size-9 place-items-center rounded-full border border-white/15 text-white/70 transition-colors hover:border-white/35 hover:text-white"
-              >
-                <SocialIcon name={s.icon} className="size-4" />
-              </a>
-            ))}
-          </div>
+        <div className="mt-16 flex flex-col gap-3 border-t border-white/[0.07] pt-6 text-[13px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} Tazama. Built in Nairobi.</p>
+          <a href="mailto:business@tazama.fm" className="transition-colors hover:text-white">
+            business@tazama.fm
+          </a>
         </div>
       </div>
     </footer>

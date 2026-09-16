@@ -21,6 +21,13 @@
   --color-play: #1ed760; /* Spotify-style green, reserved for play actions */
   --color-play-strong: #1db954;
 
+  /* ---- Marketing site (homepage, header, footer) ---- */
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-tech: var(--font-geist-mono), ui-monospace, monospace;
+  --color-ink-2: #111113; /* raised panel on ink */
+  --color-ink-3: #1a1a1d; /* control / row on ink-2 */
+  --color-snow: #f5f5f3; /* soft off-white section */
+
   /* ---- shadcn semantic tokens -> Tailwind utilities ---- */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -194,6 +201,41 @@
   }
   100% {
     transform: scale(1.08) translate(-1%, -1%);
+  }
+}
+
+/* Homepage mockups: a video's playback bar, and a phone camera's scan line. */
+@keyframes tz-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes tz-scan {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--scan-distance, 120px));
+  }
+}
+/* Hero entrance — CSS, so the headline paints before hydration. */
+@keyframes tz-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[tz-"] {
+    animation: none !important;
   }
 }
 

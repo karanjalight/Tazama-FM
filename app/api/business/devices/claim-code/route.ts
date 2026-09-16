@@ -55,5 +55,18 @@ export async function POST(request: Request) {
   // short-lived handshake.
   await admin.from("device_pairings").delete().eq("id", pairing.id);
 
+  // The screen just talked to us — show it as active on the dashboard right
+  // away instead of "Pending" until its player's first heartbeat lands.
+  const seenAt = new Date().toISOString();
+  const { data: device } = await admin
+    .from("branch_devices")
+    .update({ last_seen_at: seenAt })
+    .eq("device_token", pairing.device_token)
+    .select("branch_id")
+    .maybeSingle();
+  if (device) {
+    await admin.from("branches").update({ device_last_seen_at: seenAt }).eq("id", device.branch_id);
+  }
+
   return NextResponse.json({ deviceToken: pairing.device_token, slug: room.slug });
 }

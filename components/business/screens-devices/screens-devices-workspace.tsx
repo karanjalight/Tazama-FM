@@ -7,6 +7,7 @@ import type { ManagedDevice } from "@/lib/business/device-queries";
 import { DeviceTable } from "./device-table";
 import { DeviceDetailPanel } from "./detail-panel";
 import { AddDeviceDialog, type RoomOption } from "./add-device-dialog";
+import { useLiveDeviceStatus } from "./use-live-device-status";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -38,6 +39,7 @@ export function ScreensDevicesWorkspace({
   const [selectedId, setSelectedId] = React.useState<string | null>(devices[0]?.id ?? null);
   const [addMenuOpen, setAddMenuOpen] = React.useState(false);
   const [addDialogKind, setAddDialogKind] = React.useState<"screen" | "audio" | null>(null);
+  useLiveDeviceStatus(devices);
 
   const roomOptionNames = ["All Rooms", ...Array.from(new Set(devices.map((d) => d.roomName).filter((n): n is string => !!n)))];
 

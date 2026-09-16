@@ -23,6 +23,7 @@ import { forgetDevice } from "@/app/business/actions";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { PairLinkCard } from "./pair-link-card";
+import { StatusDot } from "./device-table";
 
 /** Absolute, not relative — `formatRelativeTime` assumes a past timestamp
  * ("Xm ago") and would misreport a future expiry as "just now"; this also
@@ -134,12 +135,7 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
                 : "bg-rose-500/15 text-rose-400",
           )}
         >
-          <span
-            className={cn(
-              "size-1.5 rounded-full",
-              device.status === "online" ? "bg-emerald-500" : device.status === "pending" ? "bg-amber-500" : "bg-rose-500",
-            )}
-          />
+          <StatusDot status={device.status} />
           {device.status === "online" ? "Online" : device.status === "pending" ? "Pending" : "Offline"}
         </span>
         <button
@@ -187,7 +183,7 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
               {device.pairingCode}
             </button>
             <p className="mt-1.5 text-[11px] text-amber-300/70">
-              On the device: open the Tazama Player, choose &ldquo;Enter a code instead,&rdquo; and type this in.
+              On the device, open the Tazama pairing page (/pair) and type this in. It stays paired after that.
               {device.pairingCodeExpiresAt &&
                 ` Expires ${formatExpiry(device.pairingCodeExpiresAt)}.`}
             </p>

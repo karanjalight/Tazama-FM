@@ -5,14 +5,27 @@ import { MonitorPlay, MoreVertical, Volume2 } from "lucide-react";
 import type { ManagedDevice } from "@/lib/business/device-queries";
 import { formatRelativeTime, cn } from "@/lib/utils";
 
+/** Status dot shared with the detail panel — an online device pulses so a
+ * live, actively-connected screen reads differently from a static label. */
+export function StatusDot({ status }: { status: ManagedDevice["status"] }) {
+  if (status === "online") {
+    return (
+      <span className="relative flex size-1.5">
+        <span className="absolute inline-flex size-full rounded-full bg-emerald-400 opacity-75 motion-safe:animate-ping" />
+        <span className="relative size-1.5 rounded-full bg-emerald-500" />
+      </span>
+    );
+  }
+  return <span className={cn("size-1.5 rounded-full", status === "pending" ? "bg-amber-500" : "bg-rose-500")} />;
+}
+
 function StatusPill({ status }: { status: ManagedDevice["status"] }) {
   const cls =
     status === "online" ? "text-emerald-400" : status === "pending" ? "text-amber-400" : "text-rose-400";
-  const dot = status === "online" ? "bg-emerald-500" : status === "pending" ? "bg-amber-500" : "bg-rose-500";
   const label = status === "online" ? "Online" : status === "pending" ? "Pending" : "Offline";
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", cls)}>
-      <span className={cn("size-1.5 rounded-full", dot)} />
+      <StatusDot status={status} />
       {label}
     </span>
   );

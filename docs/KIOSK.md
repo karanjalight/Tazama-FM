@@ -8,6 +8,30 @@ remotely-hosted app. Nothing is installed except the browser.
 
 ---
 
+## 0. Business screens: start at `/pair` (pair once, remembered forever)
+
+For a screen registered in the business dashboard (Screens & Devices →
+Register Screen), set the box's start URL to:
+
+```
+https://<your-host>/pair
+```
+
+- **First boot:** the page opens on a 4-digit code box — type the code the
+  dashboard shows for that screen. The box saves its pairing (localStorage +
+  a 10-year cookie, each restoring the other) and opens its player.
+- **Every boot after that:** `/pair` sees the saved pairing and goes straight
+  to the screen's current room player — no code again, and it follows the
+  screen if it's moved to another room in the dashboard. If the network isn't
+  up yet it keeps retrying; it never forgets the pairing on a network error.
+- The pairing is only dropped if the screen is **forgotten** in the dashboard;
+  `/pair` then asks for a new code.
+- The dashboard shows the screen as **Online** within seconds of pairing (and
+  live after that — it refreshes on its own).
+
+The older "show a code on the TV, type it into the dashboard" flow is still
+available from a link under the code box.
+
 ## 1. The kiosk URL — `/player/<slug>`
 
 Point the box at the lightweight player route, **not** the marketing landing or

@@ -39,6 +39,9 @@ export interface ManagedDevice {
    * device that has since gone offline still shows up after a refresh. */
   pairingCode: string | null;
   pairingCodeExpiresAt: string | null;
+  /** Public guest-pairing slug (`/pair/<slug>`) — null until
+   * supabase/business-pair-requests.sql has been applied. */
+  slug: string | null;
 }
 
 interface DeviceRow {
@@ -73,6 +76,18 @@ async function pairingCodesByToken(
     .gt("expires_at", new Date().toISOString());
   for (const row of (data ?? []) as { device_token: string; code: string; expires_at: string }[]) {
     map.set(row.device_token, { code: row.code, expiresAt: row.expires_at });
+  }
+  return map;
+}
+
+/** Guest-pairing slugs, read in their own query and best-effort so the
+ * device list keeps working on a database without the `slug` column yet. */
+async function slugsByDeviceId(admin: SupabaseClient, branchId: string): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const { data, error } = await admin.from("branch_devices").select("id, slug").eq("branch_id", branchId);
+  if (error) return map;
+  for (const row of (data ?? []) as { id: string; slug: string | null }[]) {
+    if (row.slug) map.set(row.id, row.slug);
   }
   return map;
 }
@@ -154,10 +169,13 @@ export async function listBranchDevicesDetailed(branchId: string): Promise<Manag
   const zoneById = new Map(zones.map((z) => [z.id, z]));
 
   const rows = (data ?? []) as DeviceRow[];
-  const pairingCodes = await pairingCodesByToken(
-    admin,
-    rows.map((r) => r.device_token),
-  );
+  const [pairingCodes, slugs] = await Promise.all([
+    pairingCodesByToken(
+      admin,
+      rows.map((r) => r.device_token),
+    ),
+    slugsByDeviceId(admin, branchId),
+  ]);
 
   return rows.map((row) => {
     const room = row.room_id ? roomById.get(row.room_id) : undefined;
@@ -180,6 +198,7 @@ export async function listBranchDevicesDetailed(branchId: string): Promise<Manag
       status: statusFor(row.last_seen_at),
       pairingCode: pairing?.code ?? null,
       pairingCodeExpiresAt: pairing?.expiresAt ?? null,
+      slug: slugs.get(row.id) ?? null,
     };
   });
 }

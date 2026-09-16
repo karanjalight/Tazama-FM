@@ -22,6 +22,7 @@ import { renameDevice, regenerateDevicePairingCode } from "@/app/business/locati
 import { forgetDevice } from "@/app/business/actions";
 import { formatRelativeTime, cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { PairLinkCard } from "./pair-link-card";
 
 /** Absolute, not relative — `formatRelativeTime` assumes a past timestamp
  * ("Xm ago") and would misreport a future expiry as "just now"; this also
@@ -192,6 +193,8 @@ export function DeviceDetailPanel({ device, onClose }: { device: ManagedDevice; 
             </p>
           </div>
         )}
+
+        {device.slug && device.roomId && <PairLinkCard slug={device.slug} deviceName={device.name} />}
 
         <div className="mt-4 space-y-3">
           <DetailRow

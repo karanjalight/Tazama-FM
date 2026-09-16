@@ -18,14 +18,17 @@ import { NAV_ICONS } from "./nav-icons";
 const CLOSE_DELAY = 140;
 
 /**
- * Marketing header, shared by the homepage, /for-business and /how-it-works
- * (all of which open on a dark hero). Transparent at the top, a quiet frosted
- * ink bar once the page scrolls. Menus follow the disclosure pattern: hover
- * opens them for mouse users, click/Enter toggles, Escape closes.
+ * Marketing header, shared by the homepage, the product pages, /for-business
+ * and /how-it-works (all of which open on a dark hero). Transparent at the
+ * top, solid black once the page scrolls. Menus follow the disclosure
+ * pattern: hovering opens one for mouse users, clicking pins it open (a click
+ * never closes a menu the pointer just opened), clicking a pinned trigger
+ * again, clicking outside or pressing Escape closes it.
  */
 export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
   const [scrolled, setScrolled] = useState(false);
-  const [open, setOpen] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ label: string; pinned: boolean } | null>(null);
+  const open = menu?.label ?? null;
   const closeTimer = useRef<number | null>(null);
   const navRef = useRef<HTMLDivElement>(null);
   const triggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -46,7 +49,7 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
 
   const scheduleClose = useCallback(() => {
     cancelClose();
-    closeTimer.current = window.setTimeout(() => setOpen(null), CLOSE_DELAY);
+    closeTimer.current = window.setTimeout(() => setMenu((cur) => (cur?.pinned ? cur : null)), CLOSE_DELAY);
   }, [cancelClose]);
 
   useEffect(() => {
@@ -54,10 +57,10 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       triggerRefs.current[open]?.focus();
-      setOpen(null);
+      setMenu(null);
     };
     const onPointer = (e: PointerEvent) => {
-      if (!navRef.current?.contains(e.target as Node)) setOpen(null);
+      if (!navRef.current?.contains(e.target as Node)) setMenu(null);
     };
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onPointer);
@@ -77,7 +80,7 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
         marketingFontVars,
         "fixed inset-x-0 top-0 z-50 font-display text-white transition-[background-color,border-color,backdrop-filter] duration-300",
         solid
-          ? "border-b border-white/[0.07] bg-ink/90 backdrop-blur-xl backdrop-saturate-150"
+          ? "border-b border-white/[0.08] bg-black"
           : "border-b border-transparent bg-transparent",
       )}
     >
@@ -99,12 +102,15 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
                 key={group.label}
                 group={group}
                 open={open === group.label}
-                onOpen={() => {
+                onHover={() => {
                   cancelClose();
-                  setOpen(group.label);
+                  setMenu((cur) => (cur?.label === group.label ? cur : { label: group.label, pinned: false }));
                 }}
-                onToggle={() => setOpen((cur) => (cur === group.label ? null : group.label))}
-                onNavigate={() => setOpen(null)}
+                onClick={() => {
+                  cancelClose();
+                  setMenu((cur) => (cur?.label === group.label && cur.pinned ? null : { label: group.label, pinned: true }));
+                }}
+                onNavigate={() => setMenu(null)}
                 triggerRef={(el) => {
                   triggerRefs.current[group.label] = el;
                 }}
@@ -141,15 +147,15 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
 function NavMenu({
   group,
   open,
-  onOpen,
-  onToggle,
+  onHover,
+  onClick,
   onNavigate,
   triggerRef,
 }: {
   group: NavGroup;
   open: boolean;
-  onOpen: () => void;
-  onToggle: () => void;
+  onHover: () => void;
+  onClick: () => void;
   onNavigate: () => void;
   triggerRef: (el: HTMLButtonElement | null) => void;
 }) {
@@ -165,11 +171,11 @@ function NavMenu({
         type="button"
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={onToggle}
-        onPointerEnter={(e) => e.pointerType === "mouse" && onOpen()}
+        onClick={onClick}
+        onPointerEnter={(e) => e.pointerType === "mouse" && onHover()}
         className={cn(
-          "inline-flex h-9 items-center gap-1 rounded-lg px-3 text-[14px] transition-colors",
-          open ? "text-white" : "text-white/65 hover:text-white",
+          "inline-flex h-9 cursor-pointer items-center gap-1 rounded-lg px-3 text-[14px] transition-colors",
+          open ? "bg-white/[0.09] text-white" : "text-white/70 hover:bg-white/[0.06] hover:text-white",
         )}
       >
         {group.label}

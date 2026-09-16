@@ -2,6 +2,7 @@
  * Shared, framework-free types for the Business feature. Safe on client + server.
  */
 import type { RoomTrack } from "@/lib/rooms/types";
+import type { TourMeta } from "@/lib/business/onboarding-tour";
 
 export type StaffRole = "admin" | "manager";
 export type BusinessRole = "owner" | StaffRole;
@@ -13,6 +14,12 @@ export interface BusinessViewer {
   role: BusinessRole;
   staffId: string | null; // business_staff.id; null for the owner
   branchIds: string[] | "all"; // "all" for owner/admin; explicit list for manager
+  /** Signed-in auth user id. Optional so existing literals stay valid. */
+  userId?: string;
+  /** Onboarding tour progress from auth user_metadata (see onboarding-tour.ts). */
+  tourMeta?: TourMeta | null;
+  /** When the getting-started checklist was dismissed, if ever. */
+  checklistDismissedAt?: string | null;
 }
 
 export interface Branch {

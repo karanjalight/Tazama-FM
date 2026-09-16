@@ -48,6 +48,18 @@ function measure(ids: readonly string[]): TargetLayout {
   return { rect: { top, left, width: right - left, height: bottom - top }, viewport };
 }
 
+/** Both-null rects count as equal; avoids a new object (and a re-render) on every scroll frame when nothing moved. */
+function sameLayout(a: TargetLayout, b: TargetLayout): boolean {
+  if (a.viewport.width !== b.viewport.width || a.viewport.height !== b.viewport.height) return false;
+  if (a.rect === null || b.rect === null) return a.rect === b.rect;
+  return (
+    a.rect.top === b.rect.top &&
+    a.rect.left === b.rect.left &&
+    a.rect.width === b.rect.width &&
+    a.rect.height === b.rect.height
+  );
+}
+
 /**
  * Scrolls the targets into view (the sidebar scrolls on short screens) and
  * tracks their union rectangle through resizes and scrolls.
@@ -66,7 +78,10 @@ export function useTargetRect(targets: readonly string[], active: boolean, reduc
     let frame = 0;
     const update = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setLayout(measure(ids)));
+      frame = requestAnimationFrame(() => {
+        const next = measure(ids);
+        setLayout((prev) => (sameLayout(prev, next) ? prev : next));
+      });
     };
     update();
     const settle = window.setTimeout(update, 450); // after a smooth scroll lands

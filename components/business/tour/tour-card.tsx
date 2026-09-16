@@ -53,11 +53,11 @@ export function TourCard({
         </AnimatePresence>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7">
+      <div className="flex min-w-0 flex-1 flex-col p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-7 lg:overflow-y-auto">
         {segments.length > 0 && (
           <ol aria-label="Tour chapters" className="flex gap-1.5">
             {segments.map((s) => (
-              <li key={s.chapter} className="min-w-0 flex-1">
+              <li key={s.chapter} className="min-w-0 flex-1" aria-current={s.state === "current" ? "step" : undefined}>
                 <span
                   className={cn(
                     "block h-1 rounded-full transition-colors duration-300",
@@ -68,7 +68,7 @@ export function TourCard({
                 />
                 <span
                   className={cn(
-                    "mt-1.5 hidden truncate text-[10px] font-medium tracking-wide sm:block",
+                    "sr-only text-[10px] font-medium tracking-wide sm:not-sr-only sm:mt-1.5 sm:block sm:truncate",
                     s.state === "current" ? "text-foreground" : "text-muted-foreground/70",
                   )}
                 >
@@ -80,20 +80,19 @@ export function TourCard({
           </ol>
         )}
 
-        <p className="mt-5 font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
-          {CHAPTER_LABEL[step.chapter]} <span aria-hidden>·</span> {pad(index + 1)} / {pad(steps.length)}
-        </p>
-
         <AnimatePresence initial={false} mode="wait">
           <motion.div
             key={step.id}
-            className="mt-2 flex-1"
+            className="mt-5 flex-1"
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={reducedMotion ? { duration: 0 } : { duration: 0.18, ease: "easeOut" }}
           >
-            <DialogPrimitive.Title className="text-xl font-semibold tracking-tight text-balance text-foreground sm:text-[26px] sm:leading-tight">
+            <p className="font-mono text-[11px] tracking-[0.14em] text-muted-foreground uppercase">
+              {CHAPTER_LABEL[step.chapter]} <span aria-hidden>·</span> {pad(index + 1)} / {pad(steps.length)}
+            </p>
+            <DialogPrimitive.Title className="mt-2 text-xl font-semibold tracking-tight text-balance text-foreground sm:text-[26px] sm:leading-tight">
               {step.title}
             </DialogPrimitive.Title>
             <DialogPrimitive.Description className="mt-3 text-sm leading-relaxed text-pretty text-muted-foreground sm:text-[15px]">

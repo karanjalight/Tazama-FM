@@ -68,8 +68,11 @@ Full body copy lives in `lib/business/onboarding-tour-steps.ts` (see plan).
   content items, schedules, non-draft announcements, staff). Every count error-tolerant → 0.
 - `app/business/onboarding/actions.ts` — `saveTourProgress(status)` and
   `dismissChecklist()` via `supabase.auth.updateUser({data})` (merges top-level
-  metadata keys); `recordTourEvent(input)` inserts into `business_tour_events` via the
-  admin client, swallowing all errors (table may not be applied yet).
+  metadata keys).
+- `app/api/business/onboarding/events/route.ts` — analytics ingest. A route handler,
+  not a server action, so the client can fire `keepalive` requests that never queue
+  behind other actions; inserts into `business_tour_events` via the admin client,
+  swallowing all errors (table may not be applied yet).
 - `supabase/business-onboarding.sql` — `business_tour_events` table (RLS on, no
   policies → service role only) + `business_tour_funnel` view (`security_invoker`,
   select revoked from anon/authenticated). Standalone file; **not** appended to

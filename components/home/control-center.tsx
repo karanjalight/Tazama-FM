@@ -80,6 +80,37 @@ function reducer(state: State, action: Action): State {
 }
 
 export function ControlCenter() {
+  return (
+    <Section id="control-center" tone="dark" className="overflow-hidden">
+      <Container wide>
+        <SectionIntro
+          index="03"
+          kicker="Control center"
+          title="Meet the control center."
+          body="Manage your screens, audio, content and locations from one place — and see every change land."
+        />
+
+        <OverviewWindow className="mt-14 sm:mt-20" />
+
+        <ul className="mt-12 grid gap-8 border-t border-white/[0.08] pt-10 sm:grid-cols-3">
+          {[
+            ["See it live", "Preview exactly what any screen is showing right now."],
+            ["Change it once", "Switch a playlist or a piece of content and the screens follow."],
+            ["Stay ahead", "Today’s schedule, recent activity and screen status in one view."],
+          ].map(([title, body]) => (
+            <li key={title}>
+              <p className="text-[15px] font-medium">{title}</p>
+              <p className="mt-1.5 text-[15px] leading-relaxed text-zinc-400">{body}</p>
+            </li>
+          ))}
+        </ul>
+      </Container>
+    </Section>
+  );
+}
+
+/** The Overview dashboard replica — shared by the homepage and /product/control-center. */
+export function OverviewWindow({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { amount: 0.25 });
   const reduced = usePrefersReducedMotion();
@@ -100,16 +131,7 @@ export function ControlCenter() {
   const session = SESSIONS[state.session];
 
   return (
-    <Section id="control-center" tone="dark" className="overflow-hidden">
-      <Container wide>
-        <SectionIntro
-          index="03"
-          kicker="Control center"
-          title="Meet the control center."
-          body="Manage your screens, audio, content and locations from one place — and see every change land."
-        />
-
-        <div ref={ref} className="relative mt-14 sm:mt-20">
+    <div ref={ref} className={cn("relative", className)}>
           <div
             aria-hidden
             className="pointer-events-none absolute -inset-x-20 -top-24 h-[480px] bg-[radial-gradient(ellipse_50%_60%_at_50%_0%,rgb(229_52_46/0.10),transparent_70%)]"
@@ -156,27 +178,12 @@ export function ControlCenter() {
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <LocationsPanel className="hidden xl:block" />
-                <ContentPerformance className="hidden md:block" />
+                <ScreenStatus className="hidden md:block" />
                 <Activity events={state.events} />
               </div>
             </div>
           </AppWindow>
-        </div>
-
-        <ul className="mt-12 grid gap-8 border-t border-white/[0.08] pt-10 sm:grid-cols-3">
-          {[
-            ["See it live", "Preview exactly what any screen is showing right now."],
-            ["Change it once", "Switch a playlist or a piece of content and the screens follow."],
-            ["Stay ahead", "Today’s schedule, recent activity and screen status in one view."],
-          ].map(([title, body]) => (
-            <li key={title}>
-              <p className="text-[15px] font-medium">{title}</p>
-              <p className="mt-1.5 text-[15px] leading-relaxed text-zinc-400">{body}</p>
-            </li>
-          ))}
-        </ul>
-      </Container>
-    </Section>
+    </div>
   );
 }
 
@@ -446,38 +453,44 @@ function LocationsPanel({ className }: { className?: string }) {
   );
 }
 
-const TOP_CONTENT = [
-  { id: "lunch-menu" as const, plays: 1284 },
-  { id: "happy-hour" as const, plays: 962 },
-  { id: "brand-film" as const, plays: 740 },
-  { id: "weekend-brunch" as const, plays: 518 },
+const SCREEN_STATUS = [
+  { label: "Online", value: 18, className: "bg-live" },
+  { label: "Pending", value: 0, className: "bg-white/40" },
+  { label: "Offline", value: 1, className: "bg-amber-400" },
 ];
 
-function ContentPerformance({ className }: { className?: string }) {
-  const ref = useRef<HTMLUListElement>(null);
+function ScreenStatus({ className }: { className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
   const seen = useInView(ref, { once: true, amount: 0.5 });
-  const max = TOP_CONTENT[0].plays;
+  const total = SCREEN_STATUS.reduce((sum, s) => sum + s.value, 0);
   return (
-    <Panel className={className} title="Content performance" meta={<span className="text-[12px] text-white/40">Plays today</span>}>
-      <ul ref={ref} className="mt-4 space-y-3.5">
-        {TOP_CONTENT.map((c, i) => (
-          <li key={c.id} className="text-[13px]">
-            <div className="flex items-center justify-between gap-3">
-              <span className="truncate text-white/80">{CONTENT[c.id].title}</span>
-              <span className="font-tech text-[12px] text-white/55">{c.plays.toLocaleString("en-US")}</span>
-            </div>
-            <div className="mt-1.5 h-[5px] overflow-hidden rounded-full bg-white/[0.06]">
-              <motion.div
-                className={cn("h-full origin-left rounded-full", i === 0 ? "bg-brand" : "bg-white/35")}
-                style={{ width: `${(c.plays / max) * 100}%` }}
-                initial={{ scaleX: 0 }}
-                animate={{ scaleX: seen ? 1 : 0 }}
-                transition={{ duration: 0.9, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-              />
-            </div>
+    <Panel className={className} title="Screen status" meta={<span className="text-[12px] text-white/40">{total} screens</span>}>
+      <div ref={ref} className="mt-4 flex h-2.5 gap-[3px] overflow-hidden rounded-full">
+        {SCREEN_STATUS.filter((s) => s.value > 0).map((s, i) => (
+          <motion.span
+            key={s.label}
+            className={cn("h-full origin-left rounded-full", s.className)}
+            style={{ width: `${(s.value / total) * 100}%` }}
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: seen ? 1 : 0 }}
+            transition={{ duration: 0.8, delay: i * 0.1, ease: [0.22, 1, 0.36, 1] }}
+          />
+        ))}
+      </div>
+      <ul className="mt-4 space-y-2.5 text-[13px]">
+        {SCREEN_STATUS.map((s) => (
+          <li key={s.label} className="flex items-center justify-between">
+            <span className="flex items-center gap-2 text-white/70">
+              <span aria-hidden className={cn("size-2 rounded-full", s.className)} />
+              {s.label}
+            </span>
+            <span className="font-tech text-white/60">{s.value}</span>
           </li>
         ))}
       </ul>
+      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[12px] text-white/45">
+        Longest offline: <span className="text-white/70">Bar TV · Town Centre</span>
+      </p>
     </Panel>
   );
 }

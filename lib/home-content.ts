@@ -6,6 +6,8 @@
  * mockups are illustrative and labelled as such on the page.
  */
 
+import { PRODUCTS, productHref } from "./product-content";
+
 /* ------------------------------- Demo business ------------------------------ */
 
 export const DEMO_BUSINESS = "Kilele Kitchen";
@@ -223,13 +225,12 @@ const INDUSTRY_ICON: Record<IndustryId, NavIconKey> = {
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Product",
-    items: [
-      { label: "Control center", description: "Every location, screen and speaker at a glance.", href: "/#control-center", icon: "dashboard" },
-      { label: "Music & audio zones", description: "Playlists and AI mixes that play in sync.", href: "/#platform", icon: "music" },
-      { label: "Digital signage & video", description: "Menus, promotions and video on any TV.", href: "/#platform", icon: "monitor" },
-      { label: "Announcements", description: "Voice messages that lower the music, on time.", href: "/#platform", icon: "megaphone" },
-      { label: "Analytics", description: "Plays, reach and screen health.", href: "/#analytics", icon: "chart" },
-    ],
+    items: PRODUCTS.map((product) => ({
+      label: product.name,
+      description: product.summary,
+      href: productHref(product.slug),
+      icon: product.icon,
+    })),
   },
   {
     label: "Solutions",

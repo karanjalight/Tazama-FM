@@ -332,7 +332,8 @@ export function Waveform({
   return (
     <g transform={`translate(${x} ${y})`}>
       {Array.from({ length: bars }, (_, i) => {
-        const rest = 0.25 + 0.75 * Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.35));
+        // Rounded: the browser normalises long floats in the SSR'd transform, which breaks hydration.
+        const rest = Math.round((0.25 + 0.75 * Math.abs(Math.sin(i * 0.9) * Math.cos(i * 0.35))) * 1000) / 1000;
         return (
           <motion.rect
             key={i}

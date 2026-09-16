@@ -4,14 +4,19 @@ import { z } from "zod";
 import { getBusinessViewer } from "@/lib/business/viewer";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { TOUR_EVENT_NAMES, TOUR_SOURCES, TOUR_VERSION } from "@/lib/business/onboarding-tour";
+import { TOUR_STEPS } from "@/lib/business/onboarding-tour-steps";
 
-const eventSchema = z.object({
-  event: z.enum(TOUR_EVENT_NAMES),
-  source: z.enum(TOUR_SOURCES),
-  stepId: z.string().min(1).max(40),
-  stepIndex: z.number().int().min(0).max(100),
-  totalSteps: z.number().int().min(1).max(100),
-});
+const STEP_IDS = new Set(TOUR_STEPS.map((s) => s.id));
+
+const eventSchema = z
+  .object({
+    event: z.enum(TOUR_EVENT_NAMES),
+    source: z.enum(TOUR_SOURCES),
+    stepId: z.string().refine((id) => STEP_IDS.has(id), "Unknown step."),
+    stepIndex: z.number().int().min(0),
+    totalSteps: z.number().int().min(1).max(TOUR_STEPS.length),
+  })
+  .refine((e) => e.stepIndex < e.totalSteps, "Step index out of range.");
 
 /**
  * Tour analytics ingest. Best-effort by design: the client fires with

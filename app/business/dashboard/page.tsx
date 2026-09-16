@@ -18,8 +18,9 @@ import {
 } from "@/lib/business/announcement-types";
 import type { BranchCardSummary } from "@/lib/business/types";
 import { getChecklistCounts } from "@/lib/business/onboarding-queries";
-import { buildChecklist, isChecklistVisible } from "@/lib/business/onboarding-checklist";
+import { buildChecklist, isChecklistComplete, isChecklistVisible } from "@/lib/business/onboarding-checklist";
 import { GettingStartedCard } from "@/components/business/tour/getting-started-card";
+import { ChecklistCompletionRecorder } from "@/components/business/tour/checklist-completion-recorder";
 import { StatTile, type StatItem } from "@/components/business/stat-tile";
 import { LocationsPanel, type DashboardLocation } from "@/components/business/dashboard/locations-panel";
 import {
@@ -85,6 +86,8 @@ export default async function BusinessDashboardPage() {
 
   const checklistItems = checklistCounts ? buildChecklist(checklistCounts, { defaultBranchSlug }) : [];
   const showChecklist = checklistCounts !== null && isChecklistVisible(checklistItems, viewer.checklistDismissedAt ?? null);
+  // Once everything is done, retire the checklist so later loads skip its queries.
+  const recordChecklistComplete = checklistCounts !== null && isChecklistComplete(checklistCounts);
 
   return (
     <div className="space-y-6">
@@ -98,6 +101,7 @@ export default async function BusinessDashboardPage() {
       </header>
 
       {showChecklist && <GettingStartedCard items={checklistItems} />}
+      {recordChecklistComplete && <ChecklistCompletionRecorder />}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4">
         {stats.map((stat, i) => (

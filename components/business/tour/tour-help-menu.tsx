@@ -20,7 +20,7 @@ const CHAPTER_HINT: Record<JumpableChapter, string> = {
   play: "Content, playlists, schedules",
   engage: "How guests join in",
   measure: "Analytics and reports",
-  grow: "Advertising and your team",
+  grow: "Advertising and settings",
 };
 
 const ITEM =

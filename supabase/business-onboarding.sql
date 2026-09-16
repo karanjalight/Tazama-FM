@@ -26,19 +26,22 @@ create index if not exists business_tour_events_funnel_idx
 alter table public.business_tour_events enable row level security;
 
 -- Drop-off funnel: how many distinct people reached, skipped at, or finished
--- from each step. step_id (not just index) because managers get a shorter tour.
+-- from each step. Split by source so first-login tours ('auto') aren't mixed
+-- with Help-menu replays and chapter jumps; step_id (not just index) because
+-- managers get a shorter tour.
 create or replace view public.business_tour_funnel
 with (security_invoker = true) as
 select
   tour_version,
+  source,
   step_id,
   min(step_index)                                              as step_index,
   count(distinct user_id) filter (where event = 'step_viewed') as people_reached,
   count(distinct user_id) filter (where event = 'skipped')     as people_skipped_here,
   count(distinct user_id) filter (where event = 'completed')   as people_completed
 from public.business_tour_events
-group by tour_version, step_id;
+group by tour_version, source, step_id;
 
 revoke all on public.business_tour_funnel from anon, authenticated;
 
--- Example: select * from public.business_tour_funnel order by tour_version, step_index;
+-- First-login funnel: select * from public.business_tour_funnel where source = 'auto' order by tour_version, step_index;

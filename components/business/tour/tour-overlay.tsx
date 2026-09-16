@@ -53,7 +53,8 @@ export function TourOverlay({
   React.useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.altKey || event.metaKey || event.ctrlKey || event.shiftKey || event.defaultPrevented) return;
+      // event.repeat: holding an arrow must not race through (and falsely complete) the tour.
+      if (event.repeat || event.altKey || event.metaKey || event.ctrlKey || event.shiftKey || event.defaultPrevented) return;
       if (event.key === "ArrowRight") {
         event.preventDefault();
         onNext();
@@ -85,7 +86,7 @@ export function TourOverlay({
           data-tour-card=""
           style={anchor ? { top: anchor.top, left: anchor.left } : undefined}
           className={cn(
-            "fixed z-[70] outline-none transition-[opacity,top] duration-300 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0",
+            "fixed z-[70] outline-none transition-[opacity,top] duration-300 ease-out motion-reduce:transition-none data-ending-style:opacity-0 data-starting-style:opacity-0",
             // Phones: bottom sheet.
             "inset-x-0 bottom-0 max-h-[94dvh]",
             // Tablet and up: centred over the main column, right of the 18rem sidebar.
@@ -107,7 +108,7 @@ export function TourOverlay({
           {anchor && (
             <span
               aria-hidden
-              className="absolute -left-[7px] hidden size-3.5 rotate-45 border-b border-l border-border bg-card transition-[top] duration-300 lg:block"
+              className="absolute -left-[7px] hidden size-3.5 rotate-45 border-b border-l border-border bg-card transition-[top] duration-300 motion-reduce:transition-none lg:block"
               style={{ top: anchor.arrowTop - 7 }}
             />
           )}

@@ -6,9 +6,8 @@ import {
   checkRequest,
   cleanDisplayName,
   queuePositionLabel,
-  requestedByFor,
 } from "./request-rules";
-import { asRoomTrack } from "./room-track";
+import { asRoomTrack, withRequestCredit } from "./room-track";
 
 const OPEN = { queuedByActor: 0, queuedInRoom: 0, alreadyQueued: false, isNowPlaying: false };
 
@@ -58,47 +57,24 @@ test("queue position labels read naturally", () => {
   assert.equal(queuePositionLabel(21), "22nd in line");
 });
 
-const NOW = Date.parse("2026-09-16T12:00:00Z");
+const SONG = { youtubeId: "abc", title: "Song", artist: "Band", thumbnailUrl: null };
 
-test("requested-by shows for the song a request just started", () => {
-  const name = requestedByFor({
-    currentYoutubeId: "abc",
-    lastClaim: { youtubeId: "abc", name: "Amina", claimedAt: "2026-09-16T11:58:00Z" },
-    now: NOW,
-  });
-  assert.equal(name, "Amina");
+test("a claimed request carries its requester's name", () => {
+  assert.deepEqual(withRequestCredit(SONG, "Amina"), { ...SONG, requestedByName: "Amina" });
 });
 
-test("requested-by falls back to a generic name", () => {
-  const name = requestedByFor({
-    currentYoutubeId: "abc",
-    lastClaim: { youtubeId: "abc", name: null, claimedAt: "2026-09-16T11:58:00Z" },
-    now: NOW,
-  });
-  assert.equal(name, "a guest");
+test("a claimed request with no name gets a generic credit", () => {
+  assert.equal(withRequestCredit(SONG, null).requestedByName, "a guest");
+  assert.equal(withRequestCredit(SONG, "   ").requestedByName, "a guest");
 });
 
-test("requested-by is hidden once a different song is playing", () => {
-  const name = requestedByFor({
-    currentYoutubeId: "xyz",
-    lastClaim: { youtubeId: "abc", name: "Amina", claimedAt: "2026-09-16T11:58:00Z" },
-    now: NOW,
-  });
-  assert.equal(name, null);
+test("asRoomTrack keeps a request credit", () => {
+  assert.equal(asRoomTrack({ ...SONG, requestedByName: "Amina" })?.requestedByName, "Amina");
 });
 
-test("requested-by ignores stale claims of the same song", () => {
-  const name = requestedByFor({
-    currentYoutubeId: "abc",
-    lastClaim: { youtubeId: "abc", name: "Amina", claimedAt: "2026-09-16T10:00:00Z" },
-    now: NOW,
-  });
-  assert.equal(name, null);
-});
-
-test("requested-by is null with nothing playing or nothing claimed", () => {
-  assert.equal(requestedByFor({ currentYoutubeId: null, lastClaim: null, now: NOW }), null);
-  assert.equal(requestedByFor({ currentYoutubeId: "abc", lastClaim: null, now: NOW }), null);
+test("asRoomTrack drops a blank or non-string credit", () => {
+  assert.equal("requestedByName" in (asRoomTrack({ ...SONG, requestedByName: "" }) ?? {}), false);
+  assert.equal("requestedByName" in (asRoomTrack({ ...SONG, requestedByName: 42 }) ?? {}), false);
 });
 
 test("asRoomTrack keeps a valid track", () => {

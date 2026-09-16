@@ -12,7 +12,6 @@ import { genreLabel } from "@/lib/genres";
 import { asRoomTrack } from "@/lib/pair/room-track";
 import { cursorBasis, upcomingIndices } from "@/lib/pair/playlist-cursor";
 import { readPlaylistCursor } from "@/lib/pair/playlist-cursor-store";
-import { requestedByFor } from "@/lib/pair/request-rules";
 import { resolveRoomSource, sourceRoomIds, type RoomSource } from "@/lib/pair/room-source";
 import type { ScheduleContentSnapshot } from "@/lib/business/schedule-types";
 import type { PairDevice, PairRequest, PairSource, PairState, PairUpcoming } from "@/lib/pair/types";
@@ -58,6 +57,29 @@ export async function getPairDeviceBySlug(slug: string): Promise<PairDevice | nu
     roomName: (room as { name: string } | null)?.name ?? null,
     branchName: (branch as { name: string } | null)?.name ?? null,
   };
+}
+
+/** The pairing slug a room's kiosk advertises in its QR badge — the room's
+ * primary screen, else its earliest-paired screen, else any device. Every
+ * device in a room mirrors the same playback, so any of them pairs a guest
+ * into the same experience. Null before the slug migration is applied. */
+export async function getPairSlugForRoom(roomId: string): Promise<string | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data, error } = await admin
+    .from("branch_devices")
+    .select("slug, device_kind, is_primary, paired_at")
+    .eq("room_id", roomId);
+  if (error || !data?.length) return null;
+  const rows = (data as { slug: string | null; device_kind: string; is_primary: boolean; paired_at: string }[])
+    .filter((d) => !!d.slug)
+    .sort(
+      (a, b) =>
+        Number(b.device_kind === "screen") - Number(a.device_kind === "screen") ||
+        Number(b.is_primary) - Number(a.is_primary) ||
+        a.paired_at.localeCompare(b.paired_at),
+    );
+  return rows[0]?.slug ?? null;
 }
 
 export interface SourcePlayback {
@@ -156,25 +178,6 @@ async function listQueuedRequests(admin: SupabaseClient, roomIds: string[], view
     });
   }
   return requests;
-}
-
-async function lastClaimedRequest(
-  admin: SupabaseClient,
-  roomIds: string[],
-): Promise<{ youtubeId: string; name: string | null; claimedAt: string } | null> {
-  if (!roomIds.length) return null;
-  const { data, error } = await admin
-    .from("venue_requests")
-    .select("track, added_by_name, claimed_at")
-    .in("room_id", roomIds)
-    .eq("status", "played")
-    .not("claimed_at", "is", null)
-    .order("claimed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error || !data) return null;
-  const track = asRoomTrack(data.track);
-  return track ? { youtubeId: track.youtubeId, name: data.added_by_name, claimedAt: data.claimed_at } : null;
 }
 
 async function roomHasOnlineDevice(admin: SupabaseClient, roomId: string): Promise<boolean> {
@@ -295,11 +298,10 @@ export async function getPairState(roomId: string, viewerId: string | null): Pro
 
   const source = await resolveRoomSource(roomId);
   const roomIds = await sourceRoomIds(admin, source);
-  const [playback, cursor, requests, lastClaim, screenOnline] = await Promise.all([
+  const [playback, cursor, requests, screenOnline] = await Promise.all([
     readSourcePlayback(admin, source),
     readPlaylistCursor(admin, source.kind, source.id),
     listQueuedRequests(admin, roomIds, viewerId),
-    lastClaimedRequest(admin, roomIds),
     roomHasOnlineDevice(admin, roomId),
   ]);
   const currentYoutubeId = playback.track?.youtubeId ?? null;
@@ -316,7 +318,7 @@ export async function getPairState(roomId: string, viewerId: string | null): Pro
       isPlaying: playback.isPlaying,
       at: playback.at,
       durationMs,
-      requestedByName: requestedByFor({ currentYoutubeId, lastClaim, now: Date.now() }),
+      requestedByName: playback.track?.requestedByName ?? null,
     },
     content: playback.content,
     requests,

@@ -10,7 +10,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { asRoomTrack } from "@/lib/pair/room-track";
+import { asRoomTrack, withRequestCredit } from "@/lib/pair/room-track";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 /** How many oldest candidates to try claiming before giving up for this
@@ -20,6 +20,8 @@ const PLAYED_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface ClaimedRequest {
   id: string;
+  /** Carries `requestedByName`, so writing it to a playback row credits the
+   * requester on the screen and every paired phone. */
   track: RoomTrack;
 }
 
@@ -35,14 +37,14 @@ export async function claimNextRequest(admin: SupabaseClient, roomIds: string[])
 
   const { data, error } = await admin
     .from("venue_requests")
-    .select("id, track")
+    .select("id, track, added_by_name")
     .in("room_id", roomIds)
     .eq("status", "queued")
     .order("created_at", { ascending: true })
     .limit(CLAIM_CANDIDATES);
   if (error || !data?.length) return null;
 
-  for (const row of data as { id: string; track: unknown }[]) {
+  for (const row of data as { id: string; track: unknown; added_by_name: string | null }[]) {
     const { data: claimed, error: claimError } = await admin
       .from("venue_requests")
       .update({ status: "played", claimed_at: new Date().toISOString() })
@@ -61,7 +63,7 @@ export async function claimNextRequest(admin: SupabaseClient, roomIds: string[])
       .in("room_id", roomIds)
       .eq("status", "played")
       .lt("claimed_at", new Date(Date.now() - PLAYED_RETENTION_MS).toISOString());
-    return { id: row.id, track };
+    return { id: row.id, track: withRequestCredit(track, row.added_by_name) };
   }
   return null;
 }

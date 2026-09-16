@@ -8,11 +8,6 @@ export const MAX_REQUESTS_PER_GUEST = 3;
 export const MAX_REQUESTS_PER_ROOM = 50;
 export const MAX_DISPLAY_NAME_LENGTH = 24;
 
-/** How long after a request starts playing the "Requested by" credit stays
- * trustworthy — past this, the same song playing again is assumed to come
- * from the playlist, not the old request. */
-const REQUEST_CREDIT_WINDOW_MS = 30 * 60 * 1000;
-
 export type RequestCheck = { ok: true } | { ok: false; error: string };
 
 export function checkRequest(input: {
@@ -55,18 +50,4 @@ function ordinal(n: number): string {
 /** `index` is 0-based within the FIFO request list. */
 export function queuePositionLabel(index: number): string {
   return index === 0 ? "Plays next" : `${ordinal(index + 1)} in line`;
-}
-
-export function requestedByFor({
-  currentYoutubeId,
-  lastClaim,
-  now,
-}: {
-  currentYoutubeId: string | null;
-  lastClaim: { youtubeId: string; name: string | null; claimedAt: string } | null;
-  now: number;
-}): string | null {
-  if (!currentYoutubeId || !lastClaim || lastClaim.youtubeId !== currentYoutubeId) return null;
-  if (now - new Date(lastClaim.claimedAt).getTime() > REQUEST_CREDIT_WINDOW_MS) return null;
-  return lastClaim.name ?? "a guest";
 }

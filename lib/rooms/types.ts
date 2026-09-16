@@ -12,6 +12,10 @@ export interface RoomTrack {
   title: string;
   artist: string | null;
   thumbnailUrl: string | null;
+  /** Only ever set on a venue playback row's track that came from a guest's
+   * Pair with a Screen request (lib/pair/request-queue.ts) — the credit the
+   * screen and paired phones show while it plays. */
+  requestedByName?: string | null;
 }
 
 /** A row from `rooms`, mapped to camelCase. */

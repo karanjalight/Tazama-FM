@@ -83,7 +83,7 @@ export function usePairLive({
           isPlaying: p.isPlaying,
           at: p.at,
           durationMs: sameTrack ? s.nowPlaying.durationMs : null,
-          requestedByName: sameTrack ? s.nowPlaying.requestedByName : null,
+          requestedByName: p.track?.requestedByName ?? null,
         },
         content: content === undefined ? s.content : content,
       };

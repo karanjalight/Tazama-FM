@@ -20,6 +20,10 @@ import {
 } from "@/lib/business/schedule-session-resolver";
 import { nextPlaylistPosition } from "@/lib/business/playlist-position";
 import { ensureGenreSeeded } from "@/lib/tracks";
+import { claimNextRequest, releaseRequest } from "@/lib/pair/request-queue";
+import { sourceRoomIds } from "@/lib/pair/room-source";
+import { readPlaylistCursor, writePlaylistCursor } from "@/lib/pair/playlist-cursor-store";
+import { cursorAfterAdvance, cursorBasis } from "@/lib/pair/playlist-cursor";
 import type { RoomTrack } from "@/lib/rooms/types";
 import type { Schedule, ScheduleSession, ScheduleSessionContentItem, ScheduleContentSnapshot, ContentRepeat } from "@/lib/business/schedule-types";
 
@@ -202,11 +206,23 @@ export async function advanceScheduleTrack(
     return { ok: true, noActiveSession: false, version: reportedVersion + 1, sessionEndsInSeconds, track: null };
   }
 
-  const { data: current } = await admin.from("schedule_playback").select("track").eq("schedule_id", scheduleId).maybeSingle();
+  const [{ data: current }, cursor, roomIds] = await Promise.all([
+    admin.from("schedule_playback").select("track").eq("schedule_id", scheduleId).maybeSingle(),
+    readPlaylistCursor(admin, "schedule", scheduleId),
+    sourceRoomIds(admin, { kind: "schedule", id: scheduleId }),
+  ]);
   const currentTrack = (current?.track as RoomTrack | null) ?? null;
   const currentYoutubeId = currentTrack?.youtubeId ?? null;
+  // Where the session's song list resumes — the cursor survives guest
+  // requests playing in between (see lib/pair/playlist-cursor.ts).
+  const basisYoutubeId = cursorBasis(cursor, currentYoutubeId);
+  // A guest's Pair request (venue_requests) plays before the session's own
+  // next song, in any room this schedule covers.
+  const request = await claimNextRequest(admin, roomIds);
   let track: RoomTrack;
-  if (genreOnly) {
+  if (request) {
+    track = request.track;
+  } else if (genreOnly) {
     // Random pick from a random session genre's bucket — a deterministic
     // "first song that isn't the current one" would ping-pong between two.
     const genre = session.genres[Math.floor(Math.random() * session.genres.length)];
@@ -228,7 +244,7 @@ export async function advanceScheduleTrack(
     track = fallback;
   } else {
     const ordered = [...session.songs].sort((a, b) => a.position - b.position);
-    const currentIndex = currentYoutubeId ? ordered.findIndex((s) => s.track.youtubeId === currentYoutubeId) : -1;
+    const currentIndex = basisYoutubeId ? ordered.findIndex((s) => s.track.youtubeId === basisYoutubeId) : -1;
     const nextIndex = nextPlaylistPosition(ordered.length, currentIndex === -1 ? null : currentIndex);
     const next = ordered[nextIndex];
     track = { youtubeId: next.track.youtubeId, title: next.track.title, artist: next.track.artist, thumbnailUrl: next.track.thumbnailUrl };
@@ -249,6 +265,10 @@ export async function advanceScheduleTrack(
     .eq("version", reportedVersion)
     .select("track, version")
     .maybeSingle();
+  if (error || !updated) {
+    // The request never reached the screen — put it back first in line.
+    if (request) await releaseRequest(admin, request.id);
+  }
   if (error) return { ok: false, error: "Could not advance schedule playback." };
   if (!updated) {
     const { data: latest } = await admin.from("schedule_playback").select("track, version").eq("schedule_id", scheduleId).maybeSingle();
@@ -260,6 +280,8 @@ export async function advanceScheduleTrack(
       track: (latest?.track as RoomTrack | null) ?? null,
     };
   }
+  const nextCursor = cursorAfterAdvance({ interruptsPlaylist: !!request, basisYoutubeId });
+  if (nextCursor !== cursor) await writePlaylistCursor(admin, "schedule", scheduleId, nextCursor);
   return { ok: true, noActiveSession: false, version: updated.version, sessionEndsInSeconds, track: updated.track as RoomTrack | null };
 }
 
@@ -323,6 +345,11 @@ export async function advanceScheduleTrackTo(
       sessionEndsInSeconds,
       track: (latest?.track as RoomTrack | null) ?? null,
     };
+  }
+  // Staff picked this song on purpose — the song list continues after it,
+  // not from a resume point saved while guest requests were playing.
+  if (await readPlaylistCursor(admin, "schedule", scheduleId)) {
+    await writePlaylistCursor(admin, "schedule", scheduleId, null);
   }
   return { ok: true, noActiveSession: false, version: updated.version, sessionEndsInSeconds, track: updated.track as RoomTrack | null };
 }

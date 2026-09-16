@@ -13,6 +13,10 @@ import { resolveNextPlaylistTrack } from "@/lib/business/playlist-resolver";
 import { schedulePlaylistPlayRecord } from "@/lib/business/playlist-mix-pool";
 import { buildSuggestions } from "@/lib/rooms/suggestions";
 import { nextQueuedZoneTrack } from "@/lib/business/zone-queue";
+import { claimNextRequest, releaseRequest } from "@/lib/pair/request-queue";
+import { sourceRoomIds } from "@/lib/pair/room-source";
+import { readPlaylistCursor, writePlaylistCursor } from "@/lib/pair/playlist-cursor-store";
+import { cursorAfterAdvance, cursorBasis } from "@/lib/pair/playlist-cursor";
 import type { RoomTrack } from "@/lib/rooms/types";
 
 /** The zone's earliest-covered room's genres — deterministic tie-break so a
@@ -68,14 +72,24 @@ export async function advanceZonePlayback(
   }
 
   const currentYoutubeId = (current.track as RoomTrack | null)?.youtubeId ?? null;
+  const [cursor, roomIds] = await Promise.all([
+    readPlaylistCursor(admin, "zone", zoneId),
+    sourceRoomIds(admin, { kind: "zone", id: zoneId }),
+  ]);
+  // Where the zone's playlist resumes — the cursor survives guest picks
+  // playing in between (see lib/pair/playlist-cursor.ts).
+  const basisYoutubeId = cursorBasis(cursor, currentYoutubeId);
 
-  // A zone-room joiner's suggestion (audio_zone_queue) plays next, ahead of
-  // the zone's own default playlist/genre pick — same "new layer sits above
-  // the existing one, existing one keeps working untouched" shape the
-  // Schedule-override-above-Audio-Zone design already uses. Only queried
-  // when nothing's queued does the zone fall back to its own resolution,
-  // exactly as before this change.
-  let next: RoomTrack | null = await nextQueuedZoneTrack(admin, zoneId);
+  // A guest's Pair request (venue_requests, first come first served) plays
+  // first, then a zone-room joiner's suggestion (audio_zone_queue), both
+  // ahead of the zone's own default playlist/genre pick — same "new layer
+  // sits above the existing one, existing one keeps working untouched" shape
+  // the Schedule-override-above-Audio-Zone design already uses. Only when
+  // nothing's queued does the zone fall back to its own resolution, exactly
+  // as before.
+  const request = await claimNextRequest(admin, roomIds);
+  let next: RoomTrack | null = request?.track ?? (await nextQueuedZoneTrack(admin, zoneId));
+  const interruptsPlaylist = next !== null;
   // Set only when `next` came from the zone's playlist — its play gets
   // recorded (least-recently-played tracking) once the CAS write lands.
   let playlistIdUsed: string | null = null;
@@ -89,7 +103,7 @@ export async function advanceZonePlayback(
     if (zoneError) return { ok: false, error: "Could not read audio zone." };
 
     next = zone?.default_playlist_id
-      ? await resolveNextPlaylistTrack(admin, zone.default_playlist_id, currentYoutubeId)
+      ? await resolveNextPlaylistTrack(admin, zone.default_playlist_id, basisYoutubeId)
       : null;
     if (next && zone?.default_playlist_id) playlistIdUsed = zone.default_playlist_id;
   }
@@ -126,6 +140,10 @@ export async function advanceZonePlayback(
     .select("track, version")
     .maybeSingle();
 
+  if (updateError || !updated) {
+    // The request never reached the screens — put it back first in line.
+    if (request) await releaseRequest(admin, request.id);
+  }
   if (updateError) return { ok: false, error: "Could not advance audio zone playback." };
 
   if (!updated) {
@@ -140,5 +158,7 @@ export async function advanceZonePlayback(
   }
 
   if (playlistIdUsed && next) schedulePlaylistPlayRecord(admin, playlistIdUsed, next.youtubeId);
+  const nextCursor = cursorAfterAdvance({ interruptsPlaylist, basisYoutubeId });
+  if (nextCursor !== cursor) await writePlaylistCursor(admin, "zone", zoneId, nextCursor);
   return { ok: true, track: updated.track as RoomTrack | null, version: updated.version };
 }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
@@ -101,6 +102,7 @@ export default function RootLayout({
           <InstallBanner />
           <Toaster />
           <ServiceWorkerRegister />
+          <Analytics />
         </ThemeProvider>
       </body>
     </html>

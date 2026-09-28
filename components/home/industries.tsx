@@ -42,7 +42,7 @@ export function Industries({ standalone = false, only }: { standalone?: boolean;
       <Container wide>
         {standalone ? null : (
         <SectionIntro
-          index="06"
+          index="01"
           kicker="Industries"
           title={
             <>

@@ -32,7 +32,7 @@ export function Engagement({ standalone = false }: { standalone?: boolean } = {}
       <Container wide>
         {standalone ? null : (
         <SectionIntro
-          index="08"
+          index="02"
           kicker="Guest engagement"
           title={
             <>

@@ -26,8 +26,24 @@ const description =
 export const metadata: Metadata = {
   title: { absolute: title },
   description,
-  openGraph: { title, description, images: [{ url: "/brand/logo-stacked.png", width: 2000, height: 2000, alt: "Tazama" }] },
-  twitter: { card: "summary_large_image", title, description, images: ["/brand/logo-stacked.png"] },
+  openGraph: {
+    title,
+    description,
+    images: [
+      {
+        url: "/brand/logo-stacked.png",
+        width: 2000,
+        height: 2000,
+        alt: "Tazama",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: ["/brand/logo-stacked.png"],
+  },
 };
 
 // Dynamic only for the per-visitor auth state in the header.
@@ -37,19 +53,27 @@ export default async function Home() {
   return (
     <>
       <SiteHeader auth={auth} />
-      <main id="content" className={cn(marketingFontVars, "flex-1 overflow-x-clip bg-ink font-display")}>
+      <main
+        id="content"
+        className={cn(
+          marketingFontVars,
+          "flex-1 overflow-x-clip bg-ink font-display",
+        )}
+      >
         <Hero />
-        <Problem />
-        <OnePlatform />
-        <ControlCenter />
-        <Workflow />
-        <PhysicalWorld />
+        {/* <Problem /> */}
         <Industries />
-        <Locations />
+
         <Engagement />
-        <Advertising />
-        <Reliability />
-        <Analytics />
+        {/* <OnePlatform /> */}
+        {/* <ControlCenter /> */}
+        <Workflow />
+        {/* <PhysicalWorld /> */}
+        <Locations />
+
+        {/* <Advertising /> */}
+        {/* <Reliability /> */}
+        {/* <Analytics /> */}
         <FinalCta />
       </main>
       <SiteFooter />

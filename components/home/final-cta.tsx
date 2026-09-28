@@ -26,7 +26,7 @@ export function FinalCta() {
       <Container wide className="relative">
         <div className="grid gap-14 lg:grid-cols-[1.15fr_1fr] lg:gap-20">
           <div>
-            <Kicker index="12">Get started</Kicker>
+            <Kicker index="05">Get started</Kicker>
             <h2
               id="cta-heading"
               className="mt-5 font-display text-[40px] leading-[1] font-semibold tracking-[-0.045em] text-balance sm:text-[60px] lg:text-[72px]"
@@ -131,7 +131,7 @@ export function ContactForm({ className }: { className?: string }) {
         </p>
       ) : null}
 
-      <button type="submit" disabled={loading} className={cn(ctaLargeClass, "mt-6 w-full disabled:opacity-60")}>
+      <button type="submit" disabled={loading} className={cn(ctaLargeClass, "mt-6 w-full rounded-full disabled:opacity-60")}>
         {loading ? <LoaderCircle aria-hidden className="size-4 animate-spin" /> : null}
         Send message
       </button>

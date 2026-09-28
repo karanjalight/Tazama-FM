@@ -22,12 +22,12 @@ export function SiteFooter() {
   ];
 
   return (
-    <footer className={cn(marketingFontVars, "border-t border-white/[0.07] bg-ink font-display text-white")}>
-      <div className="mx-auto max-w-[1320px] px-5 pt-16 pb-10 sm:px-8 sm:pt-20">
+    <footer className={cn(marketingFontVars, "border-t border-white/[0.07] bg-red-900 ink font-display text-white")}>
+      <div className="mx-auto max-w-[1440px] px-5 pt-16 pb-10 sm:px-8 sm:pt-20">
         <div className="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-5 lg:grid-cols-6 lg:gap-8">
-          <div className="col-span-2 sm:col-span-4 lg:col-span-1">
+          <div className="col-span-2 sm:col-span-4 lg:col-span-2">
             <Link href="/#top" aria-label="Tazama, home" className="inline-block rounded-md">
-              <BrandLogo className="h-14" />
+              <BrandLogo className="h-14 lg:h-32" />
             </Link>
             <p className="mt-5   text-[14px] leading-relaxed text-white/50">
               Everything your customers see and hear. One platform.
@@ -36,7 +36,7 @@ export function SiteFooter() {
 
           {columns.map((col) => (
             <nav key={col.label} aria-label={col.label}>
-              <h2 className="font-tech text-[11px] tracking-[0.12em] text-white/40 uppercase">{col.label}</h2>
+              <h2 className="font-tech text-[11px] tracking-[0.12em] text-white uppercase">{col.label}</h2>
               <ul className="mt-4 space-y-2.5">
                 {col.items.map((item) => (
                   <li key={item.label}>
@@ -50,7 +50,7 @@ export function SiteFooter() {
           ))}
         </div>
 
-        <div className="mt-16 flex flex-col gap-3 border-t border-white/[0.07] pt-6 text-[13px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-16 flex flex-col gap-3 border-t border-white/[0.07] pt-6 text-[13px] text-white sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} Tazama. Built in Nairobi.</p>
           <a href="mailto:business@tazama.fm" className="transition-colors hover:text-white">
             business@tazama.fm

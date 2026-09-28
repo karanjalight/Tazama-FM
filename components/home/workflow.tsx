@@ -29,7 +29,7 @@ export function Workflow({ standalone = false }: { standalone?: boolean } = {}) 
       <Container>
         {standalone ? null : (
         <SectionIntro
-          index="04"
+          index="03"
           kicker="How it works"
           title={
             <>

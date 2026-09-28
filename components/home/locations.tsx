@@ -77,7 +77,7 @@ export function Locations({ standalone = false }: { standalone?: boolean } = {})
       <Container>
         {standalone ? null : (
         <SectionIntro
-          index="07"
+          index="04"
           kicker="Multi-location"
           title={
             <>

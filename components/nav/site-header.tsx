@@ -84,7 +84,7 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
           : "border-b border-transparent bg-transparent",
       )}
     >
-      <div className="mx-auto flex h-16 max-w-[1320px] items-center gap-8 px-5 sm:px-8">
+      <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-8 px-5 sm:px-8">
         <Link href="/#top" aria-label="Tazama, home" className="shrink-0 rounded-md">
           <BrandLogo priority className="h-10 sm:h-12" />
         </Link>
@@ -128,11 +128,11 @@ export function SiteHeader({ auth }: { auth?: HeaderAuth | null }) {
             <>
               <a
                 href="/login"
-                className="hidden h-9 items-center rounded-lg px-3 text-[14px] text-white/70 transition-colors hover:text-white sm:inline-flex"
+                className="hidden h-9 items-center rounded-full px-3 text-[14px] text-white/70 transition-colors hover:text-white sm:inline-flex"
               >
                 Sign in
               </a>
-              <a href="/signup" className={cn(ctaClass, "hidden sm:inline-flex")}>
+              <a href="/signup" className={cn(ctaClass, "hidden rounded-full sm:inline-flex")}>
                 Get started
               </a>
             </>
@@ -174,7 +174,7 @@ function NavMenu({
         onClick={onClick}
         onPointerEnter={(e) => e.pointerType === "mouse" && onHover()}
         className={cn(
-          "inline-flex h-9 cursor-pointer items-center gap-1 rounded-lg px-3 text-[14px] transition-colors",
+          "inline-flex h-9 cursor-pointer items-center gap-1 rounded-full px-3 text-[14px] transition-colors",
           open ? "bg-white/[0.09] text-white" : "text-white/70 hover:bg-white/[0.06] hover:text-white",
         )}
       >
@@ -213,7 +213,7 @@ function NavMenu({
                       onClick={onNavigate}
                       className="group flex gap-3 rounded-xl p-3 transition-colors hover:bg-white/[0.045] focus-visible:bg-white/[0.045]"
                     >
-                      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white/[0.03] text-white/60 ring-1 ring-white/[0.08] transition-colors group-hover:text-white">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.03] text-white/60 ring-1 ring-white/[0.08] transition-colors group-hover:text-white">
                         <Icon aria-hidden className="size-[17px]" />
                       </span>
                       <span className="min-w-0">
